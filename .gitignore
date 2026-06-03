@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyd
+
+# Dystrybucja i pakowanie
+dist/
+build/
+*.egg-info/
+.eggs/
+MANIFEST
+
+# Środowiska wirtualne
+.venv/
+venv/
+env/
+
+# Narzędzia
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+
+# Zmienne środowiskowe (nigdy nie commituj!)
+.env
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# Windows NTFS alternate data streams
+*:Zone.Identifier
+
+# Logi i pliki tymczasowe
+*.log
+*.tmp
+*.bak
+
+# Dokumentacja (generowana)
+docs/_build/
+docs/api/
+
+# uv
+.uv/
+
+# Claude Code
+.claude/

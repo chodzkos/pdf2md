@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Test Python ${{ matrix.python-version }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Zainstaluj uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Skonfiguruj Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Zainstaluj zależności
+        run: uv sync
+
+      - name: Lint — ruff check
+        run: uv run ruff check .
+
+      - name: Format — ruff format check
+        run: uv run ruff format --check .
+
+      - name: Typy — mypy
+        run: uv run mypy src/
+
+      - name: Testy — pytest
+        run: uv run pytest --cov=pdf2md --cov-report=xml -m "not integration and not gui"
+
+      - name: Wyślij coverage (Ubuntu + Python 3.12)
+        if: runner.os == 'Linux' && matrix.python-version == '3.12'
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false

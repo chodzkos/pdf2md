@@ -1,0 +1,19 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.5.0
+    hooks:
+      - id: ruff
+        name: ruff (linter)
+        args: [--fix]
+      - id: ruff-format
+        name: ruff (formatter)
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.10.0
+    hooks:
+      - id: mypy
+        name: mypy (type check)
+        args: [--strict]
+        additional_dependencies:
+          - pydantic-settings
+          - loguru

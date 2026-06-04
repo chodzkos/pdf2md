@@ -67,7 +67,7 @@ Działający szkielet projektu gotowy do development, z CI/CD od pierwszego comm
 ✅ `uv run pytest` — zielone  
 ✅ `uv run ruff check .` — zero błędów  
 ✅ GitHub Actions — zielone  
-✅ Struktura katalogów zgodna z PROJEKT.md  
+✅ Struktura katalogów zgodna z docs/PROJEKT.md  
 
 ---
 

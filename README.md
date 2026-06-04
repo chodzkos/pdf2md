@@ -76,7 +76,7 @@ uv run mypy src/
 
 ## Roadmap
 
-Zobacz [ROADMAP.md](ROADMAP.md) po szczegółowy plan rozwoju.
+Zobacz [docs/ROADMAP.md](docs/ROADMAP.md) po szczegółowy plan rozwoju.
 
 ---
 

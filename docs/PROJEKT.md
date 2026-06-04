@@ -177,7 +177,10 @@ pdf2md/
 │   └── fixtures/                   # Przykładowe PDF-y do testów
 │
 ├── docs/
-│   ├── README.md
+│   ├── PROJEKT.md
+│   ├── PROMPTS.md
+│   ├── ROADMAP.md
+│   ├── FEATURES.md
 │   └── USAGE.md
 │
 ├── .github/
@@ -190,10 +193,12 @@ pdf2md/
 ├── .gitignore
 ├── .pre-commit-config.yaml
 ├── LICENSE                         # MIT
-├── README.md
-├── ROADMAP.md                      # → roadmap.md
-├── PROMPTS.md                      # → prompts.md (tylko dla ciebie, nie do repo)
-└── FEATURES.md                     # → features.md
+├── README.md                       # główny README pakietu
+└── docs/                           # dokumentacja projektu
+    ├── PROJEKT.md
+    ├── PROMPTS.md
+    ├── ROADMAP.md
+    └── FEATURES.md
 ```
 
 ### Wzorzec adaptera — serce architektury
@@ -391,7 +396,7 @@ git clone git@github.com:TWOJ-USER/pdf2md.git
 cd pdf2md
 
 # Skopiuj dokumenty projektowe do repozytorium
-# (PROJEKT.md, ROADMAP.md, PROMPTS.md, FEATURES.md)
+# (docs/PROJEKT.md, docs/ROADMAP.md, docs/PROMPTS.md, docs/FEATURES.md)
 
 # Jeśli masz klucze API, utwórz .env:
 cat > .env << 'EOF'
@@ -409,7 +414,7 @@ claude
 ```
 
 **Od tego momentu Claude Code przejmuje inicjalizację projektu.**
-Wklej Prompt #0 z pliku PROMPTS.md i postępuj zgodnie z instrukcjami.
+Wklej Prompt #0 z pliku docs/PROMPTS.md i postępuj zgodnie z instrukcjami.
 
 ### KROK 11 — Pliki testowe PDF
 Zbierz różne PDF-y i wgraj do `tests/fixtures/`:
@@ -425,6 +430,6 @@ Zbierz różne PDF-y i wgraj do `tests/fixtures/`:
 
 | Plik | Zawartość |
 |---|---|
-| `ROADMAP.md` | Etapy projektu, timeline, checklist |
-| `PROMPTS.md` | Gotowe promty do wklejenia w Claude Code |
-| `FEATURES.md` | Plany na przyszłość po ukończeniu v1.0 |
+| `docs/ROADMAP.md` | Etapy projektu, timeline, checklist |
+| `docs/PROMPTS.md` | Gotowe promty do wklejenia w Claude Code |
+| `docs/FEATURES.md` | Plany na przyszłość po ukończeniu v1.0 |

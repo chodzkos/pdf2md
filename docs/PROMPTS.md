@@ -21,7 +21,7 @@
 
 ```
 Zainicjuj projekt Python o nazwie "pdf2md" w bieżącym katalogu.
-Zapoznaj się z plikiem PROJEKT.md i ROADMAP.md jeśli są dostępne.
+Zapoznaj się z plikiem docs/PROJEKT.md i docs/ROADMAP.md jeśli są dostępne.
 
 Wykonaj następujące kroki:
 
@@ -78,7 +78,7 @@ Szkielet z:
 - sekcją Features (placeholder)
 - sekcją Installation (placeholder)
 - sekcją Usage (placeholder)
-- linkiem do ROADMAP.md
+- linkiem do docs/ROADMAP.md
 
 7. TEST SANITY
 Utwórz tests/unit/test_sanity.py:
@@ -95,7 +95,7 @@ Po zakończeniu pokaż mi:
 ## PROMPT #1 — Rdzeń i abstrakcje
 
 ```
-Jesteśmy na gałęzi etap-1-core. Zapoznaj się z PROJEKT.md.
+Jesteśmy na gałęzi etap-1-core. Zapoznaj się z docs/PROJEKT.md.
 
 Zaimplementuj rdzeń aplikacji pdf2md:
 
@@ -825,7 +825,7 @@ Przykłady komend z output
 Opis config.toml (źródło prawdy), .env jako override deweloperski, dostępnych zmiennych i modeli LLM
 
 ## 🤝 Współtworzenie
-Link do ROADMAP.md, zasady kontrybucji
+Link do docs/ROADMAP.md, zasady kontrybucji
 
 3. docs/USAGE.md
 Szczegółowy przewodnik:
@@ -940,7 +940,7 @@ uv run pyinstaller build.spec --clean
 ## PROMPT #11 — Preprocessing obrazu
 
 ```
-Jesteśmy na gałęzi etap-11-preprocessing. Zapoznaj się z PROJEKT.md i sekcją FAZA 2 w ROADMAP.md.
+Jesteśmy na gałęzi etap-11-preprocessing. Zapoznaj się z docs/PROJEKT.md i sekcją FAZA 2 w docs/ROADMAP.md.
 
 Utwórz nowy pakiet src/pdf2md/scan/ do pipeline'u skanowania książek.
 
@@ -1233,7 +1233,7 @@ Te dwie reguły warto dokleić do każdego prompta (#1 i dalej) — utwardzają 
 ```
 
 ### Gdy Claude Code coś nie rozumie
-Doprecyzuj: "Zanim cokolwiek zrobisz, przeczytaj plik PROJEKT.md i potwierdź że rozumiesz architekturę"
+Doprecyzuj: "Zanim cokolwiek zrobisz, przeczytaj plik docs/PROJEKT.md i potwierdź że rozumiesz architekturę"
 
 ### Gdy coś nie działa po implementacji
 "Test X failuje z błędem: [wklej błąd]. Napraw to nie zmieniając interfejsu publicznego."
@@ -1242,7 +1242,7 @@ Doprecyzuj: "Zanim cokolwiek zrobisz, przeczytaj plik PROJEKT.md i potwierdź ż
 "Wytłumacz dlaczego wybrałeś to rozwiązanie zamiast [alternatywa]."
 
 ### Gdy coś jest niezgodne z planem
-"To rozwiązanie odbiega od architektury z PROJEKT.md w zakresie [X]. Dostosuj je do planu."
+"To rozwiązanie odbiega od architektury z docs/PROJEKT.md w zakresie [X]. Dostosuj je do planu."
 
 ### Szybki reset jeśli coś się popsuło
 git stash         # schowaj zmiany

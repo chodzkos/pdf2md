@@ -1,4 +1,4 @@
-# pdf2md — Funkcje Przyszłości (Post v1.0)
+# pdf2md Squeezer — Funkcje Przyszłości (Post v1.0)
 
 > Pomysły na rozbudowę po ukończeniu podstawowej wersji.
 > Każda sekcja zawiera: opis, trudność implementacji i szacowany czas.
@@ -25,20 +25,21 @@
 ---
 
 ### F02 — Własny silnik ekstrakcji (bez zewnętrznych narzędzi)
-**Opis:** Własna implementacja pipeline'u ekstrakcji zamiast polegania na zewnętrznych silnikach. Daje pełną kontrolę, brak zależności, możliwość dostosowania do specyficznych potrzeb.
+> ⚠️ **Częściowo zrealizowane w Fazie 2 roadmapy.** Premium scan pipeline (etapy 11–15) pokrywa OCR skanów przez VLM, preprocessing, korektę LLM i walidację. Poniższy opis dotyczy pozostałej części — własnego silnika do **natywnych** PDF-ów (bez skanów).
 
-**Komponenty do implementacji:**
+**Opis:** Własna implementacja pipeline'u ekstrakcji dla natywnych PDF-ów zamiast polegania na PyMuPDF4LLM/Marker/Docling. Daje pełną kontrolę i brak zależności.
+
+**Komponenty do implementacji (część nieobjęta Fazą 2):**
 - **Detektor typu PDF** — tekst vs skan vs mieszany (per strona)
 - **Ekstraktor tekstu** — pdfplumber + pdfminer.six, wykrywanie nagłówków (rozmiar fontu), list, akapitów
 - **Detektor kolumn** — KMeans na pozycjach X słów, prawidłowa kolejność czytania
 - **Ekstraktor tabel** — camelot (lattice + stream), konwersja do MD table
-- **OCR pipeline** — preprocessing (deskew, denoise, binarize) → Tesseract → EasyOCR → wybór lepszego wyniku
-- **LLM fallback per-strona** — gdy OCR confidence < próg, wyślij obraz strony do Claude Vision
 
-**Trudność:** ⭐⭐⭐⭐⭐ Wysoka  
-**Czas:** ~3-4 tygodnie  
-**Zależności:** `pdfplumber`, `pdfminer.six`, `camelot-py`, `pytesseract`, `easyocr`, `opencv-python`, `scikit-learn`  
-**Uwaga:** To był pierwotny plan projektu — bardzo ambitne ale daje najlepszą jakość dla specyficznych dokumentów
+(Komponenty OCR/preprocessing/korekta/walidacja → już w Fazie 2 roadmapy)
+
+**Trudność:** ⭐⭐⭐⭐☆ Wysoka (po odjęciu części z Fazy 2)
+**Czas:** ~2 tygodnie
+**Zależności:** `pdfplumber`, `pdfminer.six`, `camelot-py`
 
 ---
 

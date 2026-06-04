@@ -1,4 +1,4 @@
-# pdf2md — Roadmap
+# pdf2md Squeezer — Roadmap
 
 > Każdy etap = jedna gałąź git (branch) = jeden Pull Request
 
@@ -7,19 +7,29 @@
 ## Szybki przegląd
 
 ```
+FAZA 1 — v1.0 (orkiestrator gotowych silników)
 Etap 0  Init projektu          ░░░░░  ~2h
 Etap 1  Rdzeń i abstrakcje     ░░░░░  ~3h
 Etap 2  PyMuPDF4LLM engine     ░░░░░  ~2h
 Etap 3  Marker engine          ░░░░░  ~3h
 Etap 4  Dostawcy LLM           ░░░░░  ~3h
-Etap 5  CLI                    ░░░░░  ~3h
+Etap 5  CLI + doctor + dry-run ░░░░░  ~4h
 Etap 6  GUI — szkielet         ░░░░░  ~4h
 Etap 7  GUI — polish           ░░░░░  ~4h
-Etap 8  Silniki: MinerU, Docling, pdf-craft  ░░░░░  ~4h
+Etap 8  Docling (core) + opc. MinerU, pdf-craft  ░░░░░  ~4h
 Etap 9  Testy + dokumentacja   ░░░░░  ~3h
-Etap 10 Packaging              ░░░░░  ~3h
+Etap 10 Packaging              ░░░░░  ~1-2 dni (trudny!)
 ────────────────────────────────────────────
-Łącznie                              ~34h robocze
+Faza 1 łącznie                       ~35h + packaging
+
+FAZA 2 — premium scan pipeline (lokalny VLM-OCR, wymaga GPU)
+Etap 11 Preprocessing obrazu   ░░░░░  ~4h
+Etap 12 Silniki VLM-OCR        ░░░░░  ~6h
+Etap 13 Korekta LLM + walidacja ░░░░  ~6h
+Etap 14 Składanie książki + EPUB ░░░░ ~5h
+Etap 15 Profile skanowania     ░░░░░  ~3h
+────────────────────────────────────────────
+Faza 2 łącznie                       ~24h robocze
                           (w swoim tempie, nie naraz)
 ```
 
@@ -70,12 +80,15 @@ Wspólny interfejs dla wszystkich silników i dostawców LLM. To fundament — w
 
 ### Zadania dla Claude Code
 - [ ] `engines/base.py` — dataclass `ConversionResult`, ABC `ConversionEngine`
-- [ ] `llm/base.py` — dataclass `LLMResult`, ABC `LLMProvider`
-- [ ] `core/config.py` — `pydantic-settings` model konfiguracji (klucze API, domyślny silnik, domyślny LLM, ścieżka output)
+- [ ] `llm/base.py` — dataclass `LLMResult`, ABC `LLMProvider` (metoda `postprocess` przyjmuje `mode`)
+- [ ] `core/config.py` — model konfiguracji oparty o **`config.toml` jako źródło prawdy** (`~/.config/pdf2md/config.toml`), z `.env` jako override deweloperskim. Pola: klucze API, nazwy modeli LLM (puste = fallback z kodu), domyślny silnik, llm_mode, ścieżka output, język. CLI i GUI czytają TEN SAM config. `save_settings()` ATOMOWY (zapis do temp + `os.replace()`, chroni przed race condition CLI/GUI).
+- [ ] Konwencja w `engines/base.py`: `is_available()` sprawdza obecność pakietu przez `importlib.metadata.version()`, NIE importuje silnika (import dopiero w `convert()`) — inaczej start/`--help`/`list-engines` trwałyby kilkanaście sekund
+- [ ] `detection/dependencies.py` — wykrywanie stanu systemu (Tesseract+języki, Poppler, Pandoc, Ollama+modele, GPU/CUDA, klucze API). Używane później przez `pdf2md doctor`.
+- [ ] `utils/chunking.py` — funkcje dzielenia tekstu: `by_chunk(text, max_tokens)`, `by_heading(text)`, `by_page(pages)`. Gotowe na tryby LLM.
 - [ ] `core/registry.py` — `EngineRegistry` i `LLMRegistry` z metodą `get_available()`
-- [ ] `core/converter.py` — `Converter` orkiestrator: `convert(pdf_path, engine, llm=None) -> ConversionResult`
+- [ ] `core/converter.py` — `Converter` orkiestrator: `convert(pdf_path, engine, llm=None, llm_mode="none") -> ConversionResult`
 - [ ] `utils/logging.py` — konfiguracja loguru (plik + konsola)
-- [ ] Testy jednostkowe: `test_registry.py` (mock engines), `test_converter.py` (mock engine + mock llm)
+- [ ] Testy jednostkowe: `test_registry.py`, `test_converter.py`, `test_config.py` (config.toml + override z .env), `test_chunking.py`
 
 ### Co robisz Ty
 - [ ] `git checkout -b etap-1-core`
@@ -86,6 +99,8 @@ Wspólny interfejs dla wszystkich silników i dostawców LLM. To fundament — w
 
 ### Definicja ukończenia
 ✅ ABC `ConversionEngine` i `LLMProvider` zdefiniowane  
+✅ Konfiguracja z `config.toml` (jedno źródło prawdy), `.env` jako override  
+✅ `utils/chunking.py` gotowe na tryby LLM  
 ✅ Registry prawidłowo wykrywa (mock) silniki  
 ✅ Converter wywołuje engine.convert() i opcjonalnie llm.postprocess()  
 ✅ Testy przechodzą  
@@ -166,30 +181,34 @@ Warstwa post-processingu LLM — czyszczenie Markdownu po konwersji.
 - [ ] `llm/ollama_provider.py`:
   - `is_available()`: ping `http://localhost:11434/api/tags`
   - `get_available_models()`: lista zainstalowanych modeli
-  - `postprocess(markdown, instructions)`: wywołanie API Ollama
+  - `postprocess(markdown, mode, instructions)`: wywołanie API Ollama
 - [ ] `llm/anthropic_provider.py`:
-  - `is_available()`: sprawdza `ANTHROPIC_API_KEY` w env
-  - `postprocess(markdown, instructions)`: Claude API (claude-sonnet-4-5)
+  - `is_available()`: sprawdza `ANTHROPIC_API_KEY`
+  - `postprocess(markdown, mode, instructions)`: Claude API
 - [ ] `llm/openai_provider.py` — analogicznie
 - [ ] `llm/gemini_provider.py` — analogicznie
+- [ ] **Nazwy modeli NIE na sztywno.** Każdy provider bierze model z `settings` (`config.toml`/`.env`); jeśli puste, używa bezpiecznego fallbacku zdefiniowanego jako stała w pliku providera. Użytkownik nadpisuje z CLI/GUI. Powód: nazwy modeli i dostępność API zmieniają się szybko — hardcode powoduje, że aplikacja przestaje działać.
+- [ ] **Tryby chunkowania** w `postprocess(markdown, mode)`: `whole_document`, `by_page`, `by_chunk`, `by_heading` (użyj `utils/chunking.py` z Etapu 1). Dla `whole_document` sprawdź czy tekst mieści się w kontekście — jeśli nie, ostrzeż i zaproponuj `by_chunk`.
 - [ ] `LLMRegistry` z auto-detekcją dostępnych dostawców
-- [ ] Prompt systemowy do post-processingu w `core/prompts.py`:
+- [ ] Prompt systemowy do post-processingu w `core/prompts.py` jako `POST_PROCESSING_PROMPT`:
   ```
   "Wyczyść i popraw poniższy Markdown uzyskany z konwersji PDF.
    Usuń artefakty OCR, popraw tabelki, zachowaj strukturę.
-   Zwróć tylko poprawiony Markdown, bez komentarzy."
+   Nie parafrazuj treści. Zwróć tylko poprawiony Markdown, bez komentarzy."
   ```
-- [ ] Testy z mock'owanymi API (żeby nie płacić za testy)
+- [ ] Testy z mock'owanymi API (żeby nie płacić za testy), w tym test że model bierze się z configu i że chunkowanie dzieli długi tekst
 
 ### Co robisz Ty
 - [ ] `git checkout -b etap-4-llm-providers`
-- [ ] (Opcjonalne) Instalacja Ollama: https://ollama.com/download → `ollama pull llama3.2`
-- [ ] Ustawiasz klucze API w `.env` dla tych dostawców których chcesz testować
-- [ ] Testujesz post-processing na surowym Markdown z Etapu 2
+- [ ] (Opcjonalne) Instalacja Ollama: https://ollama.com/download → `ollama pull qwen2.5:14b`
+- [ ] Ustawiasz klucze API w `config.toml` lub `.env` (dev) dla dostawców do testów
+- [ ] Testujesz post-processing na surowym Markdown z Etapu 2 (różne tryby chunkowania)
 - [ ] Pull Request → scal
 
 ### Definicja ukończenia
 ✅ Każdy provider zwraca `is_available() = True/False` poprawnie  
+✅ Model brany z configu (z fallbackiem), NIE hardcodowany  
+✅ Tryby chunkowania działają (whole_document / by_page / by_chunk / by_heading)  
 ✅ `postprocess()` zwraca poprawiony Markdown  
 ✅ Testy z mockami przechodzą  
 ✅ Brak twardego błędu gdy klucz API nie jest ustawiony (graceful degradation)  
@@ -212,8 +231,11 @@ pdf2md convert dokument.pdf
 # Z wyborem silnika i wyjściem
 pdf2md convert dokument.pdf -o wynik.md --engine marker
 
-# Z post-processingiem LLM
-pdf2md convert dokument.pdf --engine marker --llm claude
+# Z post-processingiem LLM (z trybem chunkowania)
+pdf2md convert dokument.pdf --engine marker --llm claude --llm-mode by_heading
+
+# Podgląd planu bez konwersji (co, czym, gdzie)
+pdf2md convert dokument.pdf --dry-run
 
 # Batch processing
 pdf2md convert *.pdf --output-dir wyniki/
@@ -222,7 +244,10 @@ pdf2md convert *.pdf --output-dir wyniki/
 pdf2md list-engines
 pdf2md list-llm
 
-# Ustawienia (zapis do config)
+# Diagnostyka całego środowiska
+pdf2md doctor
+
+# Ustawienia (zapis do config.toml)
 pdf2md config set default-engine marker
 pdf2md config set anthropic-key sk-ant-...
 pdf2md config show
@@ -230,26 +255,30 @@ pdf2md config show
 
 ### Zadania dla Claude Code
 - [ ] `cli/main.py` z click:
-  - komenda `convert` z wszystkimi flagami
-  - komenda `list-engines` (tabela ASCII z `rich`)
+  - komenda `convert` z flagami, w tym `--llm-mode [none|whole_document|by_page|by_chunk|by_heading]` i `--dry-run`
+  - `--dry-run`: pokazuje typ PDF (z `detection/pdf_type.py`), wybrany silnik, czy silnik dostępny, czy Tesseract/Pandoc/Ollama dostępne, gdzie zapisze wynik — i kończy BEZ konwersji
+  - komenda `list-engines` (tabela `rich`, z kolumną licencji)
   - komenda `list-llm` (tabela z dostępnymi dostawcami)
-  - komenda `config` (get/set/show)
-  - progress bar z `rich` podczas konwersji
-  - kolorowy output (zielone success, czerwone błędy)
-  - raport końcowy: czas konwersji, silnik, liczba stron
+  - **komenda `doctor`** — pełna diagnostyka środowiska (użyj `detection/dependencies.py`):
+    System/OS, Python, CUDA, PyTorch CUDA, Tesseract+języki (pol/eng), Poppler, Pandoc, Ollama+modele, status każdego silnika, status kluczy API. Kolorowo: ✅/⚠️/❌.
+  - komenda `config` (get/set/show) operująca na `config.toml`
+  - progress bar z `rich`, kolorowy output, raport końcowy
 - [ ] Entry point w `pyproject.toml`: `pdf2md = "pdf2md.cli.main:cli"`
-- [ ] Testy `tests/unit/test_cli.py` z `click.testing.CliRunner`
+- [ ] Testy `tests/unit/test_cli.py` z `click.testing.CliRunner` (w tym `doctor` i `--dry-run`)
 
 ### Co robisz Ty
 - [ ] `git checkout -b etap-5-cli`
 - [ ] `uv pip install -e .` — instalacja z entry pointem
-- [ ] Testujesz komendy ręcznie
+- [ ] `pdf2md doctor` — czy poprawnie wykrywa Twoje środowisko (WSL, GPU, Tesseract, Ollama)?
 - [ ] `pdf2md list-engines` — czy pokazuje dostępne silniki?
+- [ ] `pdf2md convert tests/fixtures/test_text.pdf --dry-run` — czy plan wygląda dobrze?
 - [ ] `pdf2md convert tests/fixtures/test_text.pdf` — czy działa?
 - [ ] Pull Request → scal
 
 ### Definicja ukończenia
 ✅ `pdf2md convert plik.pdf` produkuje `.md` obok pliku źródłowego  
+✅ `pdf2md doctor` pokazuje pełny stan środowiska  
+✅ `--dry-run` pokazuje plan bez konwersji  
 ✅ `--output-dir` kieruje wyniki do folderu  
 ✅ `list-engines` pokazuje co jest zainstalowane  
 ✅ Batch `*.pdf` działa  
@@ -331,7 +360,7 @@ Działające okno aplikacji z pełną funkcjonalnością konwersji (bez "polishu
   - domyślny silnik
   - domyślny folder output
   - domyślny język OCR
-  - zapis do `QSettings` (trwały między sesjami)
+  - zapis do `config.toml` przez `core/config` (to samo źródło co CLI — bez osobnego QSettings)
 - [ ] Tooltip dla niedostępnych silników: "Jak zainstalować?" z linkiem do dokumentacji
 - [ ] Przycisk "Otwórz folder wynikowy" po zakończeniu konwersji
 - [ ] Podgląd wygenerowanego Markdown (osobna zakładka lub panel)
@@ -354,27 +383,30 @@ Działające okno aplikacji z pełną funkcjonalnością konwersji (bez "polishu
 
 ---
 
-## Etap 8 — Pozostałe silniki
+## Etap 8 — Docling (core) + silniki opcjonalne
 **Gałąź:** `etap-8-engines`
 **Czas:** ~4 godziny
 
 ### Cel
-Dodanie MinerU, Docling i pdf-craft jako dodatkowych opcji.
+Dodanie **Docling** jako trzeciego silnika rdzeniowego (stabilnego, do v1.0), oraz **MinerU i pdf-craft** jako silników opcjonalnych (best-effort, bardziej ryzykownych instalacyjnie). Kolejność celowa: najpierw domknij Docling (pewny, MIT, dobre Python API), dopiero potem dwa trudniejsze.
 
 ### Zadania dla Claude Code
-- [ ] `engines/mineru_engine.py` — wrapper przez subprocess CLI (MinerU ma CLI)
-- [ ] `engines/docling_engine.py` — wrapper przez Python API Docling
-- [ ] `engines/pdf_craft_engine.py` — wrapper pdf-craft
+- [ ] `engines/docling_engine.py` — wrapper przez Python API Docling (PRIORYTET — silnik core)
+- [ ] `engines/mineru_engine.py` — wrapper przez subprocess CLI (opcjonalny)
+- [ ] `engines/pdf_craft_engine.py` — wrapper pdf-craft (opcjonalny)
+- [ ] Oznaczenie w Registry: które silniki są "core" a które "optional" (do pokazania w GUI/doctor)
 - [ ] Aktualizacja Registry o nowe silniki
 - [ ] Testy integracyjne (jeśli silniki zainstalowane, inaczej skip z `pytest.mark.skipif`)
 - [ ] Dokumentacja "Jak zainstalować każdy silnik" w `docs/ENGINES.md`
 
 ### Co robisz Ty
 - [ ] `git checkout -b etap-8-engines`
-- [ ] Instalujesz wybrane silniki (każdy osobno, sprawdzasz czy działa):
+- [ ] Instalujesz Docling (core): `uv add docling`
+- [ ] Opcjonalnie instalujesz pozostałe (każdy osobno, sprawdzasz czy działa):
   ```bash
-  uv add docling          # ~300MB
-  uv add pdf-craft        # mniejszy
+  uv add docling          # ~300MB — silnik core
+  uv add pdf-craft        # opcjonalny
+
   pip install mineru      # MinerU woli pip, sprawdź dokumentację
   ```
 - [ ] Testujesz każdy silnik na `test_scan.pdf`
@@ -417,27 +449,256 @@ Dodanie MinerU, Docling i pdf-craft jako dodatkowych opcji.
 
 ## Etap 10 — Packaging
 **Gałąź:** `etap-10-packaging`
-**Czas:** ~3 godziny
+**Czas:** ~1–2 dni (NIE 3 godziny — to jeden z najtrudniejszych etapów)
+
+> **Realizm:** PyInstaller + PySide6 + OCR + zewnętrzne binarki (Tesseract, Poppler) + ewentualne modele to notorycznie kłopotliwa kombinacja. Nie zakładaj, że to "szybka końcówka". Strategia: **build portable bez ciężkich silników**, a silniki copyleft (Marker GPL, MinerU AGPL) i zewnętrzne binarki jako opcjonalne, instalowane osobno — to także rozwiązuje kwestię licencyjną (nie bundlujesz GPL/AGPL w jedno binary MIT).
 
 ### Zadania dla Claude Code
-- [ ] `build.spec` dla PyInstaller (GUI + CLI jako dwa binary)
+- [ ] `build.spec` dla PyInstaller — build **rdzeniowy**: CLI + GUI + lekkie silniki (PyMuPDF4LLM, Docling). Marker/MinerU/pdf-craft NIE wkompilowane — wykrywane jako opcjonalne, instalowane przez użytkownika.
+- [ ] **`hiddenimports`** w build.spec: skoro silniki importujemy leniwie (dopiero w `convert()`), PyInstaller ich nie wykryje → `ModuleNotFoundError` przy użyciu. Dodaj jawnie pymupdf4llm, pymupdf, docling i ich podmoduły. Po buildzie przetestuj REALNĄ konwersję, nie tylko `--help`.
+- [ ] **`multiprocessing.freeze_support()`** w punktach wejścia (`cli/main.py`, `gui/app.py`) pod `if __name__ == "__main__"` — biblioteki ML spawnują podprocesy, bez tego skompilowany `.exe` na Windows może wpaść w pętlę nieskończoną.
 - [ ] `scripts/build_linux.sh` — buduje AppImage lub `.tar.gz`
-- [ ] `scripts/build_windows.ps1` — buduje `.exe` (uwaga: Tesseract i Poppler muszą być dołączone)
-- [ ] `.github/workflows/release.yml`:
-  - uruchamia się na tag `v*` (np. `v1.0.0`)
-  - buduje binary dla Linux i Windows
-  - tworzy GitHub Release z artefaktami
-- [ ] Instrukcja "Release checklist" w `docs/RELEASE.md`
+- [ ] `scripts/build_windows.ps1` — buduje `.exe`. Tesseract/Poppler/Pandoc **nie bundlowane** — zamiast tego `pdf2md doctor` wykrywa ich brak i podaje instrukcję instalacji.
+- [ ] `.github/workflows/release.yml`: tag `v*` → build Linux i Windows → GitHub Release
+- [ ] Sekcja w README: "Instalacja Tesseract/Poppler/Pandoc na Windows" (zamiast koniecznego bundlowania)
+- [ ] `docs/RELEASE.md` — checklist wydania
 
 ### Co robisz Ty
 - [ ] `git tag v1.0.0 && git push origin v1.0.0`
 - [ ] Obserwujesz GitHub Actions jak buduje release
-- [ ] Pobierasz binary ze strony Release i testujesz na czystym systemie
+- [ ] Pobierasz binary i testujesz na czystym systemie (Windows bez Pythona)
+- [ ] Sprawdzasz że `pdf2md doctor` poprawnie podpowiada brakujące zależności
 
 ### Definicja ukończenia
-✅ `pdf2md` binary działa bez instalacji Python  
-✅ `pdf2md-gui` otwiera się na Windows bez instalacji  
+✅ `pdf2md` i `pdf2md-gui` działają bez instalacji Pythona (rdzeniowe silniki)  
+✅ Brakujące zależności/silniki są wykrywane z czytelną instrukcją instalacji  
+✅ Build MIT nie zawiera wkompilowanych silników GPL/AGPL  
 ✅ GitHub Release zawiera pliki do pobrania  
+
+---
+---
+
+# FAZA 2 — Premium Scan Pipeline (lokalny VLM-OCR)
+
+> **Warunek wstępny:** ukończona Faza 1 (v1.0). Ta faza wymaga GPU (zoptymalizowana pod RTX 5090 Laptop 24 GB).
+>
+> **Cel fazy:** dedykowany tryb do skanowanych książek, który nie robi konwersji "jednym strzałem", tylko prowadzi dokument przez kontrolowany pipeline: PDF → obrazy → preprocessing → layout/OCR (VLM) → korekta LLM per-strona → walidacja jakości → składanie rozdziałów → Markdown/EPUB. Każdy etap pośredni jest zapisywany na dysk, co pozwala kontrolować błędy strona po stronie.
+>
+> **Architektura:** cały pipeline jest opakowany jako jeden silnik `ScanPipelineEngine` implementujący istniejący interfejs `ConversionEngine` z Fazy 1 — czyli pojawia się w GUI i CLI obok pozostałych silników, ale wewnątrz uruchamia wieloetapowy proces.
+
+### Struktura robocza (work dir)
+```
+work/
+├── pages_png/        # PDF rozbity na obrazy stron
+├── preprocessed/     # po deskew/denoise/dewarp/crop
+├── ocr_json/         # surowy wynik VLM-OCR (per strona)
+├── md_pages/         # Markdown per strona
+├── md_pages_clean/   # po korekcie LLM
+├── md_chapters/      # złożone rozdziały
+└── logs/             # raport jakości, lista trudnych stron
+output/
+├── book.md
+├── book.epub
+└── report.html
+```
+
+---
+
+## Etap 11 — Preprocessing obrazu
+**Gałąź:** `etap-11-preprocessing`
+**Czas:** ~4 godziny
+
+### Cel
+Rozbicie PDF na obrazy stron i ich obróbka przed OCR. Tu nie ma żadnego LLM — to klasyczne przetwarzanie obrazu.
+
+### Zadania dla Claude Code
+- [ ] Nowy pakiet `src/pdf2md/scan/` z modułem `preprocessing.py`
+- [ ] `pdf_to_images(pdf_path, dpi, output_dir)` — rozbicie PDF na PNG (pymupdf lub pdftoppm)
+- [ ] **`iter_page_batches(pdf_path, dpi, batch_size=20)`** — przetwarzanie STRUMIENIOWE: renderuj strony paczkami, oddawaj do przetworzenia, usuwaj PNG paczki przed następną (500 stron @600 DPI to 15–25 GB — bez tego dysk pada)
+- [ ] `cleanup_work_dir(work_dir)` — czyszczenie katalogu roboczego
+- [ ] Profile DPI: 300 (standard), 400 (stare książki, mała czcionka), 600 (bardzo trudne skany)
+- [ ] Operacje OpenCV: `deskew()`, `denoise()`, `dewarp()`, `crop_margins()`, `normalize_contrast()`
+- [ ] `preprocess_page(image, operations: list) -> image` — konfigurowalny pipeline
+- [ ] Detekcja "dwie strony na jednym skanie" i opcjonalny split
+- [ ] Testy na `tests/fixtures/test_scan.pdf` (w tym test paczkowania)
+
+### Co robisz Ty
+- [ ] `git checkout -b etap-11-preprocessing`
+- [ ] `sudo apt install poppler-utils imagemagick` (jeśli jeszcze nie masz)
+- [ ] Wgrywasz skan książki do `tests/fixtures/` (np. `test_book_scan.pdf`, kilka stron)
+- [ ] Sprawdzasz wizualnie wynik preprocessingu (obrazy w `work/preprocessed/`)
+- [ ] Pull Request → scal
+
+### Definicja ukończenia
+✅ PDF rozbijany na obrazy w wybranym DPI  
+✅ Przetwarzanie paczkowe nie trzyma wszystkich stron naraz (kontrola dysku)  
+✅ deskew + crop + denoise dają wizualnie lepszy obraz  
+✅ Testy przechodzą  
+
+---
+
+## Etap 12 — Silniki VLM-OCR
+**Gałąź:** `etap-12-vlm-ocr`
+**Czas:** ~6 godzin
+
+### Cel
+Trzy silniki OCR oparte na modelach wizyjno-językowych, jako adaptery `ConversionEngine`. To serce jakości w Fazie 2.
+
+### Zadania dla Claude Code
+- [ ] `engines/olmocr_engine.py` — adapter olmOCR (model olmOCR-2-7B-FP8, flaga `--markdown`, uruchomienie przez vLLM lub serwer lokalny)
+- [ ] `engines/paddleocr_vl_engine.py` — adapter PaddleOCR-VL
+- [ ] `engines/surya_engine.py` — adapter Surya (layout + OCR + reading order)
+- [ ] Wspólna baza `engines/vlm_base.py` z detekcją GPU (`torch.cuda.is_available()`) i ostrzeżeniem gdy brak GPU
+- [ ] **Zarządzanie VRAM**: metody `load_model()` / `unload_model()`. `unload_model()` realnie zwalnia pamięć (usuń referencje, `gc.collect()`, `torch.cuda.empty_cache()`; vLLM → zamknij proces). Konieczne, bo olmOCR (~7-8 GB) i model korekty qwen2.5:14b (~9-10 GB) NIE zmieszczą się naraz w 24 GB.
+- [ ] Każdy silnik: `is_available()` przez `importlib.metadata.version()` + `has_gpu()` (BEZ importu modelu), `requires_gpu = True`
+- [ ] Output per strona do `work/ocr_json/` i `work/md_pages/`, przetwarzanie paczkowe (iter_page_batches)
+- [ ] Aktualizacja Registry
+- [ ] Testy z `skipif` gdy brak GPU lub silnika
+
+### Co robisz Ty
+- [ ] `git checkout -b etap-12-vlm-ocr`
+- [ ] Instalacja w czystym środowisku (olmOCR wymaga osobnego env — sprawdź dokumentację):
+  ```bash
+  # olmOCR — najlepiej osobne środowisko conda/uv, wymaga CUDA
+  # Pobiera model 7B przy pierwszym uruchomieniu
+  ```
+- [ ] Sprawdzasz że GPU jest wykrywane (`nvidia-smi`, `torch.cuda.is_available()`)
+- [ ] Testujesz olmOCR na 2-3 stronach skanu — porównujesz z Markerem z Fazy 1
+- [ ] Po teście sprawdzasz `nvidia-smi` — czy `unload_model()` faktycznie zwolnił VRAM
+- [ ] Pull Request → scal
+
+### Definicja ukończenia
+✅ olmOCR konwertuje skan strony do Markdown na GPU  
+✅ `unload_model()` realnie zwalnia VRAM (widoczne w nvidia-smi)  
+✅ `is_available()` zwraca False (bez błędu) gdy brak GPU lub modelu  
+✅ Co najmniej jeden silnik VLM działa end-to-end  
+
+---
+
+## Etap 13 — Korekta LLM per-strona + walidacja jakości
+**Gałąź:** `etap-13-correction-validation`
+**Czas:** ~6 godzin
+
+### Cel
+Korekta wyniku OCR lokalnym LLM (konserwatywnie, bez parafrazy) oraz automatyczna detekcja stron o niskiej jakości i ich ponowny przebieg.
+
+### Zadania dla Claude Code
+- [ ] `scan/correction.py` — korekta per-strona przez `LLMProvider` z Fazy 1 (preferowany Ollama + Qwen 14B Q4/Q5)
+- [ ] **Sekwencja VRAM**: korekta startuje DOPIERO po `unload_model()` silnika VLM (Etap 12) — oba modele nigdy naraz w pamięci. Dla Ollamy po korekcie wyślij `keep_alive=0` (wyładowanie modelu, domyślnie trzymany 5 min). Guard: zaloguj wolne VRAM przed startem korekty.
+- [ ] Konserwatywny prompt korekcyjny w `core/prompts.py` jako `SCAN_CORRECTION_PROMPT`:
+  ```
+  Jesteś korektorem OCR. Popraw wyłącznie oczywiste błędy rozpoznawania tekstu.
+  Nie parafrazuj. Nie skracaj. Nie dopisuj informacji, których nie ma.
+  Zachowaj oryginalną składnię, interpunkcję, styl i akapity.
+  Połącz wyrazy przeniesione przez podział wiersza, jeśli to oczywiste.
+  Usuń numery stron, nagłówki i stopki tylko gdy są ewidentnie metadanymi strony.
+  Fragmenty niepewne oznacz jako [nieczytelne].
+  Przypisy oznacz jako Markdown footnotes.
+  Nie modernizuj pisowni, nie zamieniaj archaizmów, nie tłumacz, nie streszczaj.
+  Zwróć wynik jako czysty Markdown.
+  ```
+- [ ] `scan/validation.py` — heurystyki jakości:
+  - liczba znaków na stronie, wykrycie pustych stron, nagłe spadki liczby znaków
+  - liczba znaków � i `[nieczytelne]`
+  - podejrzane ciągi (rn↔m, l↔I, 0↔O)
+  - porównanie dwóch silników OCR (jeśli włączone)
+- [ ] `should_rerun_page(quality_score, threshold) -> bool`
+- [ ] Logika ponownego przebiegu trudnych stron dokładniejszym silnikiem/DPI
+- [ ] Testy z mockowanym LLM + przykładowe "brudne" strony
+
+### Co robisz Ty
+- [ ] `git checkout -b etap-13-correction-validation`
+- [ ] (Jeśli używasz lokalnego LLM) `ollama pull qwen2.5:14b` lub odpowiednik
+- [ ] Testujesz korektę na surowym OCR z Etapu 12 — sprawdzasz że LLM NIE parafrazuje
+- [ ] Sprawdzasz raport walidacji (które strony oznaczone jako trudne)
+- [ ] Pull Request → scal
+
+### Definicja ukończenia
+✅ Korekta LLM poprawia OCR bez zmiany treści  
+✅ Walidacja wykrywa strony o niskiej jakości  
+✅ Trudne strony są ponawiane automatycznie  
+
+---
+
+## Etap 14 — Składanie książki + eksport EPUB
+**Gałąź:** `etap-14-book-assembly`
+**Czas:** ~5 godzin
+
+### Cel
+Złożenie poprawionych stron w spójną książkę i eksport do Markdown + EPUB z raportem jakości.
+
+### Zadania dla Claude Code
+- [ ] `scan/assembly.py`:
+  - usuwanie powtarzalnych nagłówków/stopek
+  - łączenie akapitów między stronami
+  - naprawa dzielenia wyrazów (hyphenation)
+  - detekcja rozdziałów → struktura `md_chapters/`
+  - normalizacja cudzysłowów i myślników
+  - zachowanie kursywy/pogrubień jeśli OCR je wykrył
+  - budowa spisu treści (TOC)
+- [ ] `scan/export.py`:
+  - `book.md` (scalony)
+  - EPUB przez `ebooklib` (lepsza kontrola) lub Pandoc jako fallback
+  - `report.html` — raport jakości z miniaturami trudnych stron
+- [ ] LLM może działać rozdziałami (nie całą książką naraz)
+- [ ] `engines/scan_pipeline_engine.py` — `ScanPipelineEngine` wymuszający sekwencję: preprocessing → OCR (VLM) → unload VLM → korekta → walidacja → składanie → eksport. Po UDANYM buildzie EPUB automatyczne czyszczenie `work/` (flaga `--keep-work` do debugowania).
+- [ ] Testy końcowe: skan kilkustronicowy → poprawny EPUB (walidacja struktury); test czyszczenia work/
+
+### Co robisz Ty
+- [ ] `git checkout -b etap-14-book-assembly`
+- [ ] Uruchamiasz pełny pipeline na skanie testowym (kilka–kilkanaście stron)
+- [ ] Otwierasz wynikowy EPUB w czytniku (Calibre, Foliate)
+- [ ] Sprawdzasz `report.html` — czy trudne strony są oznaczone
+- [ ] Pull Request → scal
+
+### Definicja ukończenia
+✅ Strony łączą się w spójny `book.md` z rozdziałami  
+✅ EPUB otwiera się poprawnie w czytniku  
+✅ Raport HTML pokazuje jakość konwersji  
+
+---
+
+## Etap 15 — Profile skanowania (fast / balanced / premium)
+**Gałąź:** `etap-15-scan-profiles`
+**Czas:** ~3 godziny
+
+### Cel
+Trzy gotowe profile konfiguracji całego pipeline'u, dostępne z CLI i GUI.
+
+### Profile (pliki YAML w `profiles/`)
+- **fast** — DPI 300, deskew, PaddleOCR/Tesseract, korekta Qwen 14B, bez dewarp. Do beletrystyki i dobrych skanów.
+- **balanced** (domyślny) — DPI 400, deskew+denoise+dewarp auto, Surya/PaddleOCR-VL, korekta Qwen 14B, walidacja. Do książek popularnonaukowych, przypisów, tabel.
+- **premium** — DPI 400, pełny preprocessing, olmOCR + Surya jako kontrola, porównanie wyników, korekta konserwatywna page→chapter, rerun trudnych stron, raport HTML. Do trudnych i starych skanów.
+
+### Zadania dla Claude Code
+- [ ] `profiles/fast.yaml`, `balanced.yaml`, `premium.yaml` (struktura jak w notatkach źródłowych)
+- [ ] `scan/profiles.py` — ładowanie i walidacja profilu (pydantic)
+- [ ] CLI: `pdf2md scan plik.pdf --profile premium`
+- [ ] GUI: dropdown wyboru profilu w trybie skanowania
+- [ ] Możliwość zapisania własnego profilu przez użytkownika
+- [ ] Dokumentacja `docs/SCAN_PROFILES.md`
+
+### Co robisz Ty
+- [ ] `git checkout -b etap-15-scan-profiles`
+- [ ] Testujesz każdy profil na tym samym skanie — porównujesz jakość i czas
+- [ ] Dostrajasz domyślny profil do swoich typowych dokumentów
+- [ ] Pull Request → scal
+
+### Definicja ukończenia
+✅ `pdf2md scan plik.pdf --profile premium` działa end-to-end  
+✅ Trzy profile dają różny kompromis jakość/szybkość  
+✅ GUI pozwala wybrać profil  
+
+---
+
+## Definicja "Done" dla Fazy 2
+
+- [ ] Pełny pipeline skan → EPUB działa z profilem premium
+- [ ] olmOCR (lub inny VLM) działa lokalnie na GPU
+- [ ] Korekta LLM nie zmienia treści (tylko poprawia OCR)
+- [ ] Walidacja wykrywa i ponawia trudne strony
+- [ ] Trzy profile dostępne z CLI i GUI
+- [ ] Raport jakości HTML generowany dla każdej konwersji
 
 ---
 

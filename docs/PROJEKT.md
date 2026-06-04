@@ -1,6 +1,8 @@
-# pdf2md — Dokument Projektowy
+# pdf2md Squeezer — Dokument Projektowy
 
 > Konwerter PDF do Markdown z wieloma silnikami, GUI, CLI i opcjonalnym wsparciem LLM
+>
+> **Nazwa produktu:** pdf2md Squeezer · **Pakiet/komenda:** `pdf2md` (bez spacji — wymóg nazewnictwa Pythona)
 
 ---
 
@@ -22,13 +24,23 @@ Konwersja PDF → Markdown jest trudna bo PDF to format prezentacyjny (pozycje p
 Aplikacja będąca **orkiestratorem** gotowych, sprawdzonych silników konwersji. Użytkownik wybiera silnik odpowiedni do swojego dokumentu, opcjonalnie wspomaga go lokalnym lub chmurowym LLM.
 
 ### Zakres v1.0
-- Obsługa 5 silników konwersji (od trywialnych do zaawansowanych)
-- Opcjonalne wspomaganie LLM (lokalny Ollama lub chmura: Claude/OpenAI/Gemini)
+- **3 silniki rdzeniowe** (stabilne, testowane): PyMuPDF4LLM, Marker, Docling
+- **2 silniki opcjonalne** (dodawane później, bardziej ryzykowne instalacyjnie): MinerU, pdf-craft
+- Opcjonalne wspomaganie LLM (lokalny Ollama lub chmura: Claude/OpenAI/Gemini), z trybami chunkowania
 - Interfejs GUI (okienkowy, drag & drop)
-- Interfejs CLI (terminal, batch processing, skrypty)
+- Interfejs CLI (terminal, batch processing, skrypty) + komenda diagnostyczna `pdf2md doctor`
 - Wyjście: Markdown (opcjonalnie EPUB przez Pandoc jeśli zainstalowany)
 - Działanie w 100% lokalnie (LLM chmurowy — opcjonalne)
 - Cross-platform: Windows (WSL), Linux, macOS
+
+> **Uwaga o skanach w v1.0:** v1.0 obsługuje proste skany przez istniejące silniki (Marker/Docling z OCR), ale **bez gwarancji jakości książkowej**. Wysokiej jakości pipeline do skanowanych książek to dopiero Faza 2 (premium scan pipeline). pdf-craft w v1.0 daje podstawową obsługę, nie pełen pipeline.
+
+### Zakres Fazy 2 (premium scan pipeline)
+Po ukończeniu v1.0 — dedykowany pipeline do skanowanych książek oparty na VLM-OCR (olmOCR / PaddleOCR-VL / Surya), z preprocessingiem obrazu, korektą LLM per-strona, walidacją jakości i składaniem książki do Markdown/EPUB. Szczegóły w ROADMAP (etapy 11–15). Materiał źródłowy: notatki z badań nad modelami OCR/LLM do skanów książek.
+
+> **⚠️ Dwa twarde ograniczenia Fazy 2 na sprzęcie 24 GB VRAM:**
+> 1. **VRAM — modele NIE współistnieją.** olmOCR-2-7B (~7–8 GB) i qwen2.5:14b (~9–10 GB) + narzut PyTorch + bufory obrazów 400–600 DPI przebiją 24 GB → OOM CUDA. Pipeline musi działać **sekwencyjnie**: najpierw cała faza VLM-OCR, potem **wyładowanie modelu wizyjnego** (Ollama: `keep_alive=0`; vLLM: zamknięcie procesu/`torch.cuda.empty_cache()`), dopiero potem faza korekty LLM. Nigdy oba modele załadowane naraz.
+> 2. **Dysk — preprocessing strumieniowo.** 500 stron PNG przy 600 DPI to 15–25 GB plików tymczasowych. Pipeline przetwarza strony **paczkami** (np. po 20): preprocessing → OCR → zapis MD/JSON → natychmiastowe usunięcie PNG paczki. `work/` czyszczony automatycznie po udanym buildzie EPUB.
 
 ---
 
@@ -39,13 +51,26 @@ Aplikacja będąca **orkiestratorem** gotowych, sprawdzonych silników konwersji
 
 ### Silniki konwersji (adaptery)
 
-| Silnik | Pip | Mocna strona | Trudność instalacji |
+| Silnik | Pip | Mocna strona | Trudność | Licencja |
+|---|---|---|---|---|
+| **PyMuPDF4LLM** | `pymupdf4llm` | Najszybszy, natywny tekst | ⭐ Trywialna | AGPL/komercyjna |
+| **Marker** | `marker-pdf` | Uniwersalny, OCR, `--use_llm` | ⭐⭐ Łatwa | **GPL** (wyjątek <$2M) |
+| **MinerU** | `mineru` | Naukowe, wielokolumnowe, CJK | ⭐⭐⭐ Średnia | AGPL |
+| **Docling** | `docling` | Enterprise, tabele, RAG | ⭐⭐ Łatwa | MIT |
+| **pdf-craft** | `pdf-craft` | Skanowane książki | ⭐⭐ Łatwa | sprawdź |
+
+> **⚠️ Uwaga licencyjna (ważna przy packagingu).** Sam kod pdf2md Squeezer jest MIT, ale kilka silników ma licencje copyleft (Marker — GPL, MinerU/PyMuPDF — AGPL). Dopóki instalujesz je jako **osobne, opcjonalne pakiety pip** i wywołujesz przez adapter, Twój kod pozostaje MIT. Problem pojawia się dopiero przy **wkompilowaniu ich na sztywno w jedno binary PyInstaller** (Etap 10) — wtedy dystrybucja musiałaby respektować GPL/AGPL. Dlatego: silniki copyleft jako opcjonalne dodatki, nie część rdzeniowego buildu. Dotyczy to też przyszłego camelot (F02): sam camelot jest MIT, ale jego historyczna zależność Ghostscript to AGPL — w aktualnych wersjach camelota domyślny backend to pdfium (BSD), więc używaj pdfium i nie instaluj Ghostscriptu.
+
+
+#### Silniki VLM-OCR (Faza 2 — premium scan pipeline)
+
+Te silniki wchodzą do gry dopiero w Fazie 2 (zob. ROADMAP, etapy 11–15). Są oparte na modelach wizyjno-językowych (VLM), wymagają GPU i są zaprojektowane pod skanowane książki. Idealnie pasują do Twojego sprzętu (RTX 5090 Laptop 24 GB VRAM + 128 GB RAM).
+
+| Silnik | Typ | Mocna strona | GPU |
 |---|---|---|---|
-| **PyMuPDF4LLM** | `pymupdf4llm` | Najszybszy, natywny tekst | ⭐ Trywialna |
-| **Marker** | `marker-pdf` | Uniwersalny, OCR, `--use_llm` | ⭐⭐ Łatwa |
-| **MinerU** | `mineru` | Naukowe, wielokolumnowe, CJK | ⭐⭐⭐ Średnia |
-| **Docling** | `docling` | Enterprise, tabele, RAG | ⭐⭐ Łatwa |
-| **pdf-craft** | `pdf-craft` | Skanowane książki → EPUB | ⭐⭐ Łatwa |
+| **olmOCR** (olmOCR-2-7B) | VLM 7B | Czysty Markdown, równania, tabele, kolejność czytania | ✅ wymagany |
+| **PaddleOCR-VL** | VLM lekki | Wydajny parser dokumentów, wielojęzyczny | ✅ zalecany |
+| **Surya** | OCR + layout | Layout, reading order, fallback kontrolny | ✅ zalecany |
 
 ### Dostawcy LLM
 
@@ -111,11 +136,23 @@ pdf2md/
 │   │   ├── __init__.py
 │   │   ├── registry.py             # Wykrywanie dostępnych silników i LLM
 │   │   ├── converter.py            # Orkiestrator konwersji
-│   │   └── config.py               # Ustawienia (pydantic-settings, TOML)
+│   │   ├── config.py               # Ustawienia (pydantic-settings, config.toml + .env)
+│   │   └── prompts.py              # Prompty LLM (post-processing, korekta skanów)
+│   │
+│   ├── detection/                  # Wykrywanie typu PDF i zależności
+│   │   ├── __init__.py
+│   │   ├── pdf_type.py             # native / scanned / mixed
+│   │   └── dependencies.py         # Stan systemu (Tesseract, Poppler, Pandoc, GPU...)
+│   │
+│   ├── exporters/                  # Warstwa eksportu (od razu, choć na start tylko 2)
+│   │   ├── __init__.py
+│   │   ├── base.py                 # ABC BaseExporter
+│   │   ├── markdown_exporter.py    # Zapis .md
+│   │   └── pandoc_epub_exporter.py # EPUB przez Pandoc (natywny ebooklib → F01 później)
 │   │
 │   ├── cli/                        # Interfejs linii komend
 │   │   ├── __init__.py
-│   │   └── main.py                 # click commands
+│   │   └── main.py                 # click commands (convert, doctor, list-*, config)
 │   │
 │   ├── gui/                        # Interfejs graficzny
 │   │   ├── __init__.py
@@ -132,7 +169,7 @@ pdf2md/
 │   └── utils/
 │       ├── __init__.py
 │       ├── logging.py              # Konfiguracja loguru
-│       └── pandoc.py               # Opcjonalny eksport przez Pandoc
+│       └── chunking.py             # Dzielenie tekstu na potrzeby LLM
 │
 ├── tests/
 │   ├── unit/
@@ -192,6 +229,18 @@ class ConversionEngine(ABC):
         """Wykonaj konwersję PDF → Markdown."""
 ```
 
+> **⚡ Ważna zasada wydajności — `is_available()` NIE importuje silnika.** Registry odpytuje `is_available()` wszystkich silników przy każdym `--help`, starcie GUI czy `list-engines`. Gdyby `is_available()` robił `import marker`/`import docling`, ładowałby do pamięci gigabajty zależności (PyTorch, biblioteki wizyjne) — start trwałby kilkanaście sekund. Dlatego `is_available()` sprawdza tylko **obecność pakietu**, a fizyczny import dzieje się dopiero w `convert()`:
+> ```python
+> import importlib.metadata
+> def is_available(self) -> bool:
+>     try:
+>         importlib.metadata.version("marker-pdf")  # tylko metadane, bez importu
+>         return True
+>     except importlib.metadata.PackageNotFoundError:
+>         return False
+> ```
+> Konsekwencja dla packagingu: skoro import jest leniwy, PyInstaller nie wykryje silników automatycznie — trzeba je jawnie dodać do `hiddenimports` w `build.spec` (zob. Etap 10).
+
 ### Registry — co jest zainstalowane?
 
 ```python
@@ -224,15 +273,34 @@ Użytkownik wybiera PDF + silnik + opcje LLM
    pandoc input.md -o output.epub
 ```
 
-### LLM jako post-processing (nie per-strona)
+### LLM jako post-processing — z trybami chunkowania
 
-Kluczowe uproszczenie względem poprzedniego projektu: LLM **nie** przetwarza każdej strony osobno. Zamiast tego:
+LLM czyści surowy Markdown po konwersji (usuwa artefakty OCR, naprawia tabele). Dla krótkich dokumentów wystarczy jeden call, ale dla książek 300–800 stron przekroczy to context window modelu. Dlatego interfejs od początku przewiduje tryby chunkowania (`core/config.py` → `llm_mode`):
 
-1. Silnik robi pełną konwersję → surowy Markdown
-2. LLM opcjonalnie czyści wynik: usuwa artefakty OCR, naprawia tabelki, poprawia kolejność tekstu
-3. Jeden call API zamiast N (gdzie N = liczba stron)
+| Tryb | Działanie | Kiedy |
+|---|---|---|
+| `none` | Bez LLM | Domyślny |
+| `whole_document` | Jeden call na całość | Krótkie PDF-y (< limit kontekstu) |
+| `by_page` | Call per strona | Skany, dużo błędów OCR |
+| `by_chunk` | Podział na bloki ~N tokenów | Długie dokumenty |
+| `by_heading` | Podział wg nagłówków | Książki, raporty ze strukturą |
 
-Wyjątek: Marker ma wbudowany `--use_llm` który działa per-strona — tam korzystamy z jego własnej implementacji.
+GUI na start może pokazywać tylko prosty checkbox „Włącz LLM" + wybór trybu, ale `utils/chunking.py` i interfejs `LLMProvider.postprocess()` muszą być gotowe na chunkowanie od pierwszej implementacji — dorobienie tego później oznaczałoby przeróbkę interfejsu.
+
+Wyjątek: Marker ma wbudowany `--use_llm` działający per-strona — tam korzystamy z jego własnej implementacji.
+
+### Konfiguracja — jedno źródło prawdy
+
+Aby CLI i GUI nie rozjechały się z ustawieniami, jest **jeden** model konfiguracji:
+
+- `~/.config/pdf2md/config.toml` — źródło prawdy (silnik domyślny, folder output, język, llm_mode, nazwy modeli)
+- klucze API: `config.toml` lub systemowy keyring (docelowo), `.env` dopuszczalny w trybie deweloperskim
+- `.env` **tylko jako override deweloperski** — nadpisuje wartości lokalnie, nie jest źródłem prawdy w produkcji
+
+CLI i GUI czytają ten sam `config.toml` przez `core/config.py`. GUI zapisuje zmiany tam, nie do osobnego QSettings.
+
+> **Zapis atomowy.** Skoro `config.toml` zapisuje i CLI (`config set`), i GUI, jednoczesny zapis mógłby uszkodzić plik (race condition). `save_settings()` pisze do pliku tymczasowego i robi `os.replace()` na docelowy — operacja atomowa na poziomie systemu plików, eliminuje uszkodzenie bez dodatkowych zależności. (Cięższy `filelock` nie jest konieczny dla narzędzia jednoosobowego.)
+
 
 ---
 

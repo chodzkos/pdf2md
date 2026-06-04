@@ -6,11 +6,14 @@ Kolejność ładowania: config.toml → .env (jeśli istnieje) → cache.
 
 from __future__ import annotations
 
+import os
+import tempfile
 import tomllib
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
 _CONFIG_DIR = Path.home() / ".config" / "pdf2md"
 _CONFIG_FILE = _CONFIG_DIR / "config.toml"
@@ -54,8 +57,20 @@ def _load_toml_flat() -> dict[str, Any]:
     """Wczytuje TOML i spłaszcza sekcje do płaskiego słownika dla pydantic-settings."""
     data = _ensure_config_file()
     flat: dict[str, Any] = {}
-    for section in data.values():
+    for section_name, section in data.items():
         if isinstance(section, dict):
+            if section_name == "llm":
+                section = {
+                    ("llm_enabled" if key == "enabled" else key): value
+                    for key, value in section.items()
+                }
+                section = {
+                    ("llm_provider" if key == "provider" else key): value
+                    for key, value in section.items()
+                }
+                section = {
+                    ("llm_mode" if key == "mode" else key): value for key, value in section.items()
+                }
             flat.update(section)
     return flat
 
@@ -70,6 +85,18 @@ class Settings(BaseSettings):
         case_sensitive=False,
         extra="ignore",
     )
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        """Ustawia priorytet: zmienne środowiskowe/.env nadpisują config.toml."""
+        return env_settings, dotenv_settings, init_settings, file_secret_settings
 
     # Klucze API
     anthropic_api_key: str = ""
@@ -106,7 +133,7 @@ def get_settings() -> Settings:
 
 
 def save_settings(settings: Settings) -> None:
-    """Zapisuje ustawienia do ~/.config/pdf2md/config.toml."""
+    """Zapisuje ustawienia atomowo do ~/.config/pdf2md/config.toml."""
     global _settings_cache
     _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     lines = [
@@ -128,5 +155,18 @@ def save_settings(settings: Settings) -> None:
         f'openai_api_key = "{settings.openai_api_key}"\n',
         f'gemini_api_key = "{settings.gemini_api_key}"\n',
     ]
-    _CONFIG_FILE.write_text("".join(lines), encoding="utf-8")
+    fd, tmp_path = tempfile.mkstemp(
+        prefix=f"{_CONFIG_FILE.name}.",
+        suffix=".tmp",
+        dir=_CONFIG_DIR,
+        text=True,
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as tmp_file:
+            tmp_file.write("".join(lines))
+        os.replace(tmp_path, _CONFIG_FILE)
+    except Exception:
+        with suppress(FileNotFoundError):
+            os.unlink(tmp_path)
+        raise
     _settings_cache = settings

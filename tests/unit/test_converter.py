@@ -54,7 +54,19 @@ class TestConverter:
         result = Converter().convert(str(pdf), engine, llm=llm)
 
         assert result.markdown == "# poprawiony"
-        llm.postprocess.assert_called_once_with("# surowy")
+        llm.postprocess.assert_called_once_with("# surowy", mode="none")
+
+    def test_convert_with_llm_mode(self, tmp_path: Path) -> None:
+        """convert() przekazuje tryb LLM do dostawcy."""
+        pdf = tmp_path / "doc.pdf"
+        pdf.write_bytes(b"fake pdf")
+        engine = _make_engine(markdown="# surowy")
+        llm = _make_llm(output="# poprawiony")
+
+        result = Converter().convert(str(pdf), engine, llm=llm, llm_mode="by_chunk")
+
+        assert result.markdown == "# poprawiony"
+        llm.postprocess.assert_called_once_with("# surowy", mode="by_chunk")
 
     def test_convert_saves_output_file(self, tmp_path: Path) -> None:
         """convert() z output_path zapisuje plik .md."""

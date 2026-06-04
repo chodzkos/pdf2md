@@ -24,6 +24,7 @@ class Converter:
         engine: ConversionEngine,
         llm: LLMProvider | None = None,
         output_path: str | None = None,
+        llm_mode: str = "none",
     ) -> ConversionResult:
         """Konwertuje jeden plik PDF do Markdown.
 
@@ -32,6 +33,7 @@ class Converter:
             engine: Silnik konwersji do użycia.
             llm: Opcjonalny dostawca LLM do post-processingu.
             output_path: Ścieżka wyjściowa pliku .md (None = nie zapisuj).
+            llm_mode: Tryb post-processingu LLM.
 
         Returns:
             Wynik konwersji z Markdown i metadanymi.
@@ -52,7 +54,7 @@ class Converter:
 
         if llm is not None:
             logger.info(f"Post-processing LLM: {llm.name}")
-            llm_result = llm.postprocess(result.markdown)
+            llm_result = llm.postprocess(result.markdown, mode=llm_mode)
             result.markdown = llm_result.text
 
         if output_path is not None:
@@ -70,6 +72,7 @@ class Converter:
         engine: ConversionEngine,
         llm: LLMProvider | None = None,
         output_dir: str | None = None,
+        llm_mode: str = "none",
     ) -> list[ConversionResult]:
         """Konwertuje wiele plików PDF.
 
@@ -78,6 +81,7 @@ class Converter:
             engine: Silnik konwersji.
             llm: Opcjonalny dostawca LLM.
             output_dir: Katalog wyjściowy (None = obok źródła).
+            llm_mode: Tryb post-processingu LLM.
 
         Returns:
             Lista wyników (w kolejności wejściowej).
@@ -89,7 +93,7 @@ class Converter:
                 stem = Path(pdf_path).stem
                 out = str(Path(output_dir) / f"{stem}.md")
             try:
-                result = self.convert(pdf_path, engine, llm, output_path=out)
+                result = self.convert(pdf_path, engine, llm, output_path=out, llm_mode=llm_mode)
             except ConversionError as exc:
                 logger.error(f"Błąd przy {pdf_path}: {exc}")
                 result = ConversionResult(

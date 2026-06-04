@@ -98,3 +98,15 @@ def by_heading(text: str) -> list[str]:
             sections.append(section)
 
     return sections
+
+
+def by_page(pages: list[str]) -> list[str]:
+    """Zwraca niepuste strony jako osobne fragmenty do przetwarzania przez LLM.
+
+    Args:
+        pages: Lista tekstów stron w kolejności z dokumentu.
+
+    Returns:
+        Lista niepustych stron po przycięciu białych znaków.
+    """
+    return [page.strip() for page in pages if page.strip()]

@@ -6,8 +6,11 @@ CLI i GUI odpytują registry zamiast importować silniki bezpośrednio.
 
 from __future__ import annotations
 
-from pdf2md.engines.base import ConversionEngine
-from pdf2md.llm.base import LLMProvider
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pdf2md.engines.base import ConversionEngine
+    from pdf2md.llm.base import LLMProvider
 
 
 class EngineRegistry:

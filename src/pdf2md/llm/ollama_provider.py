@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import urllib.error
 import urllib.request
 
 from loguru import logger
@@ -12,8 +11,6 @@ from pdf2md.core.config import get_settings
 from pdf2md.core.prompts import POST_PROCESSING_PROMPT
 from pdf2md.llm.base import LLMProvider, LLMResult
 from pdf2md.llm.base_mixin import PostprocessMixin
-
-_BASE_URL = "http://localhost:11434"
 
 
 class OllamaProvider(PostprocessMixin, LLMProvider):
@@ -27,7 +24,7 @@ class OllamaProvider(PostprocessMixin, LLMProvider):
     def is_available(self) -> bool:
         """Zwraca True jeśli serwer Ollama odpowiada na /api/tags."""
         try:
-            with urllib.request.urlopen(f"{_BASE_URL}/api/tags", timeout=2) as resp:
+            with urllib.request.urlopen(f"{self._base_url()}/api/tags", timeout=2) as resp:
                 return bool(resp.status == 200)
         except Exception:
             return False
@@ -35,11 +32,17 @@ class OllamaProvider(PostprocessMixin, LLMProvider):
     def get_models(self) -> list[str]:
         """Zwraca listę dostępnych modeli z /api/tags."""
         try:
-            with urllib.request.urlopen(f"{_BASE_URL}/api/tags", timeout=2) as resp:
+            with urllib.request.urlopen(f"{self._base_url()}/api/tags", timeout=2) as resp:
                 data = json.loads(resp.read())
                 return [m["name"] for m in data.get("models", [])]
         except Exception:
             return []
+
+    def _base_url(self) -> str:
+        return (
+            getattr(get_settings(), "ollama_url", "http://localhost:11434").rstrip("/")
+            or "http://localhost:11434"
+        )
 
     def _call_llm(self, text: str, instructions: str) -> str:
         model = get_settings().ollama_model or self.default_model
@@ -50,7 +53,7 @@ class OllamaProvider(PostprocessMixin, LLMProvider):
         )
         payload = json.dumps({"model": model, "prompt": prompt, "stream": False}).encode()
         req = urllib.request.Request(
-            f"{_BASE_URL}/api/generate",
+            f"{self._base_url()}/api/generate",
             data=payload,
             headers={"Content-Type": "application/json"},
             method="POST",

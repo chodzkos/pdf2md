@@ -32,6 +32,7 @@ def test_get_settings_creates_default_config(isolated_config: Path) -> None:
     assert settings.marker_device == "cpu"
     assert settings.marker_workers == 1
     assert settings.marker_max_pages == 1
+    assert settings.ollama_url == "http://localhost:11434"
     assert settings.llm_mode == "none"
 
 
@@ -45,6 +46,7 @@ enabled = true
 provider = "ollama"
 mode = "by_chunk"
 ollama_model = "model-testowy"
+ollama_url = "http://ollama-test:11434"
 
 [conversion]
 default_engine = "marker"
@@ -68,6 +70,7 @@ openai_api_key = "dev-key"
     assert settings.llm_provider == "ollama"
     assert settings.llm_mode == "by_chunk"
     assert settings.ollama_model == "model-testowy"
+    assert settings.ollama_url == "http://ollama-test:11434"
     assert settings.default_engine == "marker"
     assert settings.default_output_dir == "/tmp/out"
     assert settings.default_language == "pol"
@@ -115,6 +118,7 @@ def test_save_settings_writes_config_atomically(isolated_config: Path) -> None:
         llm_enabled=True,
         llm_provider="ollama",
         llm_mode="by_heading",
+        ollama_url="http://localhost:11434",
         default_engine="marker",
         default_output_dir="/tmp/pdf2md",
         default_language="eng",
@@ -132,6 +136,7 @@ def test_save_settings_writes_config_atomically(isolated_config: Path) -> None:
     assert data["llm"]["enabled"] is True
     assert data["llm"]["provider"] == "ollama"
     assert data["llm"]["mode"] == "by_heading"
+    assert data["llm"]["ollama_url"] == "http://localhost:11434"
     assert data["conversion"]["default_engine"] == "marker"
     assert data["conversion"]["default_output_dir"] == "/tmp/pdf2md"
     assert data["conversion"]["default_language"] == "eng"

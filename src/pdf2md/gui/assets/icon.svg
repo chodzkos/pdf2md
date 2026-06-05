@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <rect x="14" y="12" width="58" height="76" rx="6" fill="#f4f7fb" stroke="#344054" stroke-width="5"/>
+  <path d="M54 12v22h18" fill="none" stroke="#344054" stroke-width="5" stroke-linejoin="round"/>
+  <text x="25" y="66" font-family="Arial, sans-serif" font-size="21" font-weight="700" fill="#d92d20">PDF</text>
+  <path d="M67 64h32" fill="none" stroke="#1570ef" stroke-width="7" stroke-linecap="round"/>
+  <path d="M91 50l16 14-16 14" fill="none" stroke="#1570ef" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="68" y="77" width="44" height="37" rx="6" fill="#ecfdf3" stroke="#027a48" stroke-width="5"/>
+  <text x="76" y="102" font-family="Arial, sans-serif" font-size="19" font-weight="700" fill="#027a48">MD</text>
+</svg>

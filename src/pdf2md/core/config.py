@@ -30,6 +30,7 @@ anthropic_model = ""
 openai_model = ""
 gemini_model = ""
 ollama_model = "qwen2.5:14b"
+ollama_url = "http://localhost:11434"
 
 [conversion]
 default_engine = "pymupdf4llm"
@@ -113,6 +114,7 @@ class Settings(BaseSettings):
     openai_model: str = ""
     gemini_model: str = ""
     ollama_model: str = "qwen2.5:14b"
+    ollama_url: str = "http://localhost:11434"
 
     # Konwersja
     default_engine: str = "pymupdf4llm"
@@ -154,6 +156,7 @@ def save_settings(settings: Settings) -> None:
         f'openai_model = "{settings.openai_model}"\n',
         f'gemini_model = "{settings.gemini_model}"\n',
         f'ollama_model = "{settings.ollama_model}"\n',
+        f'ollama_url = "{settings.ollama_url}"\n',
         "\n[conversion]\n",
         f'default_engine = "{settings.default_engine}"\n',
         f'default_output_dir = "{settings.default_output_dir}"\n',

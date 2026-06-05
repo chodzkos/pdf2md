@@ -63,5 +63,12 @@ class EngineSelectorWidget(QWidget):
         """Zwraca nazwę aktualnie wybranego silnika."""
         return self._combo.currentText()
 
+    def set_engine_name(self, name: str) -> None:
+        """Ustawia aktywny silnik po nazwie, jeśli jest na liście."""
+        for idx in range(self._combo.count()):
+            if self._combo.itemText(idx).lower() == name.lower():
+                self._combo.setCurrentIndex(idx)
+                return
+
     def _on_changed(self, _index: int) -> None:
         self.engine_changed.emit(self._combo.currentText())

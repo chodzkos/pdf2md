@@ -27,6 +27,7 @@ class ConversionWorker(QThread):
         llm_name: str = "none",
         llm_model: str = "",
         llm_mode: str = "whole_document",
+        language: str = "pol+eng",
     ) -> None:
         super().__init__()
         self._files = files
@@ -35,6 +36,7 @@ class ConversionWorker(QThread):
         self._llm_name = llm_name
         self._llm_model = llm_model
         self._llm_mode = llm_mode
+        self._language = language
 
     def run(self) -> None:
         """Iteruje po plikach, konwertuje każdy i emituje sygnały."""
@@ -61,12 +63,16 @@ class ConversionWorker(QThread):
                 stem = Path(pdf_path).stem
                 out_path = str(Path(self._output_dir) / f"{stem}.md") if self._output_dir else None
                 file_start = time.monotonic()
+                engine_kwargs: dict[str, object] = {}
+                if engine.supports_ocr:
+                    engine_kwargs["lang"] = self._language
                 result = converter.convert(
                     pdf_path,
                     engine,
                     llm=llm,
                     output_path=out_path,
                     llm_mode=self._llm_mode,
+                    engine_kwargs=engine_kwargs,
                 )
                 elapsed = time.monotonic() - file_start
                 self.progress.emit(filename, 100)

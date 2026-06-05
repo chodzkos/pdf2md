@@ -66,6 +66,16 @@ class TestConverter:
 
         engine.convert.assert_called_once_with(str(pdf), page_range="0")
 
+    def test_convert_passes_engine_options(self, tmp_path: Path) -> None:
+        """convert() przekazuje engine_options bezpośrednio do silnika."""
+        pdf = tmp_path / "doc.pdf"
+        pdf.write_bytes(b"fake pdf")
+        engine = _make_engine(markdown="# Hello")
+
+        Converter().convert(str(pdf), engine, engine_options={"device": "cuda"})
+
+        engine.convert.assert_called_once_with(str(pdf), device="cuda")
+
     def test_convert_with_llm_mode(self, tmp_path: Path) -> None:
         """convert() przekazuje tryb LLM do dostawcy."""
         pdf = tmp_path / "doc.pdf"

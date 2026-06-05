@@ -32,6 +32,7 @@ def test_get_settings_creates_default_config(isolated_config: Path) -> None:
     assert settings.marker_device == "cpu"
     assert settings.marker_workers == 1
     assert settings.marker_max_pages == 1
+    assert settings.docling_device == "auto"
     assert settings.ollama_url == "http://localhost:11434"
     assert settings.llm_mode == "none"
 
@@ -58,6 +59,9 @@ marker_device = "cuda"
 marker_workers = 2
 marker_max_pages = 3
 
+[docling]
+docling_device = "cuda"
+
 [api_keys]
 openai_api_key = "dev-key"
 """,
@@ -77,6 +81,7 @@ openai_api_key = "dev-key"
     assert settings.marker_device == "cuda"
     assert settings.marker_workers == 2
     assert settings.marker_max_pages == 3
+    assert settings.docling_device == "cuda"
     assert settings.openai_api_key == "dev-key"
 
 
@@ -125,6 +130,7 @@ def test_save_settings_writes_config_atomically(isolated_config: Path) -> None:
         marker_device="cpu",
         marker_workers=1,
         marker_max_pages=1,
+        docling_device="cuda",
         anthropic_api_key="ant",
         openai_api_key="open",
         gemini_api_key="gem",
@@ -143,6 +149,7 @@ def test_save_settings_writes_config_atomically(isolated_config: Path) -> None:
     assert data["marker"]["marker_device"] == "cpu"
     assert data["marker"]["marker_workers"] == 1
     assert data["marker"]["marker_max_pages"] == 1
+    assert data["docling"]["docling_device"] == "cuda"
     assert data["api_keys"]["anthropic_api_key"] == "ant"
     assert data["api_keys"]["openai_api_key"] == "open"
     assert data["api_keys"]["gemini_api_key"] == "gem"

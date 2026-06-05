@@ -5,7 +5,9 @@ from __future__ import annotations
 import importlib.metadata
 import json
 import urllib.request
+from typing import Any
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -97,6 +99,19 @@ class SettingsDialog(QDialog):
 
         self._default_language = QLineEdit()
         layout.addRow("Domyślny język OCR:", self._default_language)
+
+        self._docling_device = QComboBox()
+        for value in ("auto", "cpu", "cuda"):
+            self._docling_device.addItem(value, value)
+        if not self._cuda_available():
+            cuda_index = self._docling_device.findData("cuda")
+            if cuda_index >= 0:
+                self._docling_device.setItemData(
+                    cuda_index,
+                    "GPU niewykryte — zostanie użyte CPU",
+                    role=Qt.ItemDataRole.ToolTipRole,
+                )
+        layout.addRow("Docling device:", self._docling_device)
         return tab
 
     def _build_ollama_tab(self) -> QWidget:
@@ -139,6 +154,7 @@ class SettingsDialog(QDialog):
         self._default_output_dir.setText(self._settings.default_output_dir)
         self._default_language.setText(self._settings.default_language)
         self._ollama_url.setText(self._settings.ollama_url)
+        self._set_combo_value(self._docling_device, self._settings.docling_device)
 
         target = self._settings.default_engine.lower()
         for idx in range(self._default_engine.count()):
@@ -157,10 +173,26 @@ class SettingsDialog(QDialog):
                 "default_engine": str(self._default_engine.currentData()),
                 "default_output_dir": self._default_output_dir.text().strip(),
                 "default_language": self._default_language.text().strip() or "pol+eng",
+                "docling_device": str(self._docling_device.currentData()),
                 "ollama_url": self._ollama_url.text().strip() or "http://localhost:11434",
             }
         )
         return Settings(**data)
+
+    def _set_combo_value(self, combo: QComboBox, value: str) -> None:
+        index = combo.findData(value)
+        if index >= 0:
+            combo.setCurrentIndex(index)
+
+    def _cuda_available(self) -> bool:
+        try:
+            torch: Any = __import__("torch")
+        except Exception:
+            return False
+        try:
+            return bool(torch.cuda.is_available())
+        except Exception:
+            return False
 
     def _apply(self) -> None:
         self._settings = self._settings_from_fields()

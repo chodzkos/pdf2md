@@ -157,7 +157,7 @@ Drugi silnik — znacznie silniejszy, obsługuje OCR i ma wbudowany tryb LLM.
 
 ### Co robisz Ty
 - [ ] `git checkout -b etap-3-marker`
-- [ ] `uv add marker-pdf` (możliwe że długa instalacja — Marker ma dużo zależności)
+- [ ] `uv sync --extra engines-core` (możliwe że długa instalacja — Marker ma dużo zależności)
 - [ ] Wgrywasz `test_scan.pdf` i `test_columns.pdf` do fixtures
 - [ ] Testujesz oba pliki
 - [ ] Porównujesz jakość wyników z PyMuPDF4LLM

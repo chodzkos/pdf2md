@@ -56,6 +56,16 @@ class TestConverter:
         assert result.markdown == "# poprawiony"
         llm.postprocess.assert_called_once_with("# surowy", mode="none")
 
+    def test_convert_passes_engine_kwargs(self, tmp_path: Path) -> None:
+        """convert() przekazuje opcje specyficzne dla silnika."""
+        pdf = tmp_path / "doc.pdf"
+        pdf.write_bytes(b"fake pdf")
+        engine = _make_engine(markdown="# Hello")
+
+        Converter().convert(str(pdf), engine, engine_kwargs={"page_range": "0"})
+
+        engine.convert.assert_called_once_with(str(pdf), page_range="0")
+
     def test_convert_with_llm_mode(self, tmp_path: Path) -> None:
         """convert() przekazuje tryb LLM do dostawcy."""
         pdf = tmp_path / "doc.pdf"

@@ -326,7 +326,7 @@ tests/integration/test_marker.py:
 - porównaj długość wyniku z PyMuPDF4LLM na tym samym pliku
 
 Po zakończeniu:
-1. Pokaż mi jak zainstalować Marker: uv add marker-pdf
+1. Pokaż mi jak zainstalować Marker: uv sync --extra engines-core
 2. Uruchom testy: uv run pytest tests/ -v
 3. Pokaż output scripts/test_convert.py na test_text.pdf z --engine marker
 ```
@@ -462,7 +462,7 @@ KOMENDA: pdf2md list-engines
   Wyświetl tabelę rich z kolumnami:
     Nazwa | Status | Core/Opc. | OCR | LLM | Licencja | Opis
   Status: "✅ Dostępny" lub "❌ Niezainstalowany"
-  Dla niedostępnych dodaj hint jak zainstalować (np. "uv add marker-pdf")
+  Dla niedostępnych dodaj hint jak zainstalować (np. "uv sync --extra engines-core")
 
 KOMENDA: pdf2md list-llm
   Analogiczna tabela dla dostawców LLM.

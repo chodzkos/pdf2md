@@ -25,6 +25,7 @@ class Converter:
         llm: LLMProvider | None = None,
         output_path: str | None = None,
         llm_mode: str = "none",
+        engine_kwargs: dict[str, object] | None = None,
     ) -> ConversionResult:
         """Konwertuje jeden plik PDF do Markdown.
 
@@ -34,6 +35,7 @@ class Converter:
             llm: Opcjonalny dostawca LLM do post-processingu.
             output_path: Ścieżka wyjściowa pliku .md (None = nie zapisuj).
             llm_mode: Tryb post-processingu LLM.
+            engine_kwargs: Opcje specyficzne dla silnika konwersji.
 
         Returns:
             Wynik konwersji z Markdown i metadanymi.
@@ -49,7 +51,7 @@ class Converter:
 
         logger.info(f"Konwertuję: {path.name} (silnik: {engine.name})")
         start = time.monotonic()
-        result = engine.convert(pdf_path)
+        result = engine.convert(pdf_path, **(engine_kwargs or {}))
         result.conversion_time = time.monotonic() - start
 
         if llm is not None:

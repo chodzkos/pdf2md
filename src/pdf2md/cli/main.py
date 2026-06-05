@@ -88,9 +88,9 @@ ENGINE_CATALOG: tuple[dict[str, object], ...] = (
         "scope": "Opc.",
         "ocr": True,
         "llm": False,
-        "license": "sprawdź",
+        "license": "MIT",
         "hint": "uv add pdf-craft",
-        "description": "Eksperymentalny silnik dla skanowanych książek.",
+        "description": "Skanowane książki, Markdown i natywny EPUB.",
     },
 )
 

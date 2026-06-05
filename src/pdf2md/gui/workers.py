@@ -7,6 +7,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal
 
+from pdf2md.core.config import get_settings
 from pdf2md.core.converter import ConversionError, Converter
 from pdf2md.core.registry import engine_registry, llm_registry
 
@@ -28,8 +29,10 @@ class ConversionWorker(QThread):
         llm_model: str = "",
         llm_mode: str = "whole_document",
         language: str = "pol+eng",
+        docling_device: str | None = None,
     ) -> None:
         super().__init__()
+        settings = get_settings()
         self._files = files
         self._engine_name = engine_name
         self._output_dir = output_dir
@@ -37,6 +40,7 @@ class ConversionWorker(QThread):
         self._llm_model = llm_model
         self._llm_mode = llm_mode
         self._language = language
+        self._docling_device = docling_device or settings.docling_device
 
     def run(self) -> None:
         """Iteruje po plikach, konwertuje każdy i emituje sygnały."""
@@ -66,6 +70,9 @@ class ConversionWorker(QThread):
                 engine_kwargs: dict[str, object] = {}
                 if engine.supports_ocr:
                     engine_kwargs["lang"] = self._language
+                engine_options: dict[str, object] = {}
+                if engine.name.lower() == "docling":
+                    engine_options["device"] = self._docling_device
                 result = converter.convert(
                     pdf_path,
                     engine,
@@ -73,6 +80,7 @@ class ConversionWorker(QThread):
                     output_path=out_path,
                     llm_mode=self._llm_mode,
                     engine_kwargs=engine_kwargs,
+                    engine_options=engine_options,
                 )
                 elapsed = time.monotonic() - file_start
                 self.progress.emit(filename, 100)

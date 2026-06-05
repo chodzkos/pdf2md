@@ -13,6 +13,7 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
 _CONFIG_DIR = Path.home() / ".config" / "pdf2md"
@@ -41,6 +42,9 @@ default_language = "pol+eng"
 marker_device = "cpu"
 marker_workers = 1
 marker_max_pages = 1
+
+[docling]
+docling_device = "auto"
 
 [api_keys]
 # Klucze API — bezpieczniej trzymać w .env, tu tylko fallback
@@ -123,11 +127,21 @@ class Settings(BaseSettings):
     marker_device: str = "cpu"
     marker_workers: int = 1
     marker_max_pages: int = 1
+    docling_device: str = "auto"
 
     # LLM
     llm_enabled: bool = False
     llm_provider: str = "none"
     llm_mode: str = "none"
+
+    @field_validator("docling_device")
+    @classmethod
+    def validate_docling_device(cls, value: str) -> str:
+        """Dopuszcza tylko urządzenia wspierane przez GUI i adapter Docling."""
+        normalized = value.lower().strip()
+        if normalized not in {"auto", "cpu", "cuda"}:
+            raise ValueError("docling_device musi mieć wartość: auto, cpu albo cuda")
+        return normalized
 
 
 _settings_cache: Settings | None = None
@@ -165,6 +179,8 @@ def save_settings(settings: Settings) -> None:
         f'marker_device = "{settings.marker_device}"\n',
         f"marker_workers = {settings.marker_workers}\n",
         f"marker_max_pages = {settings.marker_max_pages}\n",
+        "\n[docling]\n",
+        f'docling_device = "{settings.docling_device}"\n',
         "\n[api_keys]\n",
         f'anthropic_api_key = "{settings.anthropic_api_key}"\n',
         f'openai_api_key = "{settings.openai_api_key}"\n',

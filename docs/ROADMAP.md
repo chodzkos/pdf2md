@@ -67,7 +67,7 @@ Działający szkielet projektu gotowy do development, z CI/CD od pierwszego comm
 ✅ `uv run pytest` — zielone  
 ✅ `uv run ruff check .` — zero błędów  
 ✅ GitHub Actions — zielone  
-✅ Struktura katalogów zgodna z docs/PROJEKT.md  
+✅ Struktura katalogów zgodna z PROJEKT.md  
 
 ---
 
@@ -145,28 +145,36 @@ Pierwszy działający silnik konwersji — najłatwiejszy z pięciu. Po tym etap
 ### Cel
 Drugi silnik — znacznie silniejszy, obsługuje OCR i ma wbudowany tryb LLM.
 
+> **⚠️ Marker potrafi zawiesić WSL.** Domyślnie spawnuje workery = liczba rdzeni CPU, każdy ładuje modele → wyczerpanie RAM/VRAM → zawieszenie całej maszyny wirtualnej (i śmierć serwera VS Code). Na słabszym sprzęcie (≤16 GB RAM / ≤8 GB VRAM) to się dzieje natychmiast. Dlatego: dławienie równoległości od początku, jednostronicowy fixture, testy `heavy` wyłączone z domyślnego `pytest`, pre-download modeli. Wymaga też `.wslconfig` (zob. PROJEKT.md, KROK 6b).
+
 ### Zadania dla Claude Code
 - [ ] `engines/marker_engine.py`:
-  - `is_available()`: sprawdza `import marker`
+  - `is_available()`: `importlib.metadata.version("marker-pdf")` (bez importu marker)
   - `convert(pdf_path, use_llm=False, llm_provider=None, lang="pl,en")`: wywołuje Marker API
+  - **dławienie zasobów (konfigurowalne, domyślnie niskie)**: `disable_multiprocessing=True`, `pdftext_workers=1`, respektowanie `TORCH_DEVICE`; limity z `config.toml` (marker_workers, marker_device, marker_max_pages)
   - obsługa parametru `use_llm` (przekazuje do Marker, jeśli `llm_provider` to Gemini/Ollama)
   - obsługa błędów, logowanie, raportowanie liczby stron
+- [ ] `tests/conftest.py`: ustaw `PDFTEXT_WORKERS=1` i `TORCH_DEVICE` PRZED importem marker
 - [ ] Aktualizacja Registry
-- [ ] Testy integracyjne z `test_scan.pdf` i `test_columns.pdf`
-- [ ] Aktualizacja `scripts/test_convert.py` — flag `--engine marker`
+- [ ] Testy integracyjne oznaczone `@pytest.mark.heavy`, na **jednostronicowym** `test_text_1page.pdf` (NIE na wielostronicowych skanach)
+- [ ] W `pyproject.toml`: marker `heavy` + `addopts = "-m 'not heavy'"`
+- [ ] Aktualizacja `scripts/test_convert.py` — flaga `--engine marker`
 
 ### Co robisz Ty
 - [ ] `git checkout -b etap-3-marker`
-- [ ] `uv sync --extra engines-core` (możliwe że długa instalacja — Marker ma dużo zależności)
-- [ ] Wgrywasz `test_scan.pdf` i `test_columns.pdf` do fixtures
-- [ ] Testujesz oba pliki
-- [ ] Porównujesz jakość wyników z PyMuPDF4LLM
+- [ ] Upewnij się, że masz `.wslconfig` z limitami RAM/swap/procesorów (KROK 6b w PROJEKT.md) i `wsl --shutdown`
+- [ ] `uv add marker-pdf` (długa instalacja — Marker ma dużo zależności)
+- [ ] Tworzysz jednostronicowy fixture: `test_text_1page.pdf`
+- [ ] NAJPIERW pobierasz modele poza pytestem: `marker_single tests/fixtures/test_text_1page.pdf --output_dir /tmp/mk`
+- [ ] `uv run pytest` (pomija heavy — powinno być szybkie i bezpieczne)
+- [ ] Dopiero świadomie, z monitorowaniem w 2. terminalu (`watch -n1 free -h`, `nvidia-smi -l 1`): `uv run pytest -m heavy`
 - [ ] Pull Request → scal
 
 ### Definicja ukończenia
-✅ Marker konwertuje PDF z OCR (skanowany plik)  
-✅ Parametr `use_llm` działa bez błędu (nawet jeśli LLM nie skonfigurowany — graceful skip)  
-✅ Testy przechodzą  
+✅ Marker konwertuje 1-stronicowy PDF bez zawieszania WSL  
+✅ Multiprocessing wyłączony domyślnie, workery konfigurowalne  
+✅ Testy `heavy` wyłączone z domyślnego `pytest`, uruchamiane świadomie  
+✅ Parametr `use_llm` działa bez błędu (graceful skip gdy LLM nie skonfigurowany)  
 
 ---
 

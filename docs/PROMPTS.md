@@ -21,7 +21,7 @@
 
 ```
 Zainicjuj projekt Python o nazwie "pdf2md" w bieżącym katalogu.
-Zapoznaj się z plikiem docs/PROJEKT.md i docs/ROADMAP.md jeśli są dostępne.
+Zapoznaj się z plikiem PROJEKT.md i ROADMAP.md jeśli są dostępne.
 
 Wykonaj następujące kroki:
 
@@ -78,7 +78,7 @@ Szkielet z:
 - sekcją Features (placeholder)
 - sekcją Installation (placeholder)
 - sekcją Usage (placeholder)
-- linkiem do docs/ROADMAP.md
+- linkiem do ROADMAP.md
 
 7. TEST SANITY
 Utwórz tests/unit/test_sanity.py:
@@ -95,7 +95,7 @@ Po zakończeniu pokaż mi:
 ## PROMPT #1 — Rdzeń i abstrakcje
 
 ```
-Jesteśmy na gałęzi etap-1-core. Zapoznaj się z docs/PROJEKT.md.
+Jesteśmy na gałęzi etap-1-core. Zapoznaj się z PROJEKT.md.
 
 Zaimplementuj rdzeń aplikacji pdf2md:
 
@@ -310,6 +310,15 @@ Klasa MarkerEngine dziedzicząca po ConversionEngine:
   Wyciągnij tekst z wyniku konwersji Markera.
   Policz strony z pymupdf jeśli Marker nie podaje.
 
+  KRYTYCZNE — DŁAWIENIE ZASOBÓW (inaczej Marker zawiesza WSL na słabszym sprzęcie):
+  Marker przez pdftext/Surya domyślnie spawnuje workery = liczba rdzeni CPU, każdy ładuje
+  modele → wyczerpanie RAM/VRAM → zawieszenie całego WSL. Domyślnie konwertuj zachowawczo:
+  - wyłącz multiprocessing (nowsze API: disable_multiprocessing=True; starsze: NUM_WORKERS=1)
+  - ogranicz pdftext_workers=1
+  - respektuj zmienną TORCH_DEVICE (pozwól wymusić cpu)
+  - czytaj limity z konfiguracji (config.toml): marker_workers, marker_device, marker_max_pages
+  Te wartości MUSZĄ być konfigurowalne, z bezpiecznymi (niskimi) domyślnymi.
+
 2. Obsługa use_llm
 Jeśli use_llm=True i Marker wspiera to przez konfigurację — przekaż odpowiedni parametr.
 Jeśli Marker nie obsługuje w tej wersji — loguj ostrzeżenie i kontynuuj bez LLM.
@@ -318,17 +327,30 @@ Jeśli Marker nie obsługuje w tej wersji — loguj ostrzeżenie i kontynuuj bez
 W engines/__init__.py dodaj MarkerEngine do engine_registry.
 Marker powinien być zarejestrowany PO PyMuPDF4LLM (wyżej w liście = wyżej priorytet).
 
-4. Testy integracyjne
+4. Testy integracyjne — OPT-IN i jednostronicowe (NIE mogą wieszać WSL)
+tests/conftest.py: ustaw zmienne PRZED importem marker (sesyjnie):
+  os.environ.setdefault("PDFTEXT_WORKERS", "1")
+  os.environ.setdefault("TORCH_DEVICE", os.environ.get("TORCH_DEVICE", "cpu"))
+
 tests/integration/test_marker.py:
+- oznacz CAŁY moduł @pytest.mark.heavy (ciężkie testy ML, wyłączone z domyślnego pytest)
 - skipif marker niezainstalowany
-- konwertuj test_text.pdf — sprawdź wynik
-- konwertuj test_scan.pdf (jeśli istnieje) — sprawdź wynik
-- porównaj długość wyniku z PyMuPDF4LLM na tym samym pliku
+- używaj JEDNOSTRONICOWEGO fixture (tests/fixtures/test_text_1page.pdf), nigdy dużych skanów
+- w konwersji przekaż disable_multiprocessing=True i ogranicz strony do 1
+- konwertuj 1 stronę — sprawdź że wynik niepusty
+- NIE rób w teście porównania na wielostronicowym skanie (to dla ręcznego uruchomienia)
+
+W pyproject.toml dodaj:
+  [tool.pytest.ini_options]
+  markers = ["heavy: ciezkie testy ML (Marker/VLM), uruchamiane recznie"]
+  addopts = "-m 'not heavy'"
+Wtedy "uv run pytest" pomija ciężkie; "uv run pytest -m heavy" uruchamia świadomie.
 
 Po zakończeniu:
-1. Pokaż mi jak zainstalować Marker: uv sync --extra engines-core
-2. Uruchom testy: uv run pytest tests/ -v
-3. Pokaż output scripts/test_convert.py na test_text.pdf z --engine marker
+1. Pokaż jak zainstalować Marker: uv add marker-pdf
+2. NAJPIERW pobierz modele poza pytestem na 1-stronicowym PDF: marker_single tests/fixtures/test_text_1page.pdf --output_dir /tmp/mk
+3. Uruchom lekkie testy: uv run pytest (pomija heavy)
+4. Dopiero świadomie i z monitorowaniem (free -h, nvidia-smi): uv run pytest -m heavy
 ```
 
 ---
@@ -462,7 +484,7 @@ KOMENDA: pdf2md list-engines
   Wyświetl tabelę rich z kolumnami:
     Nazwa | Status | Core/Opc. | OCR | LLM | Licencja | Opis
   Status: "✅ Dostępny" lub "❌ Niezainstalowany"
-  Dla niedostępnych dodaj hint jak zainstalować (np. "uv sync --extra engines-core")
+  Dla niedostępnych dodaj hint jak zainstalować (np. "uv add marker-pdf")
 
 KOMENDA: pdf2md list-llm
   Analogiczna tabela dla dostawców LLM.
@@ -825,7 +847,7 @@ Przykłady komend z output
 Opis config.toml (źródło prawdy), .env jako override deweloperski, dostępnych zmiennych i modeli LLM
 
 ## 🤝 Współtworzenie
-Link do docs/ROADMAP.md, zasady kontrybucji
+Link do ROADMAP.md, zasady kontrybucji
 
 3. docs/USAGE.md
 Szczegółowy przewodnik:
@@ -940,7 +962,7 @@ uv run pyinstaller build.spec --clean
 ## PROMPT #11 — Preprocessing obrazu
 
 ```
-Jesteśmy na gałęzi etap-11-preprocessing. Zapoznaj się z docs/PROJEKT.md i sekcją FAZA 2 w docs/ROADMAP.md.
+Jesteśmy na gałęzi etap-11-preprocessing. Zapoznaj się z PROJEKT.md i sekcją FAZA 2 w ROADMAP.md.
 
 Utwórz nowy pakiet src/pdf2md/scan/ do pipeline'u skanowania książek.
 
@@ -1233,7 +1255,7 @@ Te dwie reguły warto dokleić do każdego prompta (#1 i dalej) — utwardzają 
 ```
 
 ### Gdy Claude Code coś nie rozumie
-Doprecyzuj: "Zanim cokolwiek zrobisz, przeczytaj plik docs/PROJEKT.md i potwierdź że rozumiesz architekturę"
+Doprecyzuj: "Zanim cokolwiek zrobisz, przeczytaj plik PROJEKT.md i potwierdź że rozumiesz architekturę"
 
 ### Gdy coś nie działa po implementacji
 "Test X failuje z błędem: [wklej błąd]. Napraw to nie zmieniając interfejsu publicznego."
@@ -1242,7 +1264,7 @@ Doprecyzuj: "Zanim cokolwiek zrobisz, przeczytaj plik docs/PROJEKT.md i potwierd
 "Wytłumacz dlaczego wybrałeś to rozwiązanie zamiast [alternatywa]."
 
 ### Gdy coś jest niezgodne z planem
-"To rozwiązanie odbiega od architektury z docs/PROJEKT.md w zakresie [X]. Dostosuj je do planu."
+"To rozwiązanie odbiega od architektury z PROJEKT.md w zakresie [X]. Dostosuj je do planu."
 
 ### Szybki reset jeśli coś się popsuło
 git stash         # schowaj zmiany

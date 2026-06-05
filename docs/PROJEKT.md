@@ -42,6 +42,20 @@ Po ukończeniu v1.0 — dedykowany pipeline do skanowanych książek oparty na V
 > 1. **VRAM — modele NIE współistnieją.** olmOCR-2-7B (~7–8 GB) i qwen2.5:14b (~9–10 GB) + narzut PyTorch + bufory obrazów 400–600 DPI przebiją 24 GB → OOM CUDA. Pipeline musi działać **sekwencyjnie**: najpierw cała faza VLM-OCR, potem **wyładowanie modelu wizyjnego** (Ollama: `keep_alive=0`; vLLM: zamknięcie procesu/`torch.cuda.empty_cache()`), dopiero potem faza korekty LLM. Nigdy oba modele załadowane naraz.
 > 2. **Dysk — preprocessing strumieniowo.** 500 stron PNG przy 600 DPI to 15–25 GB plików tymczasowych. Pipeline przetwarza strony **paczkami** (np. po 20): preprocessing → OCR → zapis MD/JSON → natychmiastowe usunięcie PNG paczki. `work/` czyszczony automatycznie po udanym buildzie EPUB.
 
+### Poziomy sprzętu — co realnie zadziała na danej maszynie
+Projekt celuje docelowo w mocny sprzęt (RTX 5090 Laptop 24 GB / 128 GB RAM), ale część prac robisz na słabszym notebooku. To są realne granice:
+
+| Komponent | Słaby (16 GB RAM, GTX 1070 8 GB) | Mocny (128 GB RAM, RTX 5090 24 GB) |
+|---|---|---|
+| PyMuPDF4LLM (bez ML) | ✅ idealny, podstawowy silnik | ✅ |
+| Docling (CPU) | ✅ działa | ✅ |
+| Marker | ⚠️ tylko pojedyncze, małe pliki, multiprocessing OFF, 1 worker | ✅ |
+| LLM lokalny (Ollama) | ⚠️ tylko małe modele (~7B Q4, ~5 GB); 14B się nie zmieści | ✅ qwen2.5:14b |
+| LLM chmurowy (Claude/Gemini) | ✅ zalecany do post-processingu | ✅ |
+| Faza 2 — VLM-OCR (olmOCR FP8) | ❌ **niewykonalne** (Pascal nie ma FP8; 7B nie zmieści się w 8 GB) | ✅ |
+
+**Wniosek dla słabego notebooka:** rozwijaj i używaj Fazy 1 z PyMuPDF4LLM jako głównym silnikiem, Markera tylko zachowawczo na małych plikach, a post-processing przez **chmurę** (nie lokalny 14B). Fazę 2 (VLM, skany książek) zostaw na maszynę z RTX 5090 — na GTX 1070 nie ruszy.
+
 ---
 
 ## Stack technologiczny
@@ -177,10 +191,7 @@ pdf2md/
 │   └── fixtures/                   # Przykładowe PDF-y do testów
 │
 ├── docs/
-│   ├── PROJEKT.md
-│   ├── PROMPTS.md
-│   ├── ROADMAP.md
-│   ├── FEATURES.md
+│   ├── README.md
 │   └── USAGE.md
 │
 ├── .github/
@@ -193,12 +204,10 @@ pdf2md/
 ├── .gitignore
 ├── .pre-commit-config.yaml
 ├── LICENSE                         # MIT
-├── README.md                       # główny README pakietu
-└── docs/                           # dokumentacja projektu
-    ├── PROJEKT.md
-    ├── PROMPTS.md
-    ├── ROADMAP.md
-    └── FEATURES.md
+├── README.md
+├── ROADMAP.md                      # → roadmap.md
+├── PROMPTS.md                      # → prompts.md (tylko dla ciebie, nie do repo)
+└── FEATURES.md                     # → features.md
 ```
 
 ### Wzorzec adaptera — serce architektury
@@ -372,6 +381,32 @@ pdftotext --version
 tesseract --version
 ```
 
+### KROK 6b — Limity zasobów WSL2 (KONIECZNE — chroni przed zawieszeniem)
+Bez tego ciężkie silniki (Marker, później VLM) potrafią wyczerpać RAM/CPU i zawiesić całą maszynę WSL razem z VS Code. Na Windows utwórz plik `C:\Users\<TwojUser>\.wslconfig`.
+
+**Dla słabego sprzętu (16 GB RAM, np. notebook z GTX 1070):**
+```ini
+[wsl2]
+memory=10GB
+swap=16GB
+processors=4
+```
+(Zostawia ~6 GB dla Windows. Swap na dysku ratuje przed twardym OOM, choć spowalnia.)
+
+**Dla mocnego sprzętu (128 GB RAM, RTX 5090):**
+```ini
+[wsl2]
+memory=32GB
+swap=16GB
+processors=8
+```
+
+Po zapisaniu, w PowerShell:
+```powershell
+wsl --shutdown
+```
+i otwórz WSL ponownie. Weryfikacja w WSL: `free -h` (RAM zgodny z limitem).
+
 ### KROK 7 — (Opcjonalne) Klucze API dla LLM w chmurze
 Tylko jeśli chcesz używać chmurowych LLM do post-processingu:
 
@@ -396,7 +431,7 @@ git clone git@github.com:TWOJ-USER/pdf2md.git
 cd pdf2md
 
 # Skopiuj dokumenty projektowe do repozytorium
-# (docs/PROJEKT.md, docs/ROADMAP.md, docs/PROMPTS.md, docs/FEATURES.md)
+# (PROJEKT.md, ROADMAP.md, PROMPTS.md, FEATURES.md)
 
 # Jeśli masz klucze API, utwórz .env:
 cat > .env << 'EOF'
@@ -414,7 +449,7 @@ claude
 ```
 
 **Od tego momentu Claude Code przejmuje inicjalizację projektu.**
-Wklej Prompt #0 z pliku docs/PROMPTS.md i postępuj zgodnie z instrukcjami.
+Wklej Prompt #0 z pliku PROMPTS.md i postępuj zgodnie z instrukcjami.
 
 ### KROK 11 — Pliki testowe PDF
 Zbierz różne PDF-y i wgraj do `tests/fixtures/`:
@@ -430,6 +465,6 @@ Zbierz różne PDF-y i wgraj do `tests/fixtures/`:
 
 | Plik | Zawartość |
 |---|---|
-| `docs/ROADMAP.md` | Etapy projektu, timeline, checklist |
-| `docs/PROMPTS.md` | Gotowe promty do wklejenia w Claude Code |
-| `docs/FEATURES.md` | Plany na przyszłość po ukończeniu v1.0 |
+| `ROADMAP.md` | Etapy projektu, timeline, checklist |
+| `PROMPTS.md` | Gotowe promty do wklejenia w Claude Code |
+| `FEATURES.md` | Plany na przyszłość po ukończeniu v1.0 |

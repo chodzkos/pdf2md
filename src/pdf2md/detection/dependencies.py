@@ -6,6 +6,7 @@ nie rzucają wyjątków. Używane przez komendę `pdf2md doctor`.
 
 from __future__ import annotations
 
+import platform
 import shutil
 import subprocess
 from typing import Any
@@ -83,12 +84,19 @@ def check_gpu() -> dict[str, Any]:
     """Sprawdza dostępność GPU (CUDA przez PyTorch).
 
     Returns:
-        Słownik z kluczami: cuda_available (bool), device_name (str).
+        Słownik z informacjami o PyTorch i CUDA.
     """
-    result: dict[str, Any] = {"cuda_available": False, "device_name": ""}
+    result: dict[str, Any] = {
+        "torch_available": False,
+        "cuda_available": False,
+        "device_name": "",
+        "cuda_version": "",
+    }
     try:
         import torch
 
+        result["torch_available"] = True
+        result["cuda_version"] = str(getattr(torch.version, "cuda", "") or "")
         if torch.cuda.is_available():
             result["cuda_available"] = True
             result["device_name"] = torch.cuda.get_device_name(0)
@@ -100,6 +108,11 @@ def check_gpu() -> dict[str, Any]:
 def check_all() -> dict[str, Any]:
     """Zbiorczy raport stanu środowiska — używany przez `pdf2md doctor`."""
     return {
+        "system": {
+            "os": platform.system(),
+            "platform": platform.platform(),
+            "python": platform.python_version(),
+        },
         "tesseract": check_tesseract(),
         "poppler": check_poppler(),
         "pandoc": check_pandoc(),

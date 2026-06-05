@@ -33,6 +33,16 @@ def main() -> int:
         "--torch-device",
         help="Urządzenie dla silników opartych o Torch, np. cpu albo cuda",
     )
+    parser.add_argument(
+        "--marker-workers",
+        type=int,
+        help="Liczba workerów pdftext dla Markera (domyślnie z konfiguracji, zachowawczo 1)",
+    )
+    parser.add_argument(
+        "--marker-max-pages",
+        type=int,
+        help="Maksymalna liczba stron przetwarzanych przez Marker (0/brak = bez limitu)",
+    )
     args = parser.parse_args()
 
     import pdf2md.engines  # noqa: F401  # rejestruje wbudowane silniki
@@ -52,19 +62,18 @@ def main() -> int:
         engine_kwargs["page_range"] = args.page_range
     if args.torch_device:
         engine_kwargs["torch_device"] = args.torch_device
+    if args.marker_workers is not None:
+        engine_kwargs["marker_workers"] = args.marker_workers
+    if args.marker_max_pages is not None:
+        engine_kwargs["marker_max_pages"] = args.marker_max_pages
 
     try:
         result = Converter().convert(args.pdf_path, engine, engine_kwargs=engine_kwargs)
     except (ConversionError, RuntimeError) as exc:
         print(f"Błąd konwersji: {exc}", file=sys.stderr)
         if not engine.is_available():
-            install_command = (
-                "uv sync --extra engines-core"
-                if engine.name.lower() == "marker"
-                else "uv pip install pymupdf4llm"
-            )
             print(
-                f"Zainstaluj silnik poleceniem: {install_command}",
+                "Zainstaluj silnik poleceniem: uv sync --extra engines-core",
                 file=sys.stderr,
             )
         return 1

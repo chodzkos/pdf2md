@@ -347,10 +347,10 @@ W pyproject.toml dodaj:
 Wtedy "uv run pytest" pomija ciężkie; "uv run pytest -m heavy" uruchamia świadomie.
 
 Po zakończeniu:
-1. Pokaż jak zainstalować Marker: uv add marker-pdf
+1. Pokaż jak zainstalować Marker: uv sync --extra engines-core (marker-pdf jest w grupie engines-core)
 2. NAJPIERW pobierz modele poza pytestem na 1-stronicowym PDF: marker_single tests/fixtures/test_text_1page.pdf --output_dir /tmp/mk
 3. Uruchom lekkie testy: uv run pytest (pomija heavy)
-4. Dopiero świadomie i z monitorowaniem (free -h, nvidia-smi): uv run pytest -m heavy
+4. Dopiero świadomie i z monitorowaniem (free -h, nvidia-smi): PDF2MD_RUN_MARKER_INTEGRATION=1 uv run pytest -m heavy (sam -m heavy nie odpala realnej konwersji — jest dodatkowo bramkowana tą zmienną)
 ```
 
 ---

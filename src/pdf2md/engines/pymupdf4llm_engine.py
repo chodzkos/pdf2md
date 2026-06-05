@@ -32,7 +32,7 @@ class PyMuPDF4LLMEngine(ConversionEngine):
         if not self.is_available():
             raise RuntimeError(
                 "Silnik PyMuPDF4LLM nie jest zainstalowany. "
-                'Zainstaluj go poleceniem: uv sync --extra engines-core albo pip install "pdf2md[engines-core]".'
+                "Zainstaluj go poleceniem: uv sync --extra engines-core"
             )
 
         path = Path(pdf_path)

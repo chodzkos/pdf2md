@@ -64,20 +64,20 @@ class MarkerEngine(ConversionEngine):
             )
             pymupdf: Any = importlib.import_module("pymupdf")
 
-            config = self._build_config(
+            config_parser, llm_service = self._prepare_config_parser(
+                config_parser_cls=config_parser_cls,
                 use_llm=use_llm,
                 lang=lang,
                 kwargs=kwargs,
                 workers=marker_workers,
                 max_pages=marker_max_pages,
             )
-            config_parser = config_parser_cls(config)
             converter = pdf_converter_cls(
                 config=config_parser.generate_config_dict(),
                 artifact_dict=create_model_dict(),
                 processor_list=config_parser.get_processors(),
                 renderer=config_parser.get_renderer(),
-                llm_service=config_parser.get_llm_service(),
+                llm_service=llm_service,
             )
 
             logger.info(f"Konwertuję {path} przez Marker")
@@ -119,6 +119,46 @@ class MarkerEngine(ConversionEngine):
         config["disable_multiprocessing"] = True
         config["pdftext_workers"] = workers
         return config
+
+    def _prepare_config_parser(
+        self,
+        config_parser_cls: Any,
+        use_llm: bool,
+        lang: str,
+        kwargs: dict[str, object],
+        workers: int,
+        max_pages: int | None,
+    ) -> tuple[Any, Any]:
+        """Buduje ConfigParser Markera i rozwiązuje usługę LLM.
+
+        Jeśli use_llm=True, ale ta wersja/konfiguracja Markera nie udostępnia usługi LLM,
+        loguje ostrzeżenie i kontynuuje konwersję bez post-processingu LLM (graceful skip).
+        """
+        config = self._build_config(
+            use_llm=use_llm,
+            lang=lang,
+            kwargs=kwargs,
+            workers=workers,
+            max_pages=max_pages,
+        )
+        config_parser = config_parser_cls(config)
+        if not use_llm:
+            return config_parser, None
+        try:
+            return config_parser, config_parser.get_llm_service()
+        except Exception as exc:
+            logger.warning(
+                f"Marker nie udostępnia usługi LLM w tej wersji/konfiguracji ({exc}). "
+                "Kontynuuję konwersję bez post-processingu LLM."
+            )
+            fallback_config = self._build_config(
+                use_llm=False,
+                lang=lang,
+                kwargs=kwargs,
+                workers=workers,
+                max_pages=max_pages,
+            )
+            return config_parser_cls(fallback_config), None
 
     def _load_marker_api(self) -> tuple[Any, Any, Any, Any]:
         """Importuje Marker dopiero w momencie konwersji."""
@@ -216,6 +256,8 @@ class MarkerEngine(ConversionEngine):
         return None
 
     def _coerce_positive_int(self, value: object, default: int) -> int:
+        if not isinstance(value, (int, str, float)):
+            return default
         try:
             number = int(value)
         except (TypeError, ValueError):
@@ -224,6 +266,8 @@ class MarkerEngine(ConversionEngine):
 
     def _coerce_optional_positive_int(self, value: object) -> int | None:
         if value in (None, "", 0, "0"):
+            return None
+        if not isinstance(value, (int, str, float)):
             return None
         try:
             number = int(value)

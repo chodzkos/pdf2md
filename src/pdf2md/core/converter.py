@@ -82,7 +82,7 @@ class Converter:
             pdf_paths: Lista ścieżek do plików PDF.
             engine: Silnik konwersji.
             llm: Opcjonalny dostawca LLM.
-            output_dir: Katalog wyjściowy (None = obok źródła).
+            output_dir: Katalog wyjściowy dla plików .md (None = nie zapisuj, zwróć wynik tylko w pamięci).
             llm_mode: Tryb post-processingu LLM.
 
         Returns:

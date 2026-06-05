@@ -149,3 +149,87 @@ def test_convert_raises_when_marker_unavailable(monkeypatch: pytest.MonkeyPatch,
 
     with pytest.raises(RuntimeError, match="uv sync --extra engines-core"):
         engine.convert(str(pdf))
+
+
+def test_convert_falls_back_without_llm_when_service_unavailable(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    """use_llm=True bez usługi LLM → ostrzeżenie i konwersja bez post-processingu LLM."""
+    pdf = tmp_path / "doc.pdf"
+    pdf.write_bytes(b"%PDF-1.7\n")
+    captured: dict[str, Any] = {}
+
+    class FakeConfigParser:
+        instances = 0
+
+        def __init__(self, config: dict[str, object]) -> None:
+            FakeConfigParser.instances += 1
+            captured["last_config"] = config
+
+        def generate_config_dict(self) -> dict[str, object]:
+            return {"generated": True}
+
+        def get_processors(self) -> list[object]:
+            return ["processor"]
+
+        def get_renderer(self) -> str:
+            return "renderer"
+
+        def get_llm_service(self) -> object:
+            raise RuntimeError("brak skonfigurowanej usługi LLM w tej wersji Markera")
+
+    class FakePdfConverter:
+        def __init__(self, **kwargs: object) -> None:
+            captured["converter_kwargs"] = kwargs
+
+        def __call__(self, path: str) -> object:
+            return type("Rendered", (), {"metadata": {}})()
+
+    def fake_text_from_rendered(
+        rendered: object,
+    ) -> tuple[str, dict[str, object], dict[str, object]]:
+        return "# Marker bez LLM", {}, {}
+
+    class FakeDoc:
+        def __len__(self) -> int:
+            return 1
+
+        def close(self) -> None:
+            return None
+
+    class FakePymupdf:
+        @staticmethod
+        def open(path: str) -> FakeDoc:
+            return FakeDoc()
+
+    engine = MarkerEngine()
+    monkeypatch.setattr(engine, "is_available", lambda: True)
+    monkeypatch.setattr(engine, "_configure_torch_device", lambda torch_device: None)
+    monkeypatch.setattr(engine, "_configure_worker_env", lambda workers: None)
+    monkeypatch.setattr(
+        "pdf2md.engines.marker_engine.get_settings",
+        lambda: SimpleNamespace(marker_device="cpu", marker_workers=1, marker_max_pages=1),
+    )
+    monkeypatch.setattr(
+        engine,
+        "_load_marker_api",
+        lambda: (
+            FakeConfigParser,
+            FakePdfConverter,
+            lambda: {"model": "fake"},
+            fake_text_from_rendered,
+        ),
+    )
+    monkeypatch.setattr(
+        "pdf2md.engines.marker_engine.importlib.import_module",
+        lambda name: FakePymupdf,
+    )
+
+    result = engine.convert(str(pdf), use_llm=True, page_range="0")
+
+    assert result.markdown == "# Marker bez LLM"
+    # Po nieudanym get_llm_service konwerter dostaje llm_service=None i nie wybucha.
+    assert captured["converter_kwargs"]["llm_service"] is None
+    # Config przebudowany bez use_llm w ścieżce fallback.
+    assert captured["last_config"]["use_llm"] is False
+    assert FakeConfigParser.instances == 2

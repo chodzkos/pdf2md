@@ -1,0 +1,71 @@
+"""Dostawca LLM: Ollama (lokalne modele)."""
+
+from __future__ import annotations
+
+import json
+import urllib.error
+import urllib.request
+
+from loguru import logger
+
+from pdf2md.core.config import get_settings
+from pdf2md.core.prompts import POST_PROCESSING_PROMPT
+from pdf2md.llm.base import LLMProvider, LLMResult
+from pdf2md.llm.base_mixin import PostprocessMixin
+
+_BASE_URL = "http://localhost:11434"
+
+
+class OllamaProvider(PostprocessMixin, LLMProvider):
+    """Dostawca LLM korzystający z lokalnego serwera Ollama."""
+
+    name = "Ollama (lokalny)"
+    description = "Lokalny serwer Ollama — modele działają offline, bez klucza API."
+    requires_api_key = False
+    default_model = "qwen2.5:14b"
+
+    def is_available(self) -> bool:
+        """Zwraca True jeśli serwer Ollama odpowiada na /api/tags."""
+        try:
+            with urllib.request.urlopen(f"{_BASE_URL}/api/tags", timeout=2) as resp:
+                return bool(resp.status == 200)
+        except Exception:
+            return False
+
+    def get_models(self) -> list[str]:
+        """Zwraca listę dostępnych modeli z /api/tags."""
+        try:
+            with urllib.request.urlopen(f"{_BASE_URL}/api/tags", timeout=2) as resp:
+                data = json.loads(resp.read())
+                return [m["name"] for m in data.get("models", [])]
+        except Exception:
+            return []
+
+    def _call_llm(self, text: str, instructions: str) -> str:
+        model = get_settings().ollama_model or self.default_model
+        prompt = (
+            f"{POST_PROCESSING_PROMPT}\n\n{instructions}\n\n{text}"
+            if instructions
+            else f"{POST_PROCESSING_PROMPT}\n\n{text}"
+        )
+        payload = json.dumps({"model": model, "prompt": prompt, "stream": False}).encode()
+        req = urllib.request.Request(
+            f"{_BASE_URL}/api/generate",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req) as resp:
+            result = json.loads(resp.read())
+            return str(result.get("response", text))
+
+    def postprocess(
+        self,
+        markdown: str,
+        mode: str = "whole_document",
+        instructions: str = "",
+    ) -> LLMResult:
+        model = get_settings().ollama_model or self.default_model
+        logger.info(f"Ollama post-processing: model={model}, mode={mode}")
+        processed = self._postprocess_chunks(markdown, mode, instructions)
+        return LLMResult(text=processed, provider_used=self.name)

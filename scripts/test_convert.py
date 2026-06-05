@@ -25,6 +25,14 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Testowa konwersja PDF do Markdown.")
     parser.add_argument("pdf_path", help="Ścieżka do pliku PDF")
     parser.add_argument("--engine", default="pymupdf4llm", help="Nazwa silnika")
+    parser.add_argument(
+        "--page-range",
+        help="Zakres stron przekazywany do silnika, np. 0 albo 0,2-4",
+    )
+    parser.add_argument(
+        "--torch-device",
+        help="Urządzenie dla silników opartych o Torch, np. cpu albo cuda",
+    )
     args = parser.parse_args()
 
     import pdf2md.engines  # noqa: F401  # rejestruje wbudowane silniki
@@ -39,13 +47,24 @@ def main() -> int:
         return 2
 
     start = time.monotonic()
+    engine_kwargs: dict[str, object] = {}
+    if args.page_range:
+        engine_kwargs["page_range"] = args.page_range
+    if args.torch_device:
+        engine_kwargs["torch_device"] = args.torch_device
+
     try:
-        result = Converter().convert(args.pdf_path, engine)
+        result = Converter().convert(args.pdf_path, engine, engine_kwargs=engine_kwargs)
     except (ConversionError, RuntimeError) as exc:
         print(f"Błąd konwersji: {exc}", file=sys.stderr)
         if not engine.is_available():
+            install_command = (
+                "uv sync --extra engines-core"
+                if engine.name.lower() == "marker"
+                else "uv pip install pymupdf4llm"
+            )
             print(
-                "Zainstaluj silnik poleceniem: uv pip install pymupdf4llm",
+                f"Zainstaluj silnik poleceniem: {install_command}",
                 file=sys.stderr,
             )
         return 1

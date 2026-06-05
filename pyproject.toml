@@ -112,6 +112,8 @@ module = [
     "docling.*",
     "mineru.*",
     "pdf_craft.*",
+    "torch",
+    "torch.*",
 ]
 ignore_missing_imports = true
 

@@ -167,7 +167,7 @@ Drugi silnik — znacznie silniejszy, obsługuje OCR i ma wbudowany tryb LLM.
 - [ ] Tworzysz jednostronicowy fixture: `test_text_1page.pdf`
 - [ ] NAJPIERW pobierasz modele poza pytestem: `marker_single tests/fixtures/test_text_1page.pdf --output_dir /tmp/mk`
 - [ ] `uv run pytest` (pomija heavy — powinno być szybkie i bezpieczne)
-- [ ] Dopiero świadomie, z monitorowaniem w 2. terminalu (`watch -n1 free -h`, `nvidia-smi -l 1`): `uv run pytest -m heavy`
+- [ ] Dopiero świadomie, z monitorowaniem w 2. terminalu (`watch -n1 free -h`, `nvidia-smi -l 1`): `PDF2MD_RUN_MARKER_INTEGRATION=1 uv run pytest -m heavy` (sam `-m heavy` nie wystarczy — realna konwersja Markera jest dodatkowo bramkowana zmienną środowiskową)
 - [ ] Pull Request → scal
 
 ### Definicja ukończenia

@@ -87,7 +87,7 @@ def check_gpu() -> dict[str, Any]:
     """
     result: dict[str, Any] = {"cuda_available": False, "device_name": ""}
     try:
-        import torch  # type: ignore[import-not-found]
+        import torch
 
         if torch.cuda.is_available():
             result["cuda_available"] = True

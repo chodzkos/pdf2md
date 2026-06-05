@@ -10,6 +10,7 @@ from typing import Any
 
 from loguru import logger
 
+from pdf2md.core.config import get_settings
 from pdf2md.engines.base import ConversionEngine, ConversionResult
 
 
@@ -38,17 +39,38 @@ class MarkerEngine(ConversionEngine):
             )
 
         path = Path(pdf_path)
+        settings = get_settings()
         use_llm = bool(kwargs.pop("use_llm", False))
         lang = str(kwargs.pop("lang", "pl,en"))
-        torch_device = kwargs.pop("torch_device", None)
+        marker_device = kwargs.pop("marker_device", settings.marker_device)
+        torch_device = kwargs.pop("torch_device", marker_device)
+        marker_workers_value = kwargs.pop("marker_workers", None)
+        if marker_workers_value is None:
+            marker_workers_value = kwargs.pop("pdftext_workers", settings.marker_workers)
+        else:
+            kwargs.pop("pdftext_workers", None)
+        marker_workers = self._coerce_positive_int(
+            marker_workers_value,
+            default=1,
+        )
+        marker_max_pages = self._coerce_optional_positive_int(
+            kwargs.pop("marker_max_pages", settings.marker_max_pages)
+        )
         try:
+            self._configure_worker_env(marker_workers)
             self._configure_torch_device(torch_device)
             config_parser_cls, pdf_converter_cls, create_model_dict, text_from_rendered = (
                 self._load_marker_api()
             )
             pymupdf: Any = importlib.import_module("pymupdf")
 
-            config = self._build_config(use_llm=use_llm, lang=lang, kwargs=kwargs)
+            config = self._build_config(
+                use_llm=use_llm,
+                lang=lang,
+                kwargs=kwargs,
+                workers=marker_workers,
+                max_pages=marker_max_pages,
+            )
             config_parser = config_parser_cls(config)
             converter = pdf_converter_cls(
                 config=config_parser.generate_config_dict(),
@@ -61,12 +83,7 @@ class MarkerEngine(ConversionEngine):
             logger.info(f"Konwertuję {path} przez Marker")
             rendered = converter(str(path))
             markdown, _, _ = text_from_rendered(rendered)
-
-            doc = pymupdf.open(str(path))
-            try:
-                pages = len(doc)
-            finally:
-                doc.close()
+            pages = self._converted_page_count(converter, path, pymupdf)
         except Exception:
             logger.exception(f"Marker nie zdołał przekonwertować pliku: {path}")
             raise
@@ -79,7 +96,12 @@ class MarkerEngine(ConversionEngine):
         )
 
     def _build_config(
-        self, use_llm: bool, lang: str, kwargs: dict[str, object]
+        self,
+        use_llm: bool,
+        lang: str,
+        kwargs: dict[str, object],
+        workers: int,
+        max_pages: int | None,
     ) -> dict[str, object]:
         """Buduje konfigurację Markera zgodną z ConfigParser."""
         config: dict[str, object] = {
@@ -91,6 +113,11 @@ class MarkerEngine(ConversionEngine):
         if use_llm:
             logger.info("Marker uruchomiony z use_llm=True")
         config.update(kwargs)
+        limited_page_range = self._limited_page_range(config.get("page_range"), max_pages)
+        if limited_page_range is not None:
+            config["page_range"] = limited_page_range
+        config["disable_multiprocessing"] = True
+        config["pdftext_workers"] = workers
         return config
 
     def _load_marker_api(self) -> tuple[Any, Any, Any, Any]:
@@ -111,13 +138,31 @@ class MarkerEngine(ConversionEngine):
         metadata = getattr(rendered, "metadata", {})
         return metadata if isinstance(metadata, dict) else {}
 
+    def _converted_page_count(self, converter: object, path: Path, pymupdf: Any) -> int:
+        """Zwraca liczbę stron faktycznie przetworzonych przez Marker, jeśli jest dostępna."""
+        page_count = getattr(converter, "page_count", None)
+        if isinstance(page_count, int) and page_count > 0:
+            return page_count
+
+        doc = pymupdf.open(str(path))
+        try:
+            return len(doc)
+        finally:
+            doc.close()
+
+    def _configure_worker_env(self, workers: int) -> None:
+        """Ustawia limity workerów przed importem Markera."""
+        worker_count = str(workers)
+        os.environ["PDFTEXT_WORKERS"] = worker_count
+        os.environ["NUM_WORKERS"] = worker_count
+
     def _configure_torch_device(self, torch_device: object) -> None:
         """Ustawia urządzenie Markera przed importem jego modułów."""
-        if torch_device is not None:
-            os.environ["TORCH_DEVICE"] = str(torch_device)
+        if os.environ.get("TORCH_DEVICE"):
             return
 
-        if os.environ.get("TORCH_DEVICE"):
+        if torch_device not in (None, ""):
+            os.environ["TORCH_DEVICE"] = str(torch_device)
             return
 
         try:
@@ -139,3 +184,49 @@ class MarkerEngine(ConversionEngine):
                 f"({device_arch}; obsługiwane: {', '.join(sorted(supported_arches))}). "
                 "Marker zostanie uruchomiony na CPU."
             )
+
+    def _limited_page_range(self, page_range: object, max_pages: int | None) -> object:
+        """Ogranicza zakres stron do konserwatywnego maksimum."""
+        if max_pages is None:
+            return page_range
+        if page_range in (None, ""):
+            return "0" if max_pages == 1 else f"0-{max_pages - 1}"
+
+        pages = self._parse_page_range(page_range)
+        if pages is None:
+            return page_range
+        return ",".join(str(page) for page in pages[:max_pages])
+
+    def _parse_page_range(self, page_range: object) -> list[int] | None:
+        if isinstance(page_range, str):
+            pages: list[int] = []
+            for item in page_range.split(","):
+                if not item:
+                    continue
+                if "-" in item:
+                    start, end = item.split("-", maxsplit=1)
+                    pages.extend(range(int(start), int(end) + 1))
+                else:
+                    pages.append(int(item))
+            return sorted(set(pages))
+        if isinstance(page_range, range):
+            return list(page_range)
+        if isinstance(page_range, (list, tuple, set)):
+            return sorted({int(page) for page in page_range})
+        return None
+
+    def _coerce_positive_int(self, value: object, default: int) -> int:
+        try:
+            number = int(value)
+        except (TypeError, ValueError):
+            return default
+        return max(1, number)
+
+    def _coerce_optional_positive_int(self, value: object) -> int | None:
+        if value in (None, "", 0, "0"):
+            return None
+        try:
+            number = int(value)
+        except (TypeError, ValueError):
+            return None
+        return number if number > 0 else None

@@ -36,6 +36,11 @@ default_engine = "pymupdf4llm"
 default_output_dir = ""
 default_language = "pol+eng"
 
+[marker]
+marker_device = "cpu"
+marker_workers = 1
+marker_max_pages = 1
+
 [api_keys]
 # Klucze API — bezpieczniej trzymać w .env, tu tylko fallback
 anthropic_api_key = ""
@@ -113,6 +118,9 @@ class Settings(BaseSettings):
     default_engine: str = "pymupdf4llm"
     default_output_dir: str = ""
     default_language: str = "pol+eng"
+    marker_device: str = "cpu"
+    marker_workers: int = 1
+    marker_max_pages: int = 1
 
     # LLM
     llm_enabled: bool = False
@@ -150,6 +158,10 @@ def save_settings(settings: Settings) -> None:
         f'default_engine = "{settings.default_engine}"\n',
         f'default_output_dir = "{settings.default_output_dir}"\n',
         f'default_language = "{settings.default_language}"\n',
+        "\n[marker]\n",
+        f'marker_device = "{settings.marker_device}"\n',
+        f"marker_workers = {settings.marker_workers}\n",
+        f"marker_max_pages = {settings.marker_max_pages}\n",
         "\n[api_keys]\n",
         f'anthropic_api_key = "{settings.anthropic_api_key}"\n',
         f'openai_api_key = "{settings.openai_api_key}"\n',

@@ -29,6 +29,9 @@ def test_get_settings_creates_default_config(isolated_config: Path) -> None:
     assert isolated_config.exists()
     assert settings.default_engine == "pymupdf4llm"
     assert settings.default_language == "pol+eng"
+    assert settings.marker_device == "cpu"
+    assert settings.marker_workers == 1
+    assert settings.marker_max_pages == 1
     assert settings.llm_mode == "none"
 
 
@@ -48,6 +51,11 @@ default_engine = "marker"
 default_output_dir = "/tmp/out"
 default_language = "pol"
 
+[marker]
+marker_device = "cuda"
+marker_workers = 2
+marker_max_pages = 3
+
 [api_keys]
 openai_api_key = "dev-key"
 """,
@@ -63,6 +71,9 @@ openai_api_key = "dev-key"
     assert settings.default_engine == "marker"
     assert settings.default_output_dir == "/tmp/out"
     assert settings.default_language == "pol"
+    assert settings.marker_device == "cuda"
+    assert settings.marker_workers == 2
+    assert settings.marker_max_pages == 3
     assert settings.openai_api_key == "dev-key"
 
 
@@ -107,6 +118,9 @@ def test_save_settings_writes_config_atomically(isolated_config: Path) -> None:
         default_engine="marker",
         default_output_dir="/tmp/pdf2md",
         default_language="eng",
+        marker_device="cpu",
+        marker_workers=1,
+        marker_max_pages=1,
         anthropic_api_key="ant",
         openai_api_key="open",
         gemini_api_key="gem",
@@ -121,6 +135,9 @@ def test_save_settings_writes_config_atomically(isolated_config: Path) -> None:
     assert data["conversion"]["default_engine"] == "marker"
     assert data["conversion"]["default_output_dir"] == "/tmp/pdf2md"
     assert data["conversion"]["default_language"] == "eng"
+    assert data["marker"]["marker_device"] == "cpu"
+    assert data["marker"]["marker_workers"] == 1
+    assert data["marker"]["marker_max_pages"] == 1
     assert data["api_keys"]["anthropic_api_key"] == "ant"
     assert data["api_keys"]["openai_api_key"] == "open"
     assert data["api_keys"]["gemini_api_key"] == "gem"

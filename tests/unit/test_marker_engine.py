@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.metadata
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -95,6 +96,11 @@ def test_convert_uses_marker_api_without_loading_real_models(
     engine = MarkerEngine()
     monkeypatch.setattr(engine, "is_available", lambda: True)
     monkeypatch.setattr(engine, "_configure_torch_device", lambda torch_device: None)
+    monkeypatch.setattr(engine, "_configure_worker_env", lambda workers: None)
+    monkeypatch.setattr(
+        "pdf2md.engines.marker_engine.get_settings",
+        lambda: SimpleNamespace(marker_device="cpu", marker_workers=1, marker_max_pages=1),
+    )
     monkeypatch.setattr(
         engine,
         "_load_marker_api",
@@ -118,6 +124,8 @@ def test_convert_uses_marker_api_without_loading_real_models(
         "use_llm": True,
         "languages": "pl,en",
         "page_range": "0",
+        "disable_multiprocessing": True,
+        "pdftext_workers": 1,
     }
     assert captured["converter_kwargs"] == {
         "config": {"generated": True},

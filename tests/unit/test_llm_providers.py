@@ -91,7 +91,7 @@ class TestOllamaProvider:
         mock_resp.__exit__ = MagicMock(return_value=False)
 
         def fake_urlopen(req: object, **kwargs: object) -> object:
-            captured["data"] = json.loads(req.data.decode())  # type: ignore[union-attr]
+            captured["data"] = json.loads(req.data.decode())  # type: ignore[attr-defined]
             return mock_resp
 
         fake_settings = _fake_settings(ollama_model="llama3:8b")
@@ -113,7 +113,7 @@ class TestOllamaProvider:
         mock_resp.__exit__ = MagicMock(return_value=False)
 
         def fake_urlopen(req: object, **kwargs: object) -> object:
-            captured["data"] = json.loads(req.data.decode())  # type: ignore[union-attr]
+            captured["data"] = json.loads(req.data.decode())  # type: ignore[attr-defined]
             return mock_resp
 
         fake_settings = _fake_settings(ollama_model="")
@@ -346,23 +346,52 @@ class TestGeminiProvider:
         )
         assert GeminiProvider().is_available() is False
 
+    def test_is_available_false_when_package_missing(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            "pdf2md.llm.gemini_provider.get_settings",
+            lambda: _fake_settings(gemini_api_key="AIza-test"),
+        )
+
+        def fake_version(pkg: str) -> str:
+            raise importlib.metadata.PackageNotFoundError
+
+        monkeypatch.setattr(importlib.metadata, "version", fake_version)
+        assert GeminiProvider().is_available() is False
+
+    def test_is_available_true_when_key_and_package(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            "pdf2md.llm.gemini_provider.get_settings",
+            lambda: _fake_settings(gemini_api_key="AIza-test"),
+        )
+        monkeypatch.setattr(importlib.metadata, "version", lambda pkg: "1.0.0")
+        assert GeminiProvider().is_available() is True
+
     def test_postprocess_returns_llm_result(self, monkeypatch: pytest.MonkeyPatch) -> None:
         fake_response = MagicMock()
         fake_response.text = "# Gemini wynik"
 
-        fake_model = MagicMock()
-        fake_model.generate_content.return_value = fake_response
+        fake_client = MagicMock()
+        fake_client.models.generate_content.return_value = fake_response
 
-        fake_genai = MagicMock()
-        fake_genai.GenerativeModel.return_value = fake_model
+        fake_genai_mod = MagicMock()
+        fake_genai_mod.Client.return_value = fake_client
+
+        fake_types_mod = MagicMock()
+
+        def fake_import(name: str) -> object:
+            if name == "google.genai":
+                return fake_genai_mod
+            if name == "google.genai.types":
+                return fake_types_mod
+            raise ImportError(name)
 
         monkeypatch.setattr(
             "pdf2md.llm.gemini_provider.get_settings",
-            lambda: _fake_settings(gemini_api_key="AIza-test", gemini_model="gemini-2.0-flash"),
+            lambda: _fake_settings(gemini_api_key="AIza-test", gemini_model="gemini-2.5-flash"),
         )
         monkeypatch.setattr(
             "pdf2md.llm.gemini_provider.importlib.import_module",
-            lambda name: fake_genai,
+            fake_import,
         )
 
         result = GeminiProvider().postprocess("# tekst")
@@ -370,6 +399,58 @@ class TestGeminiProvider:
         assert isinstance(result, LLMResult)
         assert result.text == "# Gemini wynik"
         assert result.provider_used == "Gemini (Google)"
+
+    def test_postprocess_uses_model_from_settings(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        fake_response = MagicMock()
+        fake_response.text = "ok"
+
+        fake_client = MagicMock()
+        fake_client.models.generate_content.return_value = fake_response
+
+        fake_genai_mod = MagicMock()
+        fake_genai_mod.Client.return_value = fake_client
+        fake_types_mod = MagicMock()
+
+        def fake_import(name: str) -> object:
+            return fake_genai_mod if name == "google.genai" else fake_types_mod
+
+        monkeypatch.setattr(
+            "pdf2md.llm.gemini_provider.get_settings",
+            lambda: _fake_settings(gemini_api_key="AIza-test", gemini_model="gemini-2.0-flash"),
+        )
+        monkeypatch.setattr("pdf2md.llm.gemini_provider.importlib.import_module", fake_import)
+
+        GeminiProvider().postprocess("tekst")
+
+        call_kwargs = fake_client.models.generate_content.call_args
+        assert call_kwargs.kwargs["model"] == "gemini-2.0-flash"
+
+    def test_postprocess_uses_default_model_when_settings_empty(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        fake_response = MagicMock()
+        fake_response.text = "ok"
+
+        fake_client = MagicMock()
+        fake_client.models.generate_content.return_value = fake_response
+
+        fake_genai_mod = MagicMock()
+        fake_genai_mod.Client.return_value = fake_client
+        fake_types_mod = MagicMock()
+
+        def fake_import(name: str) -> object:
+            return fake_genai_mod if name == "google.genai" else fake_types_mod
+
+        monkeypatch.setattr(
+            "pdf2md.llm.gemini_provider.get_settings",
+            lambda: _fake_settings(gemini_api_key="AIza-test", gemini_model=""),
+        )
+        monkeypatch.setattr("pdf2md.llm.gemini_provider.importlib.import_module", fake_import)
+
+        GeminiProvider().postprocess("tekst")
+
+        call_kwargs = fake_client.models.generate_content.call_args
+        assert call_kwargs.kwargs["model"] == GeminiProvider.default_model
 
 
 # ---------------------------------------------------------------------------

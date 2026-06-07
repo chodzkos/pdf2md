@@ -1,4 +1,4 @@
-"""Dostawca LLM: Google Gemini API."""
+"""Dostawca LLM: Google Gemini API (google-genai SDK)."""
 
 from __future__ import annotations
 
@@ -19,30 +19,32 @@ class GeminiProvider(PostprocessMixin, LLMProvider):
     name = "Gemini (Google)"
     description = "Modele Gemini przez Google AI API — wymaga klucza GEMINI_API_KEY."
     requires_api_key = True
-    default_model = "gemini-2.0-flash"
+    default_model = "gemini-2.5-flash"
 
     def is_available(self) -> bool:
-        """Zwraca True jeśli klucz API ustawiony i pakiet google-generativeai zainstalowany."""
+        """Zwraca True jeśli klucz API ustawiony i pakiet google-genai zainstalowany."""
         if not get_settings().gemini_api_key:
             return False
         try:
-            importlib.metadata.version("google-generativeai")
+            importlib.metadata.version("google-genai")
         except importlib.metadata.PackageNotFoundError:
             return False
         return True
 
     def _call_llm(self, text: str, instructions: str) -> str:
-        genai = importlib.import_module("google.generativeai")
+        genai = importlib.import_module("google.genai")
+        types = importlib.import_module("google.genai.types")
         settings = get_settings()
         model_name = settings.gemini_model or self.default_model
-        genai.configure(api_key=settings.gemini_api_key)
-        model = genai.GenerativeModel(
-            model_name=model_name,
-            system_instruction=POST_PROCESSING_PROMPT,
-        )
+        client = genai.Client(api_key=settings.gemini_api_key)
         user_content = f"{instructions}\n\n{text}" if instructions else text
-        response = model.generate_content(user_content)
-        return str(response.text)
+        contents = f"{POST_PROCESSING_PROMPT}\n\n{user_content}"
+        resp = client.models.generate_content(
+            model=model_name,
+            contents=contents,
+            config=types.GenerateContentConfig(temperature=0.1),
+        )
+        return str(resp.text)
 
     def postprocess(
         self,

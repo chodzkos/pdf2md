@@ -97,7 +97,7 @@ Te silniki wchodzą do gry dopiero w Fazie 2 (zob. ROADMAP, etapy 11–15). Są 
 | **Ollama** | Lokalny | HTTP REST | ❌ nie potrzeba |
 | **Claude** (Anthropic) | Chmura | `anthropic` | ✅ wymagany |
 | **OpenAI** | Chmura | `openai` | ✅ wymagany |
-| **Gemini** (Google) | Chmura | `google-generativeai` | ✅ wymagany |
+| **Gemini** (Google) | Chmura | `google-genai` | ✅ wymagany |
 
 ### Interfejsy
 - **GUI:** `PySide6` (Qt 6) — nowoczesny, natywny wygląd

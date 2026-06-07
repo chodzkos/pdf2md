@@ -49,7 +49,8 @@ Skonfiguruj dla narzędzia "uv" z:
 - python = ">=3.11"
 - zależności: pydantic-settings, loguru, rich, click, PySide6
 - dev zależności: pytest, pytest-cov, ruff, mypy, pre-commit
-- opcjonalne grupy: engines-core (pymupdf4llm, marker-pdf, docling), engines-optional (pdf-craft), llm (anthropic, openai, google-generativeai)
+- opcjonalne grupy: engines-core (pymupdf4llm, marker-pdf, docling), engines-optional (pdf-craft), llm (anthropic, openai, google-genai)
+  UWAGA: użyj google-genai (nowe SDK), NIE google-generativeai (stare, EOL od sierpnia 2025)
   UWAGA: NIE umieszczaj mineru w zależnościach pip. MinerU wymaga pillow>=11, a marker-pdf
   (engines-core) przypina pillow<11 — konflikt nie do rozwiązania w jednym środowisku.
   MinerU jest wołany przez CLI (subprocess), więc instaluje się go IZOLOWANIE:
@@ -409,7 +410,22 @@ Klasa AnthropicProvider:
 Klasa OpenAIProvider — analogicznie, default_model = "gpt-4o-mini" jako fallback
 
 4. src/pdf2md/llm/gemini_provider.py
-Klasa GeminiProvider — analogicznie, default_model jako fallback
+Klasa GeminiProvider — użyj NOWEGO SDK google-genai (stare google-generativeai jest EOL):
+- is_available(): importlib.metadata.version("google-genai") + klucz w settings
+- default_model jako bezpieczny fallback (np. "gemini-2.5-flash"), nadpisywany z configu
+- postprocess(markdown, mode="whole_document", instructions=""):
+    from google import genai
+    from google.genai import types
+    client = genai.Client(api_key=settings.gemini_api_key)
+    model = settings.gemini_model or self.default_model
+    resp = client.models.generate_content(
+        model=model,
+        contents=POST_PROCESSING_PROMPT + "\n\n" + markdown,
+        config=types.GenerateContentConfig(temperature=0.1),
+    )
+    return LLMResult(text=resp.text, provider_used=self.name)
+- import google.genai tylko wewnątrz metody, nie na górze pliku
+- obsłuż chunkowanie wg mode (jak pozostali providerzy)
 
 WAŻNE — NAZWY MODELI NIE NA SZTYWNO:
 Każdy provider bierze model z settings (anthropic_model/openai_model/gemini_model/ollama_model).
@@ -1414,6 +1430,44 @@ _open_output_folder() crashuje w WSL (brak xdg-open) i jest wołane nawet po nie
    - w _show_done_message(): proponuj/otwieraj folder TYLKO gdy success > 0
 
 3. Testy (mock subprocess): brak narzędzia → brak wyjątku (tylko log); na WSL wybierany explorer.exe.
+
+Pokaż diff, uruchom uv run pytest tests/unit -v.
+```
+
+---
+
+## PROMPT D5 — Migracja GeminiProvider na google-genai (nowe SDK)
+
+> Wymaga: GeminiProvider (Etap 4). Powód: stare SDK `google-generativeai` jest EOL od sierpnia 2025;
+> zastąpione przez `google-genai` (`from google import genai`, wzorzec klienta). Nowsze modele
+> Gemini idą przez nowe SDK.
+
+```
+Stare SDK google-generativeai jest EOL (sierpień 2025). Przemigruj GeminiProvider na google-genai.
+
+1. pyproject.toml — w grupie llm zamień google-generativeai na google-genai.
+
+2. llm/gemini_provider.py — przepisz na nowy wzorzec:
+   - is_available(): importlib.metadata.version("google-genai") w try/except + klucz w settings
+   - postprocess(markdown, mode, instructions):
+       from google import genai
+       from google.genai import types
+       client = genai.Client(api_key=settings.gemini_api_key)
+       model = settings.gemini_model or self.default_model
+       resp = client.models.generate_content(
+           model=model,
+           contents=POST_PROCESSING_PROMPT + "\n\n" + markdown,
+           config=types.GenerateContentConfig(temperature=0.1),
+       )
+       return LLMResult(text=resp.text, provider_used=self.name)
+   - default_model jako BEZPIECZNY fallback (np. "gemini-2.5-flash"), nadpisywany z configu.
+     Nazwy modeli Gemini szybko się zmieniają — użytkownik ustawia aktualny przez config.
+   - import google.genai tylko wewnątrz metody, nie na górze pliku
+   - obsłuż chunkowanie wg mode (jak inni providerzy)
+
+3. Komunikat braku SDK zmień na "google-genai nie jest zainstalowany" (był google-generativeai).
+
+4. Testy (mock genai.Client): is_available bez paczki → False; postprocess zwraca LLMResult.
 
 Pokaż diff, uruchom uv run pytest tests/unit -v.
 ```

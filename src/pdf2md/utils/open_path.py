@@ -6,14 +6,14 @@ import os
 import platform
 import shutil
 import subprocess
-from pathlib import Path
+from os import PathLike
 
 from loguru import logger
 
 
-def open_in_file_manager(path: str | Path) -> bool:
+def open_in_file_manager(path: str | PathLike[str]) -> bool:
     """Otwiera sciezke w menedzerze plikow, bez rzucania wyjatkow na brak narzedzia."""
-    target = str(Path(path))
+    target = os.fspath(path)
     try:
         system = platform.system()
         if system == "Windows":

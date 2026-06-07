@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import platform
 import subprocess
 from pathlib import Path
@@ -322,7 +321,7 @@ class MainWindow(QMainWindow):
 
         system = platform.system()
         if system == "Windows":
-            os.startfile(str(directory))  # type: ignore[attr-defined]
+            subprocess.Popen(["explorer", str(directory)])
         elif system == "Darwin":
             subprocess.Popen(["open", str(directory)])
         else:

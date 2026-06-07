@@ -347,10 +347,10 @@ W pyproject.toml dodaj:
 Wtedy "uv run pytest" pomija ciężkie; "uv run pytest -m heavy" uruchamia świadomie.
 
 Po zakończeniu:
-1. Pokaż jak zainstalować Marker: uv sync --extra engines-core (marker-pdf jest w grupie engines-core)
+1. Pokaż jak zainstalować Marker: uv add marker-pdf
 2. NAJPIERW pobierz modele poza pytestem na 1-stronicowym PDF: marker_single tests/fixtures/test_text_1page.pdf --output_dir /tmp/mk
 3. Uruchom lekkie testy: uv run pytest (pomija heavy)
-4. Dopiero świadomie i z monitorowaniem (free -h, nvidia-smi): PDF2MD_RUN_MARKER_INTEGRATION=1 uv run pytest -m heavy (sam -m heavy nie odpala realnej konwersji — jest dodatkowo bramkowana tą zmienną)
+4. Dopiero świadomie i z monitorowaniem (free -h, nvidia-smi): uv run pytest -m heavy
 ```
 
 ---
@@ -1236,6 +1236,117 @@ Po zakończeniu:
 pdf2md list-profiles
 pdf2md scan tests/fixtures/test_book_scan.pdf --profile balanced -o output/
 (pokaż wynik i czas dla różnych profili)
+```
+
+---
+---
+
+# Promty dodatkowe (retrofit do istniejącego projektu)
+
+> Te prompty nie należą do liniowej roadmapy — to ulepszenia dodawane do już działających
+> etapów. Każdy zakłada, że odpowiednie komponenty (silnik, GUI, worker) już istnieją.
+> Pracuj na osobnej gałęzi (np. `fix-...`), zrób PR jak zwykle.
+
+## PROMPT D1 — GUI: wybór urządzenia Docling (cpu/cuda/auto)
+
+> Wymaga: DoclingEngine (Etap 8), okno ustawień (Etap 7), ConversionWorker (Etap 6), config.toml (Etap 1).
+
+```
+Dodaj możliwość wyboru urządzenia dla silnika Docling (cpu / cuda / auto),
+zapisywaną w config.toml i przekazywaną z GUI przez ConversionWorker do DoclingEngine.
+Najpierw sprawdź faktyczne API zainstalowanej wersji docling (accelerator_options).
+
+1. core/config.py
+- Dodaj do Settings pole: docling_device: str = "auto"  (dozwolone: "auto", "cpu", "cuda")
+- Upewnij się że jest odczytywane z config.toml i zapisywane przez save_settings()
+
+2. engines/docling_engine.py
+- W convert() dodaj parametr device: str = "auto"
+- Zmapuj string na enum Docling. Oczekiwane API (zweryfikuj w zainstalowanej wersji):
+    from docling.datamodel.accelerator_options import AcceleratorDevice, AcceleratorOptions
+    from docling.datamodel.pipeline_options import PdfPipelineOptions
+    from docling.document_converter import DocumentConverter, PdfFormatOption
+    from docling.datamodel.base_models import InputFormat
+    _MAP = {"auto": AcceleratorDevice.AUTO, "cpu": AcceleratorDevice.CPU, "cuda": AcceleratorDevice.CUDA}
+    accel = AcceleratorOptions(device=_MAP[device])
+    popts = PdfPipelineOptions(); popts.accelerator_options = accel
+    converter = DocumentConverter(format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=popts)})
+- GRACEFUL FALLBACK: jeśli device == "cuda" ale torch.cuda.is_available() == False,
+  zaloguj ostrzeżenie i użyj CPU zamiast rzucać błędem. "auto" zostaw bez sprawdzania
+  (Docling sam wykryje). Import torch tylko w tej gałęzi, nie na górze pliku.
+- Zachowaj dotychczasowe is_available() przez importlib.metadata (bez importu docling).
+
+3. core/converter.py
+- Rozszerz Converter.convert() o parametr engine_options: dict | None = None
+- Przekaż go do silnika: engine.convert(pdf_path, **(engine_options or {}))
+- Dzięki temu device trafia do DoclingEngine jako engine_options={"device": ...}
+
+4. gui/workers.py (ConversionWorker)
+- W __init__ przyjmij/odczytaj docling_device z settings (get_settings().docling_device)
+- W run(), gdy wybrany silnik to Docling, wywołaj converter.convert(..., engine_options={"device": self.docling_device})
+- Dla innych silników engine_options pomiń (lub przekaż pusty)
+
+5. gui/settings_dialog.py
+- W zakładce "Domyślne ustawienia" dodaj etykietę "Docling device" i QComboBox
+  z pozycjami: "auto", "cpu", "cuda"
+- Przy otwarciu okna ustaw bieżącą wartość z get_settings().docling_device
+- Przy zapisie (OK/Zastosuj) zapisz wybór do config.toml przez core/config.save_settings()
+  (NIE QSettings — trzymamy jedno źródło prawdy w config.toml)
+- Opcjonalnie: jeśli torch.cuda niedostępne, dodaj przy "cuda" dopisek w tooltipie
+  "GPU niewykryte — zostanie użyte CPU"
+
+6. Testy
+- tests/unit/test_config.py: docling_device domyślnie "auto", zapis/odczyt z config.toml
+- tests/unit/test_docling_engine.py (mock): device="cuda" przy braku GPU → fallback na CPU
+  bez wyjątku; sprawdź że poprawny AcceleratorDevice jest budowany dla każdej opcji
+- tests/unit/test_converter.py: engine_options przekazywane do engine.convert()
+
+Po zakończeniu pokaż diff i uruchom: uv run pytest tests/unit -v
+Nie uruchamiaj ciężkiej konwersji automatycznie.
+```
+
+---
+
+## PROMPT D2 — Naprawa: testy Markera zawieszają WSL (dławienie zasobów)
+
+> Wymaga: zaimplementowany MarkerEngine i jego testy (Etap 3). Dla słabszego sprzętu
+> (≤16 GB RAM / ≤8 GB VRAM), gdzie Marker spawnuje workery na każdym rdzeniu i wyczerpuje
+> pamięć, wieszając całą maszynę WSL.
+>
+> **Po stronie użytkownika (poza Claude Code), wykonaj najpierw:**
+> 1. Ustaw `.wslconfig` z limitami RAM/swap/procesorów (PROJEKT.md, KROK 6b) i `wsl --shutdown`.
+> 2. Utwórz jednostronicowy fixture `tests/fixtures/test_text_1page.pdf` (bogaty w tekst).
+> 3. Pobierz modele Markera POZA pytestem: `TORCH_DEVICE=cpu uv run marker_single tests/fixtures/test_text_1page.pdf --output_dir /tmp/mk`
+> 4. Testy `heavy` uruchamiaj świadomie, z monitorowaniem (`watch -n1 free -h`, `nvidia-smi -l 1`).
+
+```
+Mamy już zaimplementowany MarkerEngine i testy, ale testy Markera zawieszają WSL
+(Marker spawnuje workery = liczba rdzeni CPU, wyczerpuje RAM/VRAM). Pracuję na słabym
+sprzęcie: GTX 1070 8 GB VRAM, 16 GB RAM. Wprowadź następujące poprawki:
+
+1. tests/conftest.py — utwórz jeśli nie istnieje, ustaw PRZED importem marker:
+   import os
+   os.environ.setdefault("PDFTEXT_WORKERS", "1")
+   os.environ.setdefault("TORCH_DEVICE", "cpu")
+
+2. engines/marker_engine.py — w convert() wymuś zachowawcze ustawienia:
+   - disable_multiprocessing=True (nowsze API) lub NUM_WORKERS=1 (starsze)
+   - pdftext_workers=1
+   - respektuj TORCH_DEVICE z env
+   - dodaj parametry konfigurowalne z config.toml: marker_device, marker_workers, marker_max_pages
+   Sprawdź NAJPIERW faktyczne API zainstalowanej wersji marker-pdf (marker/settings.py).
+
+3. tests/integration/test_marker.py — przerób:
+   - oznacz cały moduł @pytest.mark.heavy
+   - używaj jednostronicowego fixture test_text_1page.pdf (nie skanów wielostronicowych)
+   - w teście przekaż disable_multiprocessing=True, ogranicz do 1 strony
+
+4. pyproject.toml — dodaj (jeśli jeszcze nie ma):
+   [tool.pytest.ini_options]
+   markers = ["heavy: ciezkie testy ML, uruchamiane recznie"]
+   addopts = "-m 'not heavy'"
+
+Po zmianach pokaż diff i NIE uruchamiaj testów heavy automatycznie.
 ```
 
 ---

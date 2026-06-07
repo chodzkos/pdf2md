@@ -32,8 +32,13 @@ class GeminiProvider(PostprocessMixin, LLMProvider):
         return True
 
     def _call_llm(self, text: str, instructions: str) -> str:
-        genai = importlib.import_module("google.genai")
-        types = importlib.import_module("google.genai.types")
+        try:
+            genai = importlib.import_module("google.genai")
+            types = importlib.import_module("google.genai.types")
+        except ImportError as exc:
+            raise RuntimeError(
+                "google-genai nie jest zainstalowany. Uruchom: uv sync --extra llm"
+            ) from exc
         settings = get_settings()
         model_name = settings.gemini_model or self.default_model
         client = genai.Client(api_key=settings.gemini_api_key)

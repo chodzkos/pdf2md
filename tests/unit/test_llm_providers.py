@@ -366,6 +366,20 @@ class TestGeminiProvider:
         monkeypatch.setattr(importlib.metadata, "version", lambda pkg: "1.0.0")
         assert GeminiProvider().is_available() is True
 
+    def test_call_llm_raises_runtime_error_when_package_missing(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            "pdf2md.llm.gemini_provider.get_settings",
+            lambda: _fake_settings(gemini_api_key="AIza-test"),
+        )
+        monkeypatch.setattr(
+            "pdf2md.llm.gemini_provider.importlib.import_module",
+            lambda name: (_ for _ in ()).throw(ImportError("No module named 'google.genai'")),
+        )
+        with pytest.raises(RuntimeError, match="google-genai nie jest zainstalowany"):
+            GeminiProvider().postprocess("# tekst")
+
     def test_postprocess_returns_llm_result(self, monkeypatch: pytest.MonkeyPatch) -> None:
         fake_response = MagicMock()
         fake_response.text = "# Gemini wynik"

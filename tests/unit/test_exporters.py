@@ -1,0 +1,64 @@
+"""Testy eksporterow plikow wynikowych."""
+
+from __future__ import annotations
+
+import subprocess
+from pathlib import Path
+
+import pytest
+
+from pdf2md.exporters.markdown_exporter import MarkdownExporter
+from pdf2md.exporters.pandoc_epub_exporter import PandocEpubExporter
+
+
+def test_markdown_exporter_writes_file(tmp_path: Path) -> None:
+    output = tmp_path / "nested" / "doc.md"
+
+    result = MarkdownExporter().export("# Tytul\n", output)
+
+    assert result == output
+    assert output.read_text(encoding="utf-8") == "# Tytul\n"
+
+
+def test_pandoc_epub_exporter_raises_when_pandoc_missing(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr("pdf2md.exporters.pandoc_epub_exporter.check_pandoc", lambda: False)
+
+    with pytest.raises(RuntimeError, match="Pandoc nie jest dostępny"):
+        PandocEpubExporter().export("# Tytul", tmp_path / "book.epub")
+
+
+def test_pandoc_epub_exporter_runs_pandoc_and_removes_temp_file(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "book.epub"
+    calls: list[list[str]] = []
+    temp_paths: list[Path] = []
+    monkeypatch.setattr("pdf2md.exporters.pandoc_epub_exporter.check_pandoc", lambda: True)
+
+    def fake_run(
+        command: list[str],
+        *,
+        check: bool,
+        capture_output: bool,
+        text: bool,
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        temp_paths.append(Path(command[1]))
+        assert check is True
+        assert capture_output is True
+        assert text is True
+        output.write_bytes(b"epub")
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr("pdf2md.exporters.pandoc_epub_exporter.subprocess.run", fake_run)
+
+    result = PandocEpubExporter().export("# Tytul", output)
+
+    assert result == output
+    assert calls == [["pandoc", str(temp_paths[0]), "-o", str(output)]]
+    assert output.read_bytes() == b"epub"
+    assert not temp_paths[0].exists()

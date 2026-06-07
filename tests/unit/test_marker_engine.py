@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.metadata
+import os
 from types import SimpleNamespace
 from typing import Any
 
@@ -233,3 +234,116 @@ def test_convert_falls_back_without_llm_when_service_unavailable(
     # Config przebudowany bez use_llm w ścieżce fallback.
     assert captured["last_config"]["use_llm"] is False
     assert FakeConfigParser.instances == 2
+
+
+def test_marker_helper_methods_parse_limits_and_metadata() -> None:
+    engine = MarkerEngine()
+
+    assert engine._limited_page_range(None, 1) == "0"
+    assert engine._limited_page_range("", 3) == "0-2"
+    assert engine._limited_page_range("0-5,2", 3) == "0,1,2"
+    assert engine._limited_page_range(range(5), 2) == "0,1"
+    assert engine._limited_page_range({"3", "1"}, 5) == "1,3"
+    assert engine._limited_page_range(object(), 2) is not None
+    assert engine._coerce_positive_int("0", default=7) == 1
+    assert engine._coerce_positive_int("bad", default=7) == 7
+    assert engine._coerce_optional_positive_int("3") == 3
+    assert engine._coerce_optional_positive_int("-1") is None
+    assert engine._extract_metadata(SimpleNamespace(metadata={"a": 1})) == {"a": 1}
+    assert engine._extract_metadata(SimpleNamespace(metadata=["bad"])) == {}
+
+
+def test_configure_worker_env_sets_worker_limits(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("PDFTEXT_WORKERS", raising=False)
+    monkeypatch.delenv("NUM_WORKERS", raising=False)
+
+    MarkerEngine()._configure_worker_env(2)
+
+    assert os.environ["PDFTEXT_WORKERS"] == "2"
+    assert os.environ["NUM_WORKERS"] == "2"
+
+
+def test_configure_torch_device_respects_existing_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TORCH_DEVICE", "cuda")
+
+    MarkerEngine()._configure_torch_device("cpu")
+
+    assert os.environ["TORCH_DEVICE"] == "cuda"
+
+
+def test_configure_torch_device_uses_explicit_value(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("TORCH_DEVICE", raising=False)
+
+    MarkerEngine()._configure_torch_device("cpu")
+
+    assert os.environ["TORCH_DEVICE"] == "cpu"
+
+
+def test_configure_torch_device_falls_back_to_cpu_on_torch_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("TORCH_DEVICE", raising=False)
+
+    def fake_import_module(name: str) -> object:
+        assert name == "torch"
+        raise RuntimeError("torch broken")
+
+    monkeypatch.setattr("pdf2md.engines.marker_engine.importlib.import_module", fake_import_module)
+
+    MarkerEngine()._configure_torch_device(None)
+
+    assert os.environ["TORCH_DEVICE"] == "cpu"
+
+
+def test_configure_torch_device_forces_cpu_for_unsupported_cuda(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("TORCH_DEVICE", raising=False)
+
+    class FakeCuda:
+        @staticmethod
+        def is_available() -> bool:
+            return True
+
+        @staticmethod
+        def get_device_capability(_index: int) -> tuple[int, int]:
+            return (6, 1)
+
+        @staticmethod
+        def get_arch_list() -> list[str]:
+            return ["sm_75", "sm_86"]
+
+    class FakeTorch:
+        cuda = FakeCuda()
+
+    monkeypatch.setattr(
+        "pdf2md.engines.marker_engine.importlib.import_module",
+        lambda name: FakeTorch,
+    )
+
+    MarkerEngine()._configure_torch_device(None)
+
+    assert os.environ["TORCH_DEVICE"] == "cpu"
+
+
+def test_load_marker_api_returns_expected_objects(monkeypatch: pytest.MonkeyPatch) -> None:
+    modules = {
+        "marker.config.parser": SimpleNamespace(ConfigParser=object()),
+        "marker.converters.pdf": SimpleNamespace(PdfConverter=object()),
+        "marker.models": SimpleNamespace(create_model_dict=lambda: {}),
+        "marker.output": SimpleNamespace(text_from_rendered=lambda rendered: ("", {}, {})),
+    }
+
+    monkeypatch.setattr(
+        "pdf2md.engines.marker_engine.importlib.import_module",
+        lambda name: modules[name],
+    )
+
+    config_parser, converter, create_model_dict, text_from_rendered = (
+        MarkerEngine()._load_marker_api()
+    )
+
+    assert config_parser is modules["marker.config.parser"].ConfigParser
+    assert converter is modules["marker.converters.pdf"].PdfConverter
+    assert create_model_dict is modules["marker.models"].create_model_dict
+    assert text_from_rendered is modules["marker.output"].text_from_rendered

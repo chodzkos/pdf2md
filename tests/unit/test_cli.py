@@ -91,6 +91,13 @@ def test_config_show_returns_zero(cli_test_env: Path) -> None:
     assert result.exit_code == 0
 
 
+def test_config_set_accepts_docling_section_key(cli_test_env: Path) -> None:
+    result = CliRunner().invoke(cli, ["config", "set", "docling.docling_device", "cuda"])
+
+    assert result.exit_code == 0
+    assert "docling_device = cuda" in result.output
+
+
 def test_convert_missing_file_returns_error(cli_test_env: Path) -> None:
     missing = cli_test_env / "nieistniejacy.pdf"
 

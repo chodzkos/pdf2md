@@ -269,6 +269,7 @@ def _normalize_config_key(key: str) -> str:
         "marker.marker_device": "marker_device",
         "marker.marker_workers": "marker_workers",
         "marker.marker_max_pages": "marker_max_pages",
+        "docling.docling_device": "docling_device",
     }
     normalized = key.strip().replace("-", "_")
     if normalized in aliases:

@@ -162,3 +162,27 @@ def test_get_settings_returns_cached_instance(isolated_config: Path) -> None:
     second = get_settings()
 
     assert first is second
+
+
+def test_marker_device_is_normalized() -> None:
+    """marker_device akceptuje wartości z różną wielkością liter."""
+    settings = Settings(marker_device=" CUDA ")
+
+    assert settings.marker_device == "cuda"
+
+
+@pytest.mark.parametrize(
+    ("field_name", "value", "message"),
+    [
+        ("marker_device", "tpu", "marker_device"),
+        ("marker_workers", 0, "marker_workers"),
+        ("marker_max_pages", -1, "marker_max_pages"),
+    ],
+)
+def test_marker_settings_are_validated(field_name: str, value: object, message: str) -> None:
+    """Konfiguracja Markera odrzuca wartości, które byłyby niebezpieczne lub nieobsługiwane."""
+    data = Settings().model_dump()
+    data[field_name] = value
+
+    with pytest.raises(ValueError, match=message):
+        Settings(**data)

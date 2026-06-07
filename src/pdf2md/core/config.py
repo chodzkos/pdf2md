@@ -134,6 +134,31 @@ class Settings(BaseSettings):
     llm_provider: str = "none"
     llm_mode: str = "none"
 
+    @field_validator("marker_device")
+    @classmethod
+    def validate_marker_device(cls, value: str) -> str:
+        """Dopuszcza tylko urządzenia wspierane przez adapter Marker."""
+        normalized = value.lower().strip()
+        if normalized not in {"auto", "cpu", "cuda"}:
+            raise ValueError("marker_device musi mieć wartość: auto, cpu albo cuda")
+        return normalized
+
+    @field_validator("marker_workers")
+    @classmethod
+    def validate_marker_workers(cls, value: int) -> int:
+        """Marker musi mieć co najmniej jednego workera."""
+        if value < 1:
+            raise ValueError("marker_workers musi być większe od 0")
+        return value
+
+    @field_validator("marker_max_pages")
+    @classmethod
+    def validate_marker_max_pages(cls, value: int) -> int:
+        """0 oznacza brak limitu stron, wartości dodatnie ograniczają konwersję."""
+        if value < 0:
+            raise ValueError("marker_max_pages musi być większe lub równe 0")
+        return value
+
     @field_validator("docling_device")
     @classmethod
     def validate_docling_device(cls, value: str) -> str:

@@ -114,3 +114,15 @@ def test_docling_cuda_falls_back_to_cpu_when_gpu_unavailable(
 
     assert result.markdown == "# Docling"
     assert _FakeDocumentConverter.built_devices == [_FakeAcceleratorDevice.CPU]
+
+
+def test_docling_default_device_is_auto(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Brak parametru device używa domyślnego auto i wybiera CPU, gdy CUDA nieużywalna."""
+    _install_fake_docling(monkeypatch, cuda_is_usable=False)
+
+    result = DoclingEngine().convert("doc.pdf")
+
+    assert result.markdown == "# Docling"
+    assert _FakeDocumentConverter.built_devices == [_FakeAcceleratorDevice.CPU]

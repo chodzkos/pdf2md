@@ -53,7 +53,7 @@ class DoclingEngine(ConversionEngine):
             return False
         return True
 
-    def convert(self, pdf_path: str, **kwargs: object) -> ConversionResult:
+    def convert(self, pdf_path: str, device: object = "auto", **kwargs: object) -> ConversionResult:
         """Konwertuje PDF do Markdown przez Docling."""
         if not self.is_available():
             raise RuntimeError(
@@ -62,9 +62,8 @@ class DoclingEngine(ConversionEngine):
             )
 
         path = Path(pdf_path)
-        device = str(kwargs.pop("device", "auto"))
         try:
-            converter = self._build_converter(device=device, kwargs=kwargs)
+            converter = self._build_converter(device=str(device), kwargs=kwargs)
             convert_kwargs = self._extract_convert_kwargs(kwargs)
             logger.info(f"Konwertuję {path} przez Docling")
             result = converter.convert(str(path), **convert_kwargs)

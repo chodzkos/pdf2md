@@ -15,7 +15,7 @@ from pdf2md.engines.base import ConversionEngine, ConversionResult
 
 
 class MinerUEngine(ConversionEngine):
-    """Adapter CLI magic-pdf z pakietu MinerU."""
+    """Adapter CLI mineru instalowanego jako izolowane narzedzie uv."""
 
     name = "MinerU"
     description = "Najlepszy dla dokumentów naukowych, wielokolumnowych i CJK"
@@ -25,15 +25,15 @@ class MinerUEngine(ConversionEngine):
 
     def is_available(self) -> bool:
         """Sprawdza obecność CLI przez shutil.which, bez importowania MinerU."""
-        return shutil.which("magic-pdf") is not None
+        return shutil.which("mineru") is not None
 
     def convert(self, pdf_path: str, **kwargs: object) -> ConversionResult:
-        """Konwertuje PDF do Markdown przez CLI magic-pdf."""
-        executable = shutil.which("magic-pdf")
+        """Konwertuje PDF do Markdown przez CLI mineru."""
+        executable = shutil.which("mineru")
         if executable is None:
             raise RuntimeError(
-                "Silnik MinerU nie jest zainstalowany lub magic-pdf nie jest w PATH. "
-                "Zainstaluj go poleceniem: uv sync --extra engines-optional"
+                "Silnik MinerU nie jest zainstalowany lub mineru nie jest w PATH. "
+                "Zainstaluj go poleceniem: uv tool install mineru --with mineru[all]"
             )
 
         path = Path(pdf_path)

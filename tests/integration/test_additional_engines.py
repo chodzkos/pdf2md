@@ -39,7 +39,7 @@ def test_docling_converts_pdf() -> None:
 
 @pytest.mark.skipif(not MinerUEngine().is_available(), reason="MinerU niezainstalowany")
 def test_mineru_converts_pdf(tmp_path: Path) -> None:
-    """MinerU konwertuje prosty PDF tekstowy do Markdown przez CLI magic-pdf."""
+    """MinerU konwertuje prosty PDF tekstowy do Markdown przez CLI mineru."""
     result = MinerUEngine().convert(_fixture_path(), output_dir=str(tmp_path / "mineru"))
 
     assert result.markdown

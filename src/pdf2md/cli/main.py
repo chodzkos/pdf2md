@@ -78,7 +78,7 @@ ENGINE_CATALOG: tuple[dict[str, object], ...] = (
         "ocr": True,
         "llm": False,
         "license": "AGPL",
-        "hint": "uv add mineru",
+        "hint": "uv tool install mineru --with mineru[all]",
         "description": "Dokumenty naukowe, layout, CJK.",
     },
     {

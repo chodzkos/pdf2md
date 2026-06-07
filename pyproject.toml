@@ -38,7 +38,6 @@ engines-core = [
     "docling>=2.0",
 ]
 engines-optional = [
-    "mineru>=1.0",
     "pdf-craft>=0.1",
 ]
 llm = [
@@ -65,16 +64,6 @@ dev = [
     "ruff>=0.5",
     "mypy>=1.10",
     "pre-commit>=3.7",
-]
-
-[tool.uv]
-# engines-core i engines-optional są wzajemnie wykluczające się — różne silniki,
-# różne środowiska. uv nie powinien próbować rozwiązywać ich jednocześnie.
-conflicts = [
-    [
-        { extra = "engines-core" },
-        { extra = "engines-optional" },
-    ],
 ]
 
 [tool.hatch.build.targets.wheel]

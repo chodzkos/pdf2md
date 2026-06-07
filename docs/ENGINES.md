@@ -79,7 +79,7 @@ uruchamia Docling na CPU; mozna to nadpisac przez `docling_device`, `DOCLING_DEV
 ## MinerU
 
 **Opis i mocne strony:** silnik nastawiony na dokumenty naukowe, wielokolumnowe uklady i CJK.
-W pdf2md adapter korzysta z CLI `magic-pdf`.
+W pdf2md adapter korzysta z CLI `mineru`.
 
 **Kiedy uzywac:** artykuly naukowe, preprinty, materialy z wieloma wzorami, kolumnami albo
 jezykami CJK.
@@ -87,16 +87,12 @@ jezykami CJK.
 **Instalacja:**
 
 ```bash
-uv sync --extra engines-optional
+uv tool install mineru --with mineru[all]
 ```
 
-albo:
-
-```bash
-uv add mineru
-```
-
-Po instalacji sprawdz, czy `magic-pdf` jest widoczne w `PATH`.
+MinerU jest instalowany izolowanie, poza srodowiskiem projektu, bo wymaga `pillow>=11`,
+a Marker przypina `pillow<11`. Po instalacji sprawdz, czy `mineru` jest widoczne w `PATH`.
+Stara komenda `magic-pdf` dotyczy wersji 1.x i nie jest uzywana przez adapter.
 
 **Znane ograniczenia:** adapter uruchamia zewnetrzny proces i szuka wygenerowanego pliku `.md`.
 Na Windows lokalizacja binarki musi przechodzic przez `shutil.which()`, bo nazwa moze miec

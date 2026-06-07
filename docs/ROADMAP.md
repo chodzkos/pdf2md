@@ -167,7 +167,7 @@ Drugi silnik — znacznie silniejszy, obsługuje OCR i ma wbudowany tryb LLM.
 - [ ] Tworzysz jednostronicowy fixture: `test_text_1page.pdf`
 - [ ] NAJPIERW pobierasz modele poza pytestem: `marker_single tests/fixtures/test_text_1page.pdf --output_dir /tmp/mk`
 - [ ] `uv run pytest` (pomija heavy — powinno być szybkie i bezpieczne)
-- [ ] Dopiero świadomie, z monitorowaniem w 2. terminalu (`watch -n1 free -h`, `nvidia-smi -l 1`): `PDF2MD_RUN_MARKER_INTEGRATION=1 uv run pytest -m heavy` (sam `-m heavy` nie wystarczy — realna konwersja Markera jest dodatkowo bramkowana zmienną środowiskową)
+- [ ] Dopiero świadomie, z monitorowaniem w 2. terminalu (`watch -n1 free -h`, `nvidia-smi -l 1`): `uv run pytest -m heavy`
 - [ ] Pull Request → scal
 
 ### Definicja ukończenia
@@ -410,12 +410,15 @@ Dodanie **Docling** jako trzeciego silnika rdzeniowego (stabilnego, do v1.0), or
 ### Co robisz Ty
 - [ ] `git checkout -b etap-8-engines`
 - [ ] Instalujesz Docling (core): `uv add docling`
-- [ ] Opcjonalnie instalujesz pozostałe (każdy osobno, sprawdzasz czy działa):
+- [ ] Opcjonalnie instalujesz pozostałe:
   ```bash
-  uv add docling          # ~300MB — silnik core
-  uv add pdf-craft        # opcjonalny
+  uv add docling          # ~300MB — silnik core (importowany w procesie)
+  uv add pdf-craft        # opcjonalny (importowany w procesie)
 
-  pip install mineru      # MinerU woli pip, sprawdź dokumentację
+  # MinerU NIE przez pip! Wymaga pillow>=11, a Marker przypina pillow<11 → konflikt.
+  # Instaluj izolowanie (osobne środowisko, komenda CLI na PATH):
+  uv tool install mineru --with mineru[all]
+  mineru --help           # weryfikacja (CLI nazywa się "mineru", nie "magic-pdf")
   ```
 - [ ] Testujesz każdy silnik na `test_scan.pdf`
 - [ ] Pull Request → scal

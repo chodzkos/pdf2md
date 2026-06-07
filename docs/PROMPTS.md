@@ -49,7 +49,11 @@ Skonfiguruj dla narzędzia "uv" z:
 - python = ">=3.11"
 - zależności: pydantic-settings, loguru, rich, click, PySide6
 - dev zależności: pytest, pytest-cov, ruff, mypy, pre-commit
-- opcjonalne grupy: engines-core (pymupdf4llm, marker-pdf, docling), engines-optional (mineru, pdf-craft), llm (anthropic, openai, google-generativeai)
+- opcjonalne grupy: engines-core (pymupdf4llm, marker-pdf, docling), engines-optional (pdf-craft), llm (anthropic, openai, google-generativeai)
+  UWAGA: NIE umieszczaj mineru w zależnościach pip. MinerU wymaga pillow>=11, a marker-pdf
+  (engines-core) przypina pillow<11 — konflikt nie do rozwiązania w jednym środowisku.
+  MinerU jest wołany przez CLI (subprocess), więc instaluje się go IZOLOWANIE:
+  uv tool install mineru --with mineru[all]  (poza projektem, nie jako dependency)
 - entry points:
     pdf2md = "pdf2md.cli.main:cli"
     pdf2md-gui = "pdf2md.gui.app:main"
@@ -741,12 +745,14 @@ Klasa MinerUEngine:
 - supports_llm = False
 - requires_gpu = False  (działa na CPU, wolniej)
 
-MinerU ma CLI. Użyj subprocess:
-- is_available(): użyj shutil.which("magic-pdf") — zwraca ścieżkę lub None.
-  WAŻNE: na Windows subprocess.run(["magic-pdf", ...]) bez .exe/.cmd rzuca FileNotFoundError;
+MinerU jest instalowany IZOLOWANIE (uv tool install mineru --with mineru[all]), NIE jako pip
+dependency — bo wymaga pillow>=11, a Marker przypina pillow<11. Adapter woła jego CLI przez subprocess.
+W MinerU 2.x+ komenda nazywa się "mineru" (stare "magic-pdf" to wersje 1.x — nieaktualne).
+- is_available(): użyj shutil.which("mineru") — zwraca ścieżkę lub None.
+  WAŻNE: na Windows subprocess.run(["mineru", ...]) bez .exe/.cmd rzuca FileNotFoundError;
   shutil.which() poprawnie lokalizuje binarkę z rozszerzeniem. Zwróć True jeśli which != None.
 - convert(pdf_path, output_dir=None, **kwargs):
-  Uruchom magic-pdf przez pełną ścieżkę z shutil.which (nie samą nazwę): magic-pdf -p pdf_path -o output_dir_temp
+  Uruchom mineru przez pełną ścieżkę z shutil.which (nie samą nazwę): mineru -p pdf_path -o output_dir_temp
   MinerU tworzy pliki w output_dir_temp/
   Znajdź wygenerowany .md (glob)
   Wczytaj jako string, zwróć ConversionResult
@@ -916,8 +922,8 @@ echo "Binary dostępne w dist/"
 3. scripts/build_windows.ps1
 (dla cross-compilation lub uruchomienia na Windows)
 Uwzględnij komentarz gdzie pobrać Tesseract i Poppler dla Windows.
-PRZYPOMNIENIE: adaptery wołające zewnętrzne binarki (MinerU/magic-pdf) muszą używać
-shutil.which() do lokalizacji pliku — na Windows samo "magic-pdf" bez .exe/.cmd zawiedzie.
+PRZYPOMNIENIE: adaptery wołające zewnętrzne binarki (MinerU → komenda `mineru`) muszą używać
+shutil.which() do lokalizacji pliku — na Windows samo "mineru" bez .exe/.cmd zawiedzie.
 
 4. .github/workflows/release.yml
 Uruchamia się na: push tags v*

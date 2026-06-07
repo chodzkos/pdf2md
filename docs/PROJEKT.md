@@ -69,11 +69,15 @@ Projekt celuje docelowo w mocny sprzęt (RTX 5090 Laptop 24 GB / 128 GB RAM), al
 |---|---|---|---|---|
 | **PyMuPDF4LLM** | `pymupdf4llm` | Najszybszy, natywny tekst | ⭐ Trywialna | AGPL/komercyjna |
 | **Marker** | `marker-pdf` | Uniwersalny, OCR, `--use_llm` | ⭐⭐ Łatwa | **GPL** (wyjątek <$2M) |
-| **MinerU** | `mineru` | Naukowe, wielokolumnowe, CJK | ⭐⭐⭐ Średnia | AGPL |
+| **MinerU** | `uv tool` (izolowany) | Naukowe, wielokolumnowe, CJK | ⭐⭐⭐ Średnia | AGPL |
 | **Docling** | `docling` | Enterprise, tabele, RAG | ⭐⭐ Łatwa | MIT |
 | **pdf-craft** | `pdf-craft` | Skanowane książki | ⭐⭐ Łatwa | sprawdź |
 
 > **⚠️ Uwaga licencyjna (ważna przy packagingu).** Sam kod pdf2md Squeezer jest MIT, ale kilka silników ma licencje copyleft (Marker — GPL, MinerU/PyMuPDF — AGPL). Dopóki instalujesz je jako **osobne, opcjonalne pakiety pip** i wywołujesz przez adapter, Twój kod pozostaje MIT. Problem pojawia się dopiero przy **wkompilowaniu ich na sztywno w jedno binary PyInstaller** (Etap 10) — wtedy dystrybucja musiałaby respektować GPL/AGPL. Dlatego: silniki copyleft jako opcjonalne dodatki, nie część rdzeniowego buildu. Dotyczy to też przyszłego camelot (F02): sam camelot jest MIT, ale jego historyczna zależność Ghostscript to AGPL — w aktualnych wersjach camelota domyślny backend to pdfium (BSD), więc używaj pdfium i nie instaluj Ghostscriptu.
+
+> **⚙️ Dwie kategorie silników — ważne dla instalacji i konfliktów zależności.**
+> - **Importowane w procesie** (PyMuPDF4LLM, Marker, Docling, pdf-craft) — żyją we wspólnym środowisku projektu (`uv add ...`) i **nawzajem ograniczają zależności**. Stąd realny konflikt: Marker przypina `pillow<11`, więc nic w tym środowisku nie może wymagać `pillow>=11`.
+> - **Wołane przez CLI/subprocess** (MinerU) — instalowane **izolowanie** przez `uv tool install mineru --with mineru[all]`, w osobnym środowisku. Ich zależności (np. `pillow>=11` w MinerU) **nie kolidują** z głównym środowiskiem. Adapter znajduje komendę przez `shutil.which("mineru")`. **MinerU nie jest zależnością pip projektu.** (CLI nazywa się `mineru` w wersji 2.x+; `magic-pdf` to przestarzała komenda 1.x.)
 
 
 #### Silniki VLM-OCR (Faza 2 — premium scan pipeline)
@@ -307,7 +311,7 @@ Wyjątek: Marker ma wbudowany `--use_llm` działający per-strona — tam korzys
 
 Aby CLI i GUI nie rozjechały się z ustawieniami, jest **jeden** model konfiguracji:
 
-- `~/.config/pdf2md/config.toml` — źródło prawdy (silnik domyślny, folder output, język, llm_mode, nazwy modeli)
+- `~/.config/pdf2md/config.toml` — źródło prawdy (silnik domyślny, folder output, język, llm_mode, nazwy modeli, `docling_device`: auto/cpu/cuda)
 - klucze API: `config.toml` lub systemowy keyring (docelowo), `.env` dopuszczalny w trybie deweloperskim
 - `.env` **tylko jako override deweloperski** — nadpisuje wartości lokalnie, nie jest źródłem prawdy w produkcji
 

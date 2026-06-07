@@ -1351,6 +1351,69 @@ Po zmianach pokaż diff i NIE uruchamiaj testów heavy automatycznie.
 
 ---
 
+## PROMPT D3 — Docling/CUDA: realny test GPU zamiast samego is_available()
+
+> Wymaga: DoclingEngine (Etap 8), `detection/dependencies.py` (Etap 1).
+> Powód: na starszych kartach (np. GTX 1070, sm_61) `torch.cuda.is_available()` zwraca True,
+> ale kernel nie istnieje → `cudaErrorNoKernelImageForDevice` przy faktycznym wykonaniu.
+> `device="auto"` wybierał wtedy GPU i Docling się wywracał.
+
+```
+DoclingEngine z device="auto" crashuje na starej karcie (GTX 1070, sm_61): torch.cuda.is_available()
+zwraca True, ale kernel nie istnieje → cudaErrorNoKernelImageForDevice. Napraw detekcję GPU.
+
+1. detection/dependencies.py — dodaj funkcję cuda_usable() -> bool:
+   - jeśli torch niezaimportowalny lub torch.cuda.is_available() == False → False
+   - w przeciwnym razie zrób SMOKE TEST: x = torch.zeros(1).cuda(); torch.cuda.synchronize()
+   - jeśli rzuci wyjątek (np. AcceleratorError/RuntimeError) → zwróć False
+   - wynik zcache'uj (functools.lru_cache), żeby nie testować przy każdym wywołaniu
+
+2. engines/docling_engine.py — w mapowaniu device:
+   - "cpu" → CPU
+   - "cuda" → jeśli cuda_usable(): CUDA; inaczej loguj ostrzeżenie i CPU
+   - "auto" → jeśli cuda_usable(): CUDA; inaczej CPU (NIE polegaj na samym AcceleratorDevice.AUTO,
+     bo Docling/torch wykrywa niekompatybilne GPU jako dostępne i crashuje)
+
+3. Zastosuj cuda_usable() też w przyszłych silnikach GPU (Marker device, VLM) — wspólne źródło prawdy.
+
+4. doctor: w komendzie `pdf2md doctor` pokazuj wynik cuda_usable() (a nie tylko torch.cuda.is_available()),
+   żeby od razu było widać "CUDA obecne, ale nieużywalne na tej karcie".
+
+5. Testy (mock): cuda_usable() False → device auto/cuda dają CPU bez wyjątku.
+
+Pokaż diff, uruchom uv run pytest tests/unit -v.
+```
+
+---
+
+## PROMPT D4 — GUI: bezpieczne otwieranie folderu wyników (WSL/cross-platform)
+
+> Wymaga: GUI (Etap 6/7). Powód: `_open_output_folder()` woła `xdg-open`, którego w WSL nie ma
+> → FileNotFoundError; dodatkowo było wołane nawet po nieudanej konwersji.
+
+```
+_open_output_folder() crashuje w WSL (brak xdg-open) i jest wołane nawet po nieudanej konwersji.
+
+1. utils/open_path.py — funkcja open_in_file_manager(path) odporna na brak narzędzia:
+   - Windows: os.startfile
+   - macOS: "open"
+   - WSL (wykryj: "microsoft" w platform.uname().release.lower()): "wslview" jeśli jest (shutil.which),
+     inaczej "explorer.exe". UWAGA: explorer.exe zwraca kod wyjścia 1 nawet przy sukcesie —
+     NIE traktuj niezerowego return code jako błędu.
+   - Linux: "xdg-open" jeśli jest (shutil.which)
+   - całość w try/except — brak narzędzia LOGUJE ostrzeżenie, NIE rzuca wyjątku
+
+2. gui/main_window.py:
+   - _open_output_folder() używa open_in_file_manager() i łapie wyjątki
+   - w _show_done_message(): proponuj/otwieraj folder TYLKO gdy success > 0
+
+3. Testy (mock subprocess): brak narzędzia → brak wyjątku (tylko log); na WSL wybierany explorer.exe.
+
+Pokaż diff, uruchom uv run pytest tests/unit -v.
+```
+
+---
+
 ## Wskazówki ogólne
 
 ### Dwie zasady do DOPISANIA na końcu każdego prompta etapowego

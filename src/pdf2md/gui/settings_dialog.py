@@ -5,7 +5,6 @@ from __future__ import annotations
 import importlib.metadata
 import json
 import urllib.request
-from typing import Any
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -27,6 +26,7 @@ from PySide6.QtWidgets import (
 
 from pdf2md.core.config import Settings, get_settings, save_settings
 from pdf2md.core.registry import engine_registry
+from pdf2md.detection.dependencies import cuda_usable
 
 
 class SettingsDialog(QDialog):
@@ -185,14 +185,7 @@ class SettingsDialog(QDialog):
             combo.setCurrentIndex(index)
 
     def _cuda_available(self) -> bool:
-        try:
-            torch: Any = __import__("torch")
-        except Exception:
-            return False
-        try:
-            return bool(torch.cuda.is_available())
-        except Exception:
-            return False
+        return cuda_usable()
 
     def _apply(self) -> None:
         self._settings = self._settings_from_fields()

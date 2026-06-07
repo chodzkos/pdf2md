@@ -530,6 +530,10 @@ def doctor(ctx: click.Context) -> None:
     gpu_table.add_column("Status")
     gpu_table.add_row("PyTorch", "✅ działa" if gpu.get("torch_available") else "❌ brak")
     gpu_table.add_row("CUDA", "✅ dostępna" if gpu.get("cuda_available") else "❌ niedostępna")
+    gpu_table.add_row(
+        "CUDA smoke test",
+        "✅ używalna" if gpu.get("cuda_usable") else "❌ nieużywalna",
+    )
     gpu_table.add_row("CUDA version", str(gpu.get("cuda_version") or "brak"))
     gpu_table.add_row("Urządzenie", str(gpu.get("device_name") or "brak"))
     console.print(gpu_table)

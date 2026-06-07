@@ -9,6 +9,7 @@ from __future__ import annotations
 import platform
 import shutil
 import subprocess
+from functools import lru_cache
 from typing import Any
 
 
@@ -80,6 +81,25 @@ def check_ollama() -> dict[str, Any]:
     return result
 
 
+@lru_cache(maxsize=1)
+def cuda_usable() -> bool:
+    """Sprawdza, czy CUDA jest nie tylko widoczna, ale wykonuje prosty kernel."""
+    try:
+        import torch
+    except Exception:
+        return False
+
+    try:
+        if not torch.cuda.is_available():
+            return False
+        tensor = torch.zeros(1).cuda()
+        torch.cuda.synchronize()
+        del tensor
+    except Exception:
+        return False
+    return True
+
+
 def check_gpu() -> dict[str, Any]:
     """Sprawdza dostępność GPU (CUDA przez PyTorch).
 
@@ -89,6 +109,7 @@ def check_gpu() -> dict[str, Any]:
     result: dict[str, Any] = {
         "torch_available": False,
         "cuda_available": False,
+        "cuda_usable": False,
         "device_name": "",
         "cuda_version": "",
     }
@@ -100,6 +121,7 @@ def check_gpu() -> dict[str, Any]:
         if torch.cuda.is_available():
             result["cuda_available"] = True
             result["device_name"] = torch.cuda.get_device_name(0)
+        result["cuda_usable"] = cuda_usable()
     except Exception:
         pass
     return result

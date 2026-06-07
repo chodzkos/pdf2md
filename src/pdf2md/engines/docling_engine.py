@@ -9,6 +9,7 @@ from typing import Any, ClassVar
 
 from loguru import logger
 
+from pdf2md.detection.dependencies import cuda_usable
 from pdf2md.engines.base import ConversionEngine, ConversionResult
 
 
@@ -113,29 +114,18 @@ class DoclingEngine(ConversionEngine):
     def _resolve_device(self, device: str) -> object:
         accelerator_module: Any = importlib.import_module("docling.datamodel.accelerator_options")
         normalized = device.lower().strip()
-        device_map = {
-            "auto": accelerator_module.AcceleratorDevice.AUTO,
-            "cpu": accelerator_module.AcceleratorDevice.CPU,
-            "cuda": accelerator_module.AcceleratorDevice.CUDA,
-        }
-        if normalized not in device_map:
+        if normalized not in {"auto", "cpu", "cuda"}:
             raise ValueError("Docling device musi mieć wartość: auto, cpu albo cuda")
 
-        if normalized == "cuda" and not self._torch_cuda_available():
-            logger.warning("CUDA niedostępna dla Docling — używam CPU.")
+        if normalized == "cpu":
             return accelerator_module.AcceleratorDevice.CPU
 
-        return device_map[normalized]
+        if cuda_usable():
+            return accelerator_module.AcceleratorDevice.CUDA
 
-    def _torch_cuda_available(self) -> bool:
-        try:
-            torch: Any = importlib.import_module("torch")
-        except Exception:
-            return False
-        try:
-            return bool(torch.cuda.is_available())
-        except Exception:
-            return False
+        if normalized == "cuda":
+            logger.warning("CUDA niedostępna lub nieużywalna dla Docling — używam CPU.")
+        return accelerator_module.AcceleratorDevice.CPU
 
     def _extract_convert_kwargs(self, kwargs: dict[str, object]) -> dict[str, object]:
         convert_kwargs: dict[str, object] = {}

@@ -44,6 +44,7 @@ def _fake_dependencies() -> dict[str, Any]:
         "gpu": {
             "torch_available": False,
             "cuda_available": False,
+            "cuda_usable": False,
             "device_name": "",
             "cuda_version": "",
         },
@@ -70,6 +71,7 @@ def test_doctor_returns_zero(cli_test_env: Path) -> None:
     result = CliRunner().invoke(cli, ["doctor"])
 
     assert result.exit_code == 0
+    assert "CUDA smoke test" in result.output
 
 
 def test_convert_dry_run_does_not_create_markdown(cli_test_env: Path) -> None:

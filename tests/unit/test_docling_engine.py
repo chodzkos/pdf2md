@@ -8,6 +8,7 @@ from typing import Any, ClassVar
 
 import pytest
 
+from pdf2md.engines import docling_engine
 from pdf2md.engines.docling_engine import DoclingEngine
 
 
@@ -50,7 +51,7 @@ class _FakeDocumentConverter:
         return SimpleNamespace(document=document)
 
 
-def _install_fake_docling(monkeypatch: pytest.MonkeyPatch, cuda_available: bool) -> None:
+def _install_fake_docling(monkeypatch: pytest.MonkeyPatch, cuda_is_usable: bool) -> None:
     _FakeDocumentConverter.built_devices = []
 
     modules = {
@@ -66,7 +67,6 @@ def _install_fake_docling(monkeypatch: pytest.MonkeyPatch, cuda_available: bool)
             AcceleratorDevice=_FakeAcceleratorDevice,
             AcceleratorOptions=_FakeAcceleratorOptions,
         ),
-        "torch": SimpleNamespace(cuda=SimpleNamespace(is_available=lambda: cuda_available)),
     }
 
     def fake_import_module(name: str) -> Any:
@@ -75,24 +75,28 @@ def _install_fake_docling(monkeypatch: pytest.MonkeyPatch, cuda_available: bool)
         raise AssertionError(f"Nieoczekiwany import: {name}")
 
     monkeypatch.setattr("importlib.import_module", fake_import_module)
+    monkeypatch.setattr(docling_engine, "cuda_usable", lambda: cuda_is_usable)
     monkeypatch.setattr(DoclingEngine, "is_available", lambda _self: True)
 
 
 @pytest.mark.parametrize(
-    ("device", "expected"),
+    ("device", "cuda_is_usable", "expected"),
     [
-        ("auto", _FakeAcceleratorDevice.AUTO),
-        ("cpu", _FakeAcceleratorDevice.CPU),
-        ("cuda", _FakeAcceleratorDevice.CUDA),
+        ("auto", True, _FakeAcceleratorDevice.CUDA),
+        ("auto", False, _FakeAcceleratorDevice.CPU),
+        ("cpu", False, _FakeAcceleratorDevice.CPU),
+        ("cuda", True, _FakeAcceleratorDevice.CUDA),
+        ("cuda", False, _FakeAcceleratorDevice.CPU),
     ],
 )
 def test_docling_builds_accelerator_device(
     monkeypatch: pytest.MonkeyPatch,
     device: str,
+    cuda_is_usable: bool,
     expected: _FakeAcceleratorDevice,
 ) -> None:
-    """DoclingEngine mapuje wybór device na AcceleratorDevice."""
-    _install_fake_docling(monkeypatch, cuda_available=True)
+    """DoclingEngine mapuje wybór device na używalny AcceleratorDevice."""
+    _install_fake_docling(monkeypatch, cuda_is_usable=cuda_is_usable)
 
     result = DoclingEngine().convert("doc.pdf", device=device)
 
@@ -103,8 +107,8 @@ def test_docling_builds_accelerator_device(
 def test_docling_cuda_falls_back_to_cpu_when_gpu_unavailable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """device='cuda' bez dostępnej CUDA buduje AcceleratorOptions dla CPU."""
-    _install_fake_docling(monkeypatch, cuda_available=False)
+    """device='cuda' bez używalnej CUDA buduje AcceleratorOptions dla CPU."""
+    _install_fake_docling(monkeypatch, cuda_is_usable=False)
 
     result = DoclingEngine().convert("doc.pdf", device="cuda")
 

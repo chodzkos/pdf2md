@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import platform
-import subprocess
 from pathlib import Path
 
+from loguru import logger
 from PySide6.QtCore import QUrl
 from PySide6.QtGui import QAction, QDesktopServices, QIcon, QKeySequence
 from PySide6.QtWidgets import (
@@ -34,6 +33,7 @@ from pdf2md.gui.widgets.file_list import FileListWidget
 from pdf2md.gui.widgets.llm_selector import LLMSelectorWidget
 from pdf2md.gui.widgets.log_panel import LogPanelWidget
 from pdf2md.gui.workers import ConversionWorker
+from pdf2md.utils.open_path import open_in_file_manager
 
 
 def _separator() -> QFrame:
@@ -299,7 +299,12 @@ class MainWindow(QMainWindow):
             f"Czas:     {total:.1f}s"
         )
 
-        open_folder = message.addButton("Otwórz folder wynikowy", QMessageBox.ButtonRole.ActionRole)
+        open_folder = None
+        if success > 0:
+            open_folder = message.addButton(
+                "Otwórz folder wynikowy",
+                QMessageBox.ButtonRole.ActionRole,
+            )
         export_epub = None
         if check_pandoc() and self._last_markdown_outputs:
             export_epub = message.addButton("Eksportuj do EPUB", QMessageBox.ButtonRole.ActionRole)
@@ -307,7 +312,7 @@ class MainWindow(QMainWindow):
         message.exec()
 
         clicked = message.clickedButton()
-        if clicked is open_folder:
+        if open_folder is not None and clicked is open_folder:
             self._open_output_folder()
         elif export_epub is not None and clicked is export_epub:
             self._export_last_outputs_to_epub()
@@ -319,13 +324,10 @@ class MainWindow(QMainWindow):
         if directory is None:
             return
 
-        system = platform.system()
-        if system == "Windows":
-            subprocess.Popen(["explorer", str(directory)])
-        elif system == "Darwin":
-            subprocess.Popen(["open", str(directory)])
-        else:
-            subprocess.Popen(["xdg-open", str(directory)])
+        try:
+            open_in_file_manager(directory)
+        except Exception as exc:
+            logger.warning(f"Nie udało się otworzyć folderu wynikowego: {exc}")
 
     def _export_last_outputs_to_epub(self) -> None:
         exporter = PandocEpubExporter()

@@ -6,7 +6,6 @@ import os
 import tempfile
 from pathlib import Path
 
-import cv2
 import numpy as np
 import pymupdf
 import pytest
@@ -237,6 +236,24 @@ def test_normalize_contrast_grayscale() -> None:
     img = _white_page(200, 150, channels=1)
     result = normalize_contrast(img)
     assert result.shape == img.shape
+
+
+# ---------------------------------------------------------------------------
+# dewarp
+# ---------------------------------------------------------------------------
+
+
+def test_dewarp_returns_same_shape() -> None:
+    """dewarp zwraca obraz o tych samych wymiarach (lub nie modyfikuje, gdy brak konturów)."""
+    img = _white_page(400, 300)
+    result = dewarp(img)
+    assert result.shape == img.shape
+
+
+def test_dewarp_noisy_image_does_not_crash() -> None:
+    img = _noisy_page(400, 300)
+    result = dewarp(img)
+    assert result.ndim == 3
 
 
 # ---------------------------------------------------------------------------

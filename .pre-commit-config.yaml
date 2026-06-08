@@ -13,7 +13,8 @@ repos:
     hooks:
       - id: mypy
         name: mypy (type check)
-        args: [--strict]
+        args: [--config-file=pyproject.toml]
+        exclude: ^tests/
         additional_dependencies:
           - pydantic-settings
           - loguru

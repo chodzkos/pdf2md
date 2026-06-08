@@ -6,9 +6,14 @@ import os
 import tempfile
 from pathlib import Path
 
+import pytest
+
+# Pomiń cały moduł gdy scan-extras (numpy, opencv, pymupdf) nie są zainstalowane.
+pytest.importorskip("numpy")
+pytest.importorskip("pymupdf")
+
 import numpy as np
 import pymupdf
-import pytest
 
 from pdf2md.scan.preprocessing import (
     cleanup_work_dir,

@@ -2432,7 +2432,6 @@ source = { editable = "." }
 dependencies = [
     { name = "click" },
     { name = "loguru" },
-    { name = "pdf-craft" },
     { name = "pydantic-settings" },
     { name = "pyside6" },
     { name = "rich" },
@@ -2485,7 +2484,6 @@ requires-dist = [
     { name = "marker-pdf", marker = "extra == 'engines-core'", specifier = ">=0.2" },
     { name = "marker-pdf", marker = "extra == 'marker'", specifier = ">=0.2" },
     { name = "openai", marker = "extra == 'llm'", specifier = ">=1.35" },
-    { name = "pdf-craft", specifier = ">=1.0.13" },
     { name = "pdf-craft", marker = "extra == 'engines-optional'", specifier = ">=0.1" },
     { name = "pdf-craft", marker = "extra == 'pdf-craft'", specifier = ">=0.1" },
     { name = "pydantic-settings", specifier = ">=2.3" },

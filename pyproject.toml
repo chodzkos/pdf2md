@@ -57,6 +57,10 @@ llm = [
     "openai>=1.35",
     "google-genai>=1.0",
 ]
+scan = [
+    "opencv-python>=4.8",
+    "numpy>=1.26",
+]
 
 [project.scripts]
 pdf2md = "pdf2md.cli.main:cli"
@@ -114,8 +118,16 @@ module = [
     "pdf_craft.*",
     "torch",
     "torch.*",
+    "cv2",
+    "cv2.*",
+    "pymupdf",
+    "pymupdf.*",
 ]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["pdf2md.scan.*"]
+disallow_untyped_calls = false
 
 # ── Pytest ───────────────────────────────────────────────────────────────────────
 [tool.pytest.ini_options]

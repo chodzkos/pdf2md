@@ -146,10 +146,10 @@ def deskew(image: np.ndarray) -> np.ndarray:
 def denoise(image: np.ndarray) -> np.ndarray:
     """Redukuj szum przez filtrowanie nielokalne (Non-Local Means)."""
     if image.ndim == 3:
-        return cv2.fastNlMeansDenoisingColored(image, None, h=10, hColor=10,
-                                               templateWindowSize=7, searchWindowSize=21)
-    return cv2.fastNlMeansDenoising(image, None, h=10,
-                                    templateWindowSize=7, searchWindowSize=21)
+        return cv2.fastNlMeansDenoisingColored(
+            image, None, h=10, hColor=10, templateWindowSize=7, searchWindowSize=21
+        )
+    return cv2.fastNlMeansDenoising(image, None, h=10, templateWindowSize=7, searchWindowSize=21)
 
 
 def dewarp(image: np.ndarray) -> np.ndarray:

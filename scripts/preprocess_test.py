@@ -35,7 +35,7 @@ def main() -> None:
         type=int,
         default=DPI_STANDARD,
         help=f"Rozdzielczość renderowania (domyślnie {DPI_STANDARD}; "
-             f"stare książki: {DPI_OLD_BOOKS}; trudne skany: {DPI_DIFFICULT})",
+        f"stare książki: {DPI_OLD_BOOKS}; trudne skany: {DPI_DIFFICULT})",
     )
     parser.add_argument("--deskew", action="store_true", help="Wyrównaj pochylenie")
     parser.add_argument("--crop", action="store_true", help="Przytnij marginesy")
@@ -81,9 +81,9 @@ def main() -> None:
     t0 = time.monotonic()
     total_pages = 0
 
-    for batch in iter_page_batches(str(pdf_path), dpi=args.dpi,
-                                   batch_size=args.batch_size,
-                                   work_dir=str(raw_dir)):
+    for batch in iter_page_batches(
+        str(pdf_path), dpi=args.dpi, batch_size=args.batch_size, work_dir=str(raw_dir)
+    ):
         for raw_path in batch:
             name = Path(raw_path).name
             img = cv2.imread(raw_path)

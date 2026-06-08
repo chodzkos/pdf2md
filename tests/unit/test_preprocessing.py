@@ -33,7 +33,11 @@ SCAN_FIXTURE = Path(__file__).parent.parent / "fixtures" / "test_scan.pdf"
 
 def _white_page(h: int = 400, w: int = 300, channels: int = 3) -> np.ndarray:
     """Biała strona — minimalistyczny obraz do testów."""
-    return np.full((h, w, channels), 255, dtype=np.uint8) if channels == 3 else np.full((h, w), 255, dtype=np.uint8)
+    return (
+        np.full((h, w, channels), 255, dtype=np.uint8)
+        if channels == 3
+        else np.full((h, w), 255, dtype=np.uint8)
+    )
 
 
 def _noisy_page(h: int = 400, w: int = 300) -> np.ndarray:

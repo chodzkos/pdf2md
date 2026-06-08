@@ -122,6 +122,8 @@ module = [
     "cv2.*",
     "pymupdf",
     "pymupdf.*",
+    "numpy",
+    "numpy.*",
 ]
 ignore_missing_imports = true
 

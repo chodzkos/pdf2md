@@ -18,7 +18,7 @@ Etap 6  GUI — szkielet         ░░░░░  ~4h
 Etap 7  GUI — polish           ░░░░░  ~4h
 Etap 8  Docling (core) + opc. MinerU, pdf-craft  ░░░░░  ~4h
 Etap 9  Testy + dokumentacja   ░░░░░  ~3h
-Etap 10 Packaging              ░░░░░  ~1-2 dni (trudny!)
+Etap 10 Dystrybucja (pakiet pip/uv)  ░░░░░  ~3h
 ────────────────────────────────────────────
 Faza 1 łącznie                       ~35h + packaging
 
@@ -458,33 +458,63 @@ Dodanie **Docling** jako trzeciego silnika rdzeniowego (stabilnego, do v1.0), or
 
 ---
 
-## Etap 10 — Packaging
+## Etap 10 — Dystrybucja jako pakiet (pip/uv)
 **Gałąź:** `etap-10-packaging`
-**Czas:** ~1–2 dni (NIE 3 godziny — to jeden z najtrudniejszych etapów)
+**Czas:** ~3 godziny
 
-> **Realizm:** PyInstaller + PySide6 + OCR + zewnętrzne binarki (Tesseract, Poppler) + ewentualne modele to notorycznie kłopotliwa kombinacja. Nie zakładaj, że to "szybka końcówka". Strategia: **build portable bez ciężkich silników**, a silniki copyleft (Marker GPL, MinerU AGPL) i zewnętrzne binarki jako opcjonalne, instalowane osobno — to także rozwiązuje kwestię licencyjną (nie bundlujesz GPL/AGPL w jedno binary MIT).
+> **Decyzja dystrybucyjna.** Główny kanał wydania v1.0 to **pakiet Python (pip/uv)**, nie frozen binary. Powody:
+> 1. **Licencja.** Publikujesz wyłącznie swój kod MIT. Silniki copyleft (PyMuPDF4LLM — AGPL, Marker — GPL, MinerU — AGPL) instaluje sam użytkownik u siebie — to nie jest dystrybucja tych pakietów przez Ciebie, więc Twój pakiet pozostaje czysto MIT.
+> 2. **Elastyczność.** Użytkownik dokłada tylko te silniki, których chce: `uv pip install pymupdf4llm` itd. Orkiestrator importuje to, co jest zainstalowane.
+> 3. **Frozen binary nie przyjmuje silników po fakcie.** Zamrożona binarka PyInstallera ma site-packages wbudowane na sztywno — nie da się do niej doinstalować silnika importowanego (PyMuPDF4LLM, Docling). Dlatego binarka ma sens dopiero, gdy bundluje **własny silnik MIT** (Faza 2, F02). Do tego czasu „goła" binarka byłaby prawie bezużyteczna.
+>
+> Frozen binary (PyInstaller) → przeniesiony do zadań **po Fazie 2** (sekcja niżej). Praca z `build.spec` z wcześniejszych prób nie idzie do kosza — zostaje na ten moment.
 
 ### Zadania dla Claude Code
-- [ ] `build.spec` dla PyInstaller — build **rdzeniowy**: CLI + GUI + lekkie silniki (PyMuPDF4LLM, Docling). Marker/MinerU/pdf-craft NIE wkompilowane — wykrywane jako opcjonalne, instalowane przez użytkownika.
-- [ ] **`hiddenimports`** w build.spec: skoro silniki importujemy leniwie (dopiero w `convert()`), PyInstaller ich nie wykryje → `ModuleNotFoundError` przy użyciu. Dodaj jawnie pymupdf4llm, pymupdf, docling i ich podmoduły. Po buildzie przetestuj REALNĄ konwersję, nie tylko `--help`.
-- [ ] **`multiprocessing.freeze_support()`** w punktach wejścia (`cli/main.py`, `gui/app.py`) pod `if __name__ == "__main__"` — biblioteki ML spawnują podprocesy, bez tego skompilowany `.exe` na Windows może wpaść w pętlę nieskończoną.
-- [ ] `scripts/build_linux.sh` — buduje AppImage lub `.tar.gz`
-- [ ] `scripts/build_windows.ps1` — buduje `.exe`. Tesseract/Poppler/Pandoc **nie bundlowane** — zamiast tego `pdf2md doctor` wykrywa ich brak i podaje instrukcję instalacji.
-- [ ] `.github/workflows/release.yml`: tag `v*` → build Linux i Windows → GitHub Release
-- [ ] Sekcja w README: "Instalacja Tesseract/Poppler/Pandoc na Windows" (zamiast koniecznego bundlowania)
-- [ ] `docs/RELEASE.md` — checklist wydania
+- [x] `pyproject.toml` gotowy do publikacji: metadane (autor, opis, URL, klasyfikatory, `license = MIT`), entry points (`pdf2md`, `pdf2md-gui`), opcjonalne extra: `engines-core`, `engines-optional`, `llm`
+- [x] Weryfikacja, że pakiet buduje się czysto: `uv build` → wheel + sdist w `dist/`
+- [x] `docs/INSTALL.md` — instalacja: `uv tool install pdf2md` (sam orkiestrator), potem dokładanie silników (`uv pip install pymupdf4llm` / `docling` / `marker-pdf`) i LLM (`anthropic` / `openai` / `google-genai`), oraz silniki CLI (`uv tool install mineru --with mineru[all]`)
+- [x] `.github/workflows/release.yml`: na tag `v*` → `uv build` → GitHub Release z wheel + sdist (opcjonalnie publish na PyPI)
+- [x] README: sekcja instalacji + tabela „który silnik czym doinstalować"; `pdf2md doctor` jako narzędzie do wykrycia, czego brakuje
+- [x] `docs/RELEASE.md` — checklist wydania pakietu
 
 ### Co robisz Ty
-- [ ] `git tag v1.0.0 && git push origin v1.0.0`
-- [ ] Obserwujesz GitHub Actions jak buduje release
-- [ ] Pobierasz binary i testujesz na czystym systemie (Windows bez Pythona)
-- [ ] Sprawdzasz że `pdf2md doctor` poprawnie podpowiada brakujące zależności
+- [ ] `git checkout -b etap-10-packaging`
+- [ ] `uv build` — sprawdzasz, że powstają wheel + sdist
+- [ ] Test w czystym środowisku: `uv tool install dist/pdf2md-*.whl` → `pdf2md doctor` (silniki jako „niedostępne, zainstaluj przez ...")
+- [ ] Dokładasz jeden silnik: `uv pip install pymupdf4llm` → `pdf2md convert plik.pdf` działa
+- [ ] `git tag v1.0.0 && git push origin v1.0.0` → obserwujesz release na GitHub
+- [ ] Pull Request → scal
 
 ### Definicja ukończenia
-✅ `pdf2md` i `pdf2md-gui` działają bez instalacji Pythona (rdzeniowe silniki)  
-✅ Brakujące zależności/silniki są wykrywane z czytelną instrukcją instalacji  
-✅ Build MIT nie zawiera wkompilowanych silników GPL/AGPL  
-✅ GitHub Release zawiera pliki do pobrania  
+✅ `uv build` produkuje wheel + sdist (czysto MIT, bez wbudowanych silników)  
+✅ `uv tool install` daje działający orkiestrator; silniki dokładane przez pip/uv  
+✅ `pdf2md doctor` podpowiada, czego brakuje i jak to zainstalować  
+✅ GitHub Release zawiera pakiet do pobrania  
+
+---
+
+## Etap 10b — Frozen binary (PyInstaller) — PO FAZIE 2
+**Gałąź:** `etap-10b-frozen-binary` (realizować dopiero po ukończeniu Fazy 2)
+**Czas:** ~1–2 dni (trudny)
+
+> **Warunek:** ukończony własny silnik z F02 (pdfplumber + pdfminer.six + Tesseract — wszystko permisywne: MIT/Apache/BSD). Dopiero wtedy frozen binary ma sens: bundluje **wyłącznie własny silnik MIT**, działa samodzielnie bez instalacji Pythona, a jego dystrybucja jest licencyjnie czysta. PyMuPDF4LLM/Docling/Marker/MinerU pozostają opcjonalne (pip/CLI), NIE wkompilowane.
+
+### Zadania dla Claude Code (gdy nadejdzie czas)
+- [ ] `build.spec` (PyInstaller): CLI + GUI + **tylko własny silnik MIT** i jego permisywne zależności. ŻADNYCH silników copyleft (PyMuPDF4LLM/Marker/MinerU) ani VLM w bundlu.
+- [ ] **CPU-only torch** jeśli własny silnik użyje torcha (inaczej CArchive >4 GiB → `struct.error`); wymuś `torch+cpu`, odinstaluj `nvidia-*`/`triton` przed buildem; w skrypcie assert „brak nvidia-*"
+- [ ] `hiddenimports` dla leniwie importowanych modułów; `copy_metadata()` dla pakietów, których `is_available()` używa `importlib.metadata`
+- [ ] `multiprocessing.freeze_support()` w punktach wejścia (`cli/main.py`, `gui/app.py`)
+- [ ] PySide6: NIE `collect_data_files/dynamic_libs` całości — tylko standardowe hooki dla importowanych `QtWidgets/QtGui/QtCore`
+- [ ] `scripts/build_linux.sh`, `scripts/build_windows.ps1` (Windows: Tesseract/Poppler nie bundlowane, `pdf2md doctor` wskazuje instalację)
+- [ ] **Realny test GUI** (nie tylko `--help`): `xvfb-run ./dist/pdf2md-gui` lub na maszynie z ekranem — weryfikacja pluginu platformy Qt
+- [ ] `.github/workflows/release-binary.yml`: build Linux + Windows na tag
+
+### Definicja ukończenia
+✅ Binarka działa bez instalacji Pythona, używając własnego silnika MIT  
+✅ Binarka NIE zawiera kodu copyleft (czysta dystrybucja MIT)  
+✅ GUI realnie się uruchamia z frozen binary (przetestowane z sesją graficzną)  
+✅ Brakujące zewnętrzne narzędzia/silniki wykrywane z instrukcją instalacji  
+
 
 ---
 ---
@@ -744,4 +774,4 @@ git pull
 - [ ] LLM post-processing działa z przynajmniej 1 dostawcą
 - [ ] Testy: ≥75% coverage, wszystkie zielone
 - [ ] README jest kompletne z przykładami
-- [ ] GitHub Release zawiera binary do pobrania
+- [ ] GitHub Release zawiera pakiet (wheel + sdist) do pobrania; `uv tool install` działa

@@ -891,86 +891,61 @@ uv run pytest --cov=pdf2md -v
 
 ---
 
-## PROMPT #10 — Packaging
+## PROMPT #10 — Dystrybucja jako pakiet (pip/uv)
 
 ```
 Jesteśmy na gałęzi etap-10-packaging.
 
-UWAGA: to jeden z najtrudniejszych etapów (PyInstaller + PySide6 + OCR + binarki).
-Nie traktuj go jak szybkiej końcówki. Strategia: build RDZENIOWY bez ciężkich i copyleft silników.
+Główny kanał wydania v1.0 to PAKIET Python (pip/uv), NIE frozen binary.
+Powód: publikujemy tylko kod MIT; silniki copyleft (PyMuPDF4LLM-AGPL, Marker-GPL, MinerU-AGPL)
+instaluje sam użytkownik u siebie. Frozen binary i tak nie przyjmuje silników importowanych po
+fakcie (zamrożone site-packages), więc ma sens dopiero z własnym silnikiem z Fazy 2.
 
-Przygotuj dystrybucję pdf2md jako standalone binary.
+1. pyproject.toml — przygotuj do publikacji:
+   - metadane: name, version, description, authors, readme, license = "MIT", urls (repo),
+     classifiers, requires-python
+   - [project.scripts]: pdf2md = "pdf2md.cli.main:cli"; pdf2md-gui = "pdf2md.gui.app:main"
+   - [project.optional-dependencies]:
+       engines-core = [pymupdf4llm, marker-pdf, docling]
+       engines-optional = [pdf-craft]
+       llm = [anthropic, openai, google-genai]
+   - MinerU NIE w extra (instalowany przez uv tool — patrz Etap 8)
 
-1. build.spec (PyInstaller)
-Utwórz specfile budujący DWA binary:
-- pdf2md (CLI) — bez GUI, mniejszy
-- pdf2md-gui (GUI) — z PySide6
+2. Build pakietu:
+   uv build        # → dist/pdf2md-<ver>.whl + dist/pdf2md-<ver>.tar.gz
 
-ZASADA LICENCYJNA I ROZMIAROWA:
-- Wkompiluj TYLKO silniki lekkie i permisywne: PyMuPDF4LLM, Docling.
-- NIE wkompilowuj Marker (GPL), MinerU (AGPL), pdf-craft, silników VLM — to copyleft i/lub ciężkie.
-  Mają być wykrywane jako opcjonalne i instalowane osobno przez użytkownika (pip).
-  Powód: bundlowanie GPL/AGPL w jedno binary zmusza do objęcia całości tą licencją (projekt jest MIT).
+3. docs/INSTALL.md — instrukcja:
+   - sam orkiestrator:  uv tool install pdf2md
+   - dokładanie silników:  uv pip install pymupdf4llm   (albo docling / marker-pdf)
+   - LLM:  uv pip install anthropic   (albo openai / google-genai)
+   - silnik CLI:  uv tool install mineru --with mineru[all]
+   - pierwsza diagnostyka:  pdf2md doctor  (pokaże, czego brakuje)
 
-Upewnij się że dołączone są:
-- Pliki danych: ikona SVG
-- Qt plugins dla PySide6
-- HIDDENIMPORTS (krytyczne): ponieważ silniki importujemy LENIWIE (dopiero w convert()),
-  PyInstaller ich NIE wykryje automatycznie. Aplikacja skompiluje się, ale wybuchnie
-  ModuleNotFoundError przy pierwszym użyciu nawet lekkiego silnika. Dodaj jawnie do
-  hiddenimports w build.spec wszystkie wkompilowane moduły: pymupdf4llm, pymupdf, docling
-  (i ich podmoduły, jeśli PyInstaller zgłasza braki). Po buildzie PRZETESTUJ realną konwersję,
-  nie tylko --help.
-- FREEZE_SUPPORT: w punkcie wejścia (cli/main.py i gui/app.py) dodaj na początku
-  `import multiprocessing; multiprocessing.freeze_support()` pod `if __name__ == "__main__":`.
-  Powód: biblioteki ML (torch/docling) wewnętrznie spawnują podprocesy (DataLoader itp.);
-  bez freeze_support() skompilowany .exe na Windows może wejść w pętlę nieskończoną
-  (rekurencyjne odpalanie samego siebie). To NIE wynika z QThread — QThread to wątki,
-  nie multiprocessing — tylko z podprocesów bibliotek ML.
+4. README — sekcja instalacji + tabela "który silnik czym doinstalować".
 
-2. scripts/build_linux.sh
-#!/bin/bash
-set -e
-uv run pip install pyinstaller
-uv run pyinstaller build.spec --clean
-echo "Binary dostępne w dist/"
+5. .github/workflows/release.yml — na tag v*:
+   - uv build
+   - utwórz GitHub Release i dołącz wheel + sdist (opcjonalnie publish na PyPI przez trusted publishing)
 
-3. scripts/build_windows.ps1
-(dla cross-compilation lub uruchomienia na Windows)
-Uwzględnij komentarz gdzie pobrać Tesseract i Poppler dla Windows.
-PRZYPOMNIENIE: adaptery wołające zewnętrzne binarki (MinerU → komenda `mineru`) muszą używać
-shutil.which() do lokalizacji pliku — na Windows samo "mineru" bez .exe/.cmd zawiedzie.
+6. docs/RELEASE.md — checklist:
+   - [ ] CHANGELOG.md zaktualizowany
+   - [ ] wersja w pyproject.toml podbita
+   - [ ] uv run pytest zielone
+   - [ ] git tag vX.Y.Z && git push origin vX.Y.Z
+   - [ ] sprawdź Release na GitHub
 
-4. .github/workflows/release.yml
-Uruchamia się na: push tags v*
-
-Jobs:
-  build-linux:
-    runs-on: ubuntu-latest
-    kroki: checkout, install uv, uv sync, apt install poppler-utils tesseract-ocr, 
-           install pyinstaller, pyinstaller build.spec, upload artifact
-
-  build-windows:
-    runs-on: windows-latest  
-    kroki: analogicznie z choco install tesseract poppler
-
-  create-release:
-    needs: [build-linux, build-windows]
-    kroki: download artifacts, gh release create z plikami
-
-5. docs/RELEASE.md
-Checklist przed wydaniem nowej wersji:
-- [ ] Zaktualizuj CHANGELOG.md
-- [ ] Zaktualizuj wersję w pyproject.toml
-- [ ] Uruchom testy: uv run pytest
-- [ ] Tag: git tag v1.0.0 && git push origin v1.0.0
-- [ ] Obserwuj GitHub Actions
-
-Po zakończeniu pokaż jak ręcznie przetestować build:
-uv run pyinstaller build.spec --clean
-./dist/pdf2md --help
-./dist/pdf2md list-engines
+Po zakończeniu pokaż jak przetestować w czystym środowisku:
+uv build
+uv tool install dist/pdf2md-*.whl
+pdf2md doctor
+uv pip install pymupdf4llm
+pdf2md convert tests/fixtures/test_text_1page.pdf
 ```
+
+> **Frozen binary (PyInstaller) — odłożony do Etapu 10b, PO Fazie 2.** Zamrożona binarka nie
+> przyjmie silników importowanych po fakcie, więc ma sens dopiero gdy bundluje własny silnik MIT
+> (F02). Wcześniejsza praca z `build.spec` (CPU-only torch, hiddenimports, copy_metadata,
+> freeze_support, odchudzony PySide6) zostaje zachowana i przyda się wtedy. Zob. ROADMAP, Etap 10b.
 
 ---
 ---

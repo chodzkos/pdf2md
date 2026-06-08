@@ -29,7 +29,7 @@ def main() -> None:
     setup_logging()
     app = QApplication(sys.argv)
     app.setApplicationName("pdf2md")
-    app.setApplicationVersion("0.1.0-dev")
+    app.setApplicationVersion("1.0.0")
     icon_path = Path(__file__).resolve().parent / "assets" / "icon.svg"
     app.setWindowIcon(QIcon(str(icon_path)))
     window = MainWindow(initial_files=initial_files)

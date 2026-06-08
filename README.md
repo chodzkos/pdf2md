@@ -10,7 +10,7 @@ pdf2md konwertuje pliki PDF do Markdown przez kilka wymiennych silnikow: szybkie
 
 - Konwersja pojedynczych PDF-ow i batchy do Markdown.
 - GUI w PySide6 oraz CLI oparte o Click.
-- Silniki: PyMuPDF4LLM, Marker, Docling, MinerU i pdf-craft.
+- Silniki wykrywane opcjonalnie: PyMuPDF4LLM, Marker, Docling, MinerU i pdf-craft.
 - OCR dla skanow, dokumentow wielokolumnowych, tabel i materialow naukowych.
 - Opcjonalne LLM: Ollama, Anthropic Claude, OpenAI i Google Gemini.
 - Eksport do Markdown i EPUB przez Pandoc.
@@ -19,15 +19,15 @@ pdf2md konwertuje pliki PDF do Markdown przez kilka wymiennych silnikow: szybkie
 
 ## 🔧 Silniki konwersji
 
-| Silnik | Typ dokumentu | OCR | Instalacja |
+| Silnik | Typ dokumentu | OCR | Czym doinstalować |
 |---|---|---:|---|
-| PyMuPDF4LLM | Natywne PDF-y z warstwa tekstowa | Nie | `uv pip install "pdf2md[pymupdf]"` |
-| Marker | Skanowane i mieszane PDF-y, OCR, layout | Tak | `uv pip install "pdf2md[marker]"` |
-| Docling | Tabele, dokumenty biznesowe, RAG | Tak | `uv pip install "pdf2md[docling]"` |
+| PyMuPDF4LLM | Natywne PDF-y z warstwa tekstowa | Nie | `uv pip install pymupdf4llm` |
+| Marker | Skanowane i mieszane PDF-y, OCR, layout | Tak | `uv pip install marker-pdf` |
+| Docling | Tabele, dokumenty biznesowe, RAG | Tak | `uv pip install docling` |
 | MinerU | Artykuly naukowe, CJK, wielokolumnowe uklady | Tak | `uv tool install mineru --with mineru[all]` |
-| pdf-craft | Skanowane ksiazki, EPUB/Markdown | Tak | `uv pip install "pdf2md[pdf-craft]"` |
+| pdf-craft | Skanowane ksiazki, EPUB/Markdown | Tak | `uv pip install pdf-craft` |
 
-MinerU jest celowo instalowany jako izolowane narzedzie `uv tool`, a nie jako dependency projektu, bo jego wymagania moga konfliktowac z Markerem.
+Pakiet `pdf2md` jest orkiestratorem MIT. Silniki, zwlaszcza copyleft albo bardzo ciezkie, instaluje u siebie uzytkownik; `pdf2md doctor` pokazuje, czego brakuje.
 
 ## 📦 Instalacja
 
@@ -44,6 +44,13 @@ MinerU jest celowo instalowany jako izolowane narzedzie `uv tool`, a nie jako de
 ### Instalacja aplikacji
 
 ```bash
+uv tool install pdf2md
+pdf2md doctor
+```
+
+Jesli pracujesz w aktywnym virtualenv zamiast `uv tool`:
+
+```bash
 uv pip install pdf2md
 ```
 
@@ -58,17 +65,24 @@ uv sync
 ### Instalacja silników (opcjonalnie)
 
 ```bash
-uv pip install "pdf2md[pymupdf]"
-uv pip install "pdf2md[marker]"
-uv pip install "pdf2md[docling]"
-uv pip install "pdf2md[pdf-craft]"
-uv pip install "pdf2md[llm]"
+uv pip install pymupdf4llm
+uv pip install marker-pdf
+uv pip install docling
+uv pip install pdf-craft
 ```
 
-Agregat dla glownych silnikow:
+LLM:
 
 ```bash
-uv pip install "pdf2md[engines-core,llm]"
+uv pip install anthropic
+uv pip install openai
+uv pip install google-genai
+```
+
+Jesli instalujesz `pdf2md` jako izolowane narzedzie `uv tool`, mozesz od razu dolaczyc zaleznosci do tego samego srodowiska:
+
+```bash
+uv tool install pdf2md --with pymupdf4llm --with docling
 ```
 
 MinerU:

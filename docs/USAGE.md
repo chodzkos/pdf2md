@@ -254,25 +254,33 @@ Najczestsze zmienne srodowiskowe:
 
 ## Instalacja silnikow
 
-Silniki podstawowe:
+Silniki instaluj w tym samym srodowisku Pythona, w ktorym dziala `pdf2md`. Dla aktywnego virtualenv:
 
 ```bash
-uv pip install "pdf2md[pymupdf]"
-uv pip install "pdf2md[marker]"
-uv pip install "pdf2md[docling]"
+uv pip install pymupdf4llm
+uv pip install marker-pdf
+uv pip install docling
 ```
 
-Silniki opcjonalne:
+Silniki opcjonalne i CLI:
 
 ```bash
-uv pip install "pdf2md[pdf-craft]"
+uv pip install pdf-craft
 uv tool install mineru --with mineru[all]
 ```
 
 LLM:
 
 ```bash
-uv pip install "pdf2md[llm]"
+uv pip install anthropic
+uv pip install openai
+uv pip install google-genai
+```
+
+Jesli `pdf2md` jest zainstalowany przez `uv tool`, dolacz zaleznosci do izolowanego srodowiska narzedzia:
+
+```bash
+uv tool install pdf2md --with pymupdf4llm --with docling
 ```
 
 W repozytorium developerskim:

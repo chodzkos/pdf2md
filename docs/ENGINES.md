@@ -15,13 +15,13 @@ faktury bez potrzeby OCR.
 **Instalacja:**
 
 ```bash
-uv sync --extra engines-core
+uv pip install pymupdf4llm
 ```
 
-albo:
+Dla instalacji developerskiej z repozytorium:
 
 ```bash
-uv add pymupdf4llm
+uv sync --extra engines-core
 ```
 
 **Znane ograniczenia:** nie rozpoznaje skanow bez warstwy tekstowej. Przy bardzo zlozonym
@@ -38,13 +38,13 @@ Markdown jest wazniejsza niz czas konwersji.
 **Instalacja:**
 
 ```bash
-uv sync --extra engines-core
+uv pip install marker-pdf
 ```
 
-albo:
+Dla instalacji developerskiej z repozytorium:
 
 ```bash
-uv add marker-pdf
+uv sync --extra engines-core
 ```
 
 **Znane ograniczenia:** laduje modele ML i domyslnie moze uruchamiac wiele workerow. W pdf2md
@@ -62,13 +62,13 @@ w ktorych wazna jest struktura wyjsciowa.
 **Instalacja:**
 
 ```bash
-uv sync --extra engines-core
+uv pip install docling
 ```
 
-albo:
+Dla instalacji developerskiej z repozytorium:
 
 ```bash
-uv add docling
+uv sync --extra engines-core
 ```
 
 **Znane ograniczenia:** import Docling moze ladowac ciezsze zaleznosci, dlatego adapter sprawdza
@@ -109,13 +109,13 @@ tabelami albo wzorami.
 **Instalacja:**
 
 ```bash
-uv sync --extra engines-optional
+uv pip install pdf-craft
 ```
 
-albo:
+Dla instalacji developerskiej z repozytorium:
 
 ```bash
-uv add pdf-craft
+uv sync --extra engines-optional
 ```
 
 Wymagany jest Poppler dostepny w systemie.

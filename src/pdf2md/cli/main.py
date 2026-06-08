@@ -45,7 +45,7 @@ ENGINE_CATALOG: tuple[dict[str, object], ...] = (
         "ocr": False,
         "llm": False,
         "license": "AGPL/kom.",
-        "hint": "uv add pymupdf4llm",
+        "hint": "uv pip install pymupdf4llm",
         "description": "Szybki ekstraktor tekstu z natywnych PDF-ów.",
     },
     {
@@ -56,7 +56,7 @@ ENGINE_CATALOG: tuple[dict[str, object], ...] = (
         "ocr": True,
         "llm": True,
         "license": "GPL",
-        "hint": "uv add marker-pdf",
+        "hint": "uv pip install marker-pdf",
         "description": "Uniwersalny konwerter z OCR i trybem LLM.",
     },
     {
@@ -67,7 +67,7 @@ ENGINE_CATALOG: tuple[dict[str, object], ...] = (
         "ocr": True,
         "llm": False,
         "license": "MIT",
-        "hint": "uv add docling",
+        "hint": "uv pip install docling",
         "description": "Enterprise parser dokumentów, tabele, RAG.",
     },
     {
@@ -89,7 +89,7 @@ ENGINE_CATALOG: tuple[dict[str, object], ...] = (
         "ocr": True,
         "llm": False,
         "license": "MIT",
-        "hint": "uv add pdf-craft",
+        "hint": "uv pip install pdf-craft",
         "description": "Skanowane książki, Markdown i natywny EPUB.",
     },
 )

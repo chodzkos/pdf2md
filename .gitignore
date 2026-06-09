@@ -41,6 +41,9 @@ Thumbs.db
 # Windows NTFS alternate data streams
 *:Zone.Identifier
 
+# Lokalny katalog roboczy skryptu preprocess_test.py
+work/
+
 # Logi i pliki tymczasowe
 *.log
 *.tmp

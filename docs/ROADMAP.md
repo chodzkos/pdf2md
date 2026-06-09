@@ -470,12 +470,12 @@ Dodanie **Docling** jako trzeciego silnika rdzeniowego (stabilnego, do v1.0), or
 > Frozen binary (PyInstaller) → przeniesiony do zadań **po Fazie 2** (sekcja niżej). Praca z `build.spec` z wcześniejszych prób nie idzie do kosza — zostaje na ten moment.
 
 ### Zadania dla Claude Code
-- [x] `pyproject.toml` gotowy do publikacji: metadane (autor, opis, URL, klasyfikatory, `license = MIT`), entry points (`pdf2md`, `pdf2md-gui`), opcjonalne extra: `engines-core`, `engines-optional`, `llm`
-- [x] Weryfikacja, że pakiet buduje się czysto: `uv build` → wheel + sdist w `dist/`
-- [x] `docs/INSTALL.md` — instalacja: `uv tool install pdf2md` (sam orkiestrator), potem dokładanie silników (`uv pip install pymupdf4llm` / `docling` / `marker-pdf`) i LLM (`anthropic` / `openai` / `google-genai`), oraz silniki CLI (`uv tool install mineru --with mineru[all]`)
-- [x] `.github/workflows/release.yml`: na tag `v*` → `uv build` → GitHub Release z wheel + sdist (opcjonalnie publish na PyPI)
-- [x] README: sekcja instalacji + tabela „który silnik czym doinstalować"; `pdf2md doctor` jako narzędzie do wykrycia, czego brakuje
-- [x] `docs/RELEASE.md` — checklist wydania pakietu
+- [ ] `pyproject.toml` gotowy do publikacji: metadane (autor, opis, URL, klasyfikatory, `license = MIT`), entry points (`pdf2md`, `pdf2md-gui`), opcjonalne extra: `engines-core`, `engines-optional`, `llm`
+- [ ] Weryfikacja, że pakiet buduje się czysto: `uv build` → wheel + sdist w `dist/`
+- [ ] `docs/INSTALL.md` — instalacja: `uv tool install pdf2md` (sam orkiestrator), potem dokładanie silników (`uv pip install pymupdf4llm` / `docling` / `marker-pdf`) i LLM (`anthropic` / `openai` / `google-genai`), oraz silniki CLI (`uv tool install mineru --with mineru[all]`)
+- [ ] `.github/workflows/release.yml`: na tag `v*` → `uv build` → GitHub Release z wheel + sdist (opcjonalnie publish na PyPI)
+- [ ] README: sekcja instalacji + tabela „który silnik czym doinstalować"; `pdf2md doctor` jako narzędzie do wykrycia, czego brakuje
+- [ ] `docs/RELEASE.md` — checklist wydania pakietu
 
 ### Co robisz Ty
 - [ ] `git checkout -b etap-10-packaging`

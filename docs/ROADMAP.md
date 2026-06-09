@@ -164,6 +164,7 @@ Drugi silnik — znacznie silniejszy, obsługuje OCR i ma wbudowany tryb LLM.
 - [ ] `git checkout -b etap-3-marker`
 - [ ] Upewnij się, że masz `.wslconfig` z limitami RAM/swap/procesorów (KROK 6b w PROJEKT.md) i `wsl --shutdown`
 - [ ] `uv add marker-pdf` (długa instalacja — Marker ma dużo zależności)
+- [ ] `uv add "transformers>=4.48,<5"` — wymagane przez surya (Marker); zapobiega też cofnięciu transformers przez Docling do 4.47.x (objaw: `ImportError: cannot import name 'ALL_ATTENTION_FUNCTIONS'`). Zob. macierz zgodności w PROJEKT.md.
 - [ ] Tworzysz jednostronicowy fixture: `test_text_1page.pdf`
 - [ ] NAJPIERW pobierasz modele poza pytestem: `marker_single tests/fixtures/test_text_1page.pdf --output_dir /tmp/mk`
 - [ ] `uv run pytest` (pomija heavy — powinno być szybkie i bezpieczne)
@@ -208,7 +209,7 @@ Warstwa post-processingu LLM — czyszczenie Markdownu po konwersji.
 
 ### Co robisz Ty
 - [ ] `git checkout -b etap-4-llm-providers`
-- [ ] (Opcjonalne) Instalacja Ollama: https://ollama.com/download → `ollama pull qwen2.5:14b`
+- [ ] (Opcjonalne) Instalacja Ollama: https://ollama.com/download → `ollama pull qwen3:14b`
 - [ ] Ustawiasz klucze API w `config.toml` lub `.env` (dev) dla dostawców do testów
 - [ ] Testujesz post-processing na surowym Markdown z Etapu 2 (różne tryby chunkowania)
 - [ ] Pull Request → scal
@@ -470,7 +471,7 @@ Dodanie **Docling** jako trzeciego silnika rdzeniowego (stabilnego, do v1.0), or
 > Frozen binary (PyInstaller) → przeniesiony do zadań **po Fazie 2** (sekcja niżej). Praca z `build.spec` z wcześniejszych prób nie idzie do kosza — zostaje na ten moment.
 
 ### Zadania dla Claude Code
-- [ ] `pyproject.toml` gotowy do publikacji: metadane (autor, opis, URL, klasyfikatory, `license = MIT`), entry points (`pdf2md`, `pdf2md-gui`), opcjonalne extra: `engines-core`, `engines-optional`, `llm`
+- [ ] `pyproject.toml` gotowy do publikacji: metadane (autor, opis, URL, klasyfikatory, `license = MIT`), entry points (`pdf2md`, `pdf2md-gui`), opcjonalne extra: `engines-core` (z pinem `transformers>=4.48,<5` — wspólny mianownik Marker/Docling, zob. PROJEKT macierz zgodności), `engines-optional`, `llm`
 - [ ] Weryfikacja, że pakiet buduje się czysto: `uv build` → wheel + sdist w `dist/`
 - [ ] `docs/INSTALL.md` — instalacja: `uv tool install pdf2md` (sam orkiestrator), potem dokładanie silników (`uv pip install pymupdf4llm` / `docling` / `marker-pdf`) i LLM (`anthropic` / `openai` / `google-genai`), oraz silniki CLI (`uv tool install mineru --with mineru[all]`)
 - [ ] `.github/workflows/release.yml`: na tag `v*` → `uv build` → GitHub Release z wheel + sdist (opcjonalnie publish na PyPI)
@@ -590,7 +591,7 @@ Trzy silniki OCR oparte na modelach wizyjno-językowych, jako adaptery `Conversi
 - [ ] `engines/paddleocr_vl_engine.py` — adapter PaddleOCR-VL
 - [ ] `engines/surya_engine.py` — adapter Surya (layout + OCR + reading order)
 - [ ] Wspólna baza `engines/vlm_base.py` z detekcją GPU (`torch.cuda.is_available()`) i ostrzeżeniem gdy brak GPU
-- [ ] **Zarządzanie VRAM**: metody `load_model()` / `unload_model()`. `unload_model()` realnie zwalnia pamięć (usuń referencje, `gc.collect()`, `torch.cuda.empty_cache()`; vLLM → zamknij proces). Konieczne, bo olmOCR (~7-8 GB) i model korekty qwen2.5:14b (~9-10 GB) NIE zmieszczą się naraz w 24 GB.
+- [ ] **Zarządzanie VRAM**: metody `load_model()` / `unload_model()`. `unload_model()` realnie zwalnia pamięć (usuń referencje, `gc.collect()`, `torch.cuda.empty_cache()`; vLLM → zamknij proces). Konieczne, bo olmOCR (~7-8 GB) i model korekty qwen3:14b (~9-10 GB) NIE zmieszczą się naraz w 24 GB.
 - [ ] Każdy silnik: `is_available()` przez `importlib.metadata.version()` + `has_gpu()` (BEZ importu modelu), `requires_gpu = True`
 - [ ] Output per strona do `work/ocr_json/` i `work/md_pages/`, przetwarzanie paczkowe (iter_page_batches)
 - [ ] Aktualizacja Registry
@@ -624,7 +625,7 @@ Trzy silniki OCR oparte na modelach wizyjno-językowych, jako adaptery `Conversi
 Korekta wyniku OCR lokalnym LLM (konserwatywnie, bez parafrazy) oraz automatyczna detekcja stron o niskiej jakości i ich ponowny przebieg.
 
 ### Zadania dla Claude Code
-- [ ] `scan/correction.py` — korekta per-strona przez `LLMProvider` z Fazy 1 (preferowany Ollama + Qwen 14B Q4/Q5)
+- [ ] `scan/correction.py` — korekta per-strona przez `LLMProvider` z Fazy 1 (preferowany Ollama + Qwen3 14B Q4/Q5)
 - [ ] **Sekwencja VRAM**: korekta startuje DOPIERO po `unload_model()` silnika VLM (Etap 12) — oba modele nigdy naraz w pamięci. Dla Ollamy po korekcie wyślij `keep_alive=0` (wyładowanie modelu, domyślnie trzymany 5 min). Guard: zaloguj wolne VRAM przed startem korekty.
 - [ ] Konserwatywny prompt korekcyjny w `core/prompts.py` jako `SCAN_CORRECTION_PROMPT`:
   ```
@@ -649,7 +650,7 @@ Korekta wyniku OCR lokalnym LLM (konserwatywnie, bez parafrazy) oraz automatyczn
 
 ### Co robisz Ty
 - [ ] `git checkout -b etap-13-correction-validation`
-- [ ] (Jeśli używasz lokalnego LLM) `ollama pull qwen2.5:14b` lub odpowiednik
+- [ ] (Jeśli używasz lokalnego LLM) `ollama pull qwen3:14b` lub odpowiednik
 - [ ] Testujesz korektę na surowym OCR z Etapu 12 — sprawdzasz że LLM NIE parafrazuje
 - [ ] Sprawdzasz raport walidacji (które strony oznaczone jako trudne)
 - [ ] Pull Request → scal
@@ -707,8 +708,8 @@ Złożenie poprawionych stron w spójną książkę i eksport do Markdown + EPUB
 Trzy gotowe profile konfiguracji całego pipeline'u, dostępne z CLI i GUI.
 
 ### Profile (pliki YAML w `profiles/`)
-- **fast** — DPI 300, deskew, PaddleOCR/Tesseract, korekta Qwen 14B, bez dewarp. Do beletrystyki i dobrych skanów.
-- **balanced** (domyślny) — DPI 400, deskew+denoise+dewarp auto, Surya/PaddleOCR-VL, korekta Qwen 14B, walidacja. Do książek popularnonaukowych, przypisów, tabel.
+- **fast** — DPI 300, deskew, PaddleOCR/Tesseract, korekta Qwen3 14B, bez dewarp. Do beletrystyki i dobrych skanów.
+- **balanced** (domyślny) — DPI 400, deskew+denoise+dewarp auto, Surya/PaddleOCR-VL, korekta Qwen3 14B, walidacja. Do książek popularnonaukowych, przypisów, tabel.
 - **premium** — DPI 400, pełny preprocessing, olmOCR + Surya jako kontrola, porównanie wyników, korekta konserwatywna page→chapter, rerun trudnych stron, raport HTML. Do trudnych i starych skanów.
 
 ### Zadania dla Claude Code

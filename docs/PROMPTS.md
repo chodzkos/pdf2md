@@ -46,7 +46,7 @@ Utwórz katalogi:
 2. PYPROJECT.TOML
 Skonfiguruj dla narzędzia "uv" z:
 - name = "pdf2md"
-- python = ">=3.11,<3.13"
+- python = ">=3.11"
 - zależności: pydantic-settings, loguru, rich, click, PySide6
 - dev zależności: pytest, pytest-cov, ruff, mypy, pre-commit
 - opcjonalne grupy: engines-core (pymupdf4llm, marker-pdf, docling), engines-optional (pdf-craft), llm (anthropic, openai, google-genai)
@@ -159,7 +159,7 @@ Klasa Settings z polami:
 - anthropic_model: str = ""   # puste = fallback z providera
 - openai_model: str = ""
 - gemini_model: str = ""
-- ollama_model: str = "qwen2.5:14b"
+- ollama_model: str = "qwen3:14b"   # domyślna sugestia; użytkownik nadpisuje w config.toml (na 24 GB można 27-32B)
 - default_engine: str = "pymupdf4llm"
 - default_output_dir: str = ""  (jeśli puste, zapisuj obok źródła)
 - default_language: str = "pol+eng"
@@ -389,13 +389,19 @@ Zwróć TYLKO poprawiony Markdown, bez żadnych komentarzy, wyjaśnień ani wst�
 Klasa OllamaProvider:
 - name = "Ollama (lokalny)"
 - requires_api_key = False
-- default_model = "qwen2.5:14b"
+- default_model = "qwen3:14b"
 - is_available(): GET http://localhost:11434/api/tags timeout=2s, zwróć True jeśli 200
 - get_models(): zwróć listę dostępnych modeli z /api/tags
 - postprocess(markdown, mode="whole_document", instructions=""):
   model = settings.ollama_model or self.default_model
   POST http://localhost:11434/api/generate, stream=False
   Zastosuj chunkowanie wg `mode` (patrz punkt 5)
+  WYŁĄCZ thinking: w ciele żądania ustaw pole "think": False na NAJWYŻSZYM poziomie
+    (obok "model", "prompt", "stream") — NIE w "options", bo tam Ollama je ignoruje.
+    Powód: modele Qwen3/3.5 mają thinking włączony domyślnie, a do czyszczenia Markdown
+    (zadanie dosłowne, nie rozumowe) chain-of-thought tylko spowalnia i miesza wynik.
+    Opcjonalnie wystaw to jako pole configu ollama_think: bool = False, gdyby ktoś chciał
+    thinking do trudniejszych zadań — ale domyślnie False.
 
 2. src/pdf2md/llm/anthropic_provider.py  
 Klasa AnthropicProvider:
@@ -1024,7 +1030,7 @@ Klasa bazowa VLMEngine(ConversionEngine):
 - ZARZĄDZANIE VRAM (krytyczne na 24 GB): metody load_model() i unload_model().
   unload_model() musi REALNIE zwolnić VRAM: usuń referencje do modelu, gc.collect(),
   torch.cuda.empty_cache(); dla backendów serwerowych (vLLM) zamknij proces serwera.
-  Powód: olmOCR-2-7B (~7-8 GB) i model korekty qwen2.5:14b (~9-10 GB) NIE zmieszczą się
+  Powód: olmOCR-2-7B (~7-8 GB) i model korekty qwen3:14b (~9-10 GB) NIE zmieszczą się
   jednocześnie w 24 GB. Pipeline ładuje VLM → przetwarza WSZYSTKIE strony → unload_model()
   → dopiero potem faza korekty LLM (Etap 13). Nigdy oba modele naraz.
 - wspólna logika: przetwarzanie paczkowe (scan/preprocessing.iter_page_batches),
@@ -1088,7 +1094,7 @@ Wynik zwróć jako czysty Markdown.
 
 2. src/pdf2md/scan/correction.py
 - correct_page(md: str, provider: LLMProvider) -> str
-  Używa SCAN_CORRECTION_PROMPT i dostawcy LLM z Fazy 1 (preferowany lokalny Ollama + Qwen 14B).
+  Używa SCAN_CORRECTION_PROMPT i dostawcy LLM z Fazy 1 (preferowany lokalny Ollama + Qwen3 14B).
 - correct_pages_batch(md_dir, provider, output_dir) — korekta wszystkich stron
   Tryb conservative: niska temperatura, brak kreatywności.
 
@@ -1187,7 +1193,7 @@ profiles/fast.yaml:
   dpi: 300
   preprocess: {deskew: true, denoise: false, dewarp: false}
   ocr: {engine: paddleocr, gpu: true}
-  llm_cleanup: {enabled: true, provider: ollama, model: qwen2.5:14b, chunk: page}
+  llm_cleanup: {enabled: true, provider: ollama, model: qwen3:14b, chunk: page}
   output: {markdown: true, epub: true}
 
 profiles/balanced.yaml:
@@ -1196,7 +1202,7 @@ profiles/balanced.yaml:
   preprocess: {deskew: true, denoise: true, dewarp: auto, crop: auto}
   layout: {engine: surya}
   ocr: {engine: paddleocr-vl, gpu: true}
-  llm_cleanup: {enabled: true, provider: ollama, model: qwen2.5:14b, chunk: page}
+  llm_cleanup: {enabled: true, provider: ollama, model: qwen3:14b, chunk: page}
   postprocess: {remove_headers_footers: true, merge_paragraphs: true, fix_hyphenation: true}
   output: {markdown: true, epub: true, quality_report: true}
 
@@ -1206,7 +1212,7 @@ profiles/premium.yaml:
   preprocess: {deskew: true, denoise: true, dewarp: true, crop: true}
   layout: {engine: olmocr}
   ocr: {primary: olmocr, secondary: surya, compare_outputs: true}
-  llm_cleanup: {enabled: true, provider: ollama, model: qwen2.5:14b, mode: conservative, chunk: page_then_chapter}
+  llm_cleanup: {enabled: true, provider: ollama, model: qwen3:14b, mode: conservative, chunk: page_then_chapter}
   postprocess: {remove_headers_footers: true, merge_paragraphs: true, fix_hyphenation: true, footnotes: true, toc_detection: true}
   validation: {detect_low_confidence_pages: true, rerun_bad_pages: true}
   output: {markdown: true, epub: true, html_report: true}
@@ -1479,6 +1485,126 @@ także w testach. Napraw IZOLACJĘ testów config, nie zmieniając zachowania ap
 
 Pokaż diff.
 ```
+
+---
+
+## PROMPT D7 — MinerU: konfigurowalny backend + logowanie stderr przy błędzie
+
+> Wymaga: adapter MinerU (Etap 8). Powód: domyślny backend MinerU (hybrid → vLLM →
+> flashinfer) wymaga JIT-kompilacji kerneli i na świeżej maszynie/nowym GPU pada
+> (`Failed to find C compiler` bez build-essential; `Could not find nvcc` przez bug
+> flashinfer 0.4.0+ bez CUDA Toolkit). Backend `pipeline` omija cały stos vLLM/flashinfer
+> i działa niezawodnie na GPU przez torch. Dodatkowo adapter łapie CalledProcessError, ale
+> NIE pokazuje stderr/stdout MinerU — w GUI widać tylko „exit status 1" bez przyczyny, co
+> uniemożliwia diagnozę.
+
+```
+W engines/mineru_engine.py popraw adapter MinerU. NIE zmieniaj architektury (dalej
+subprocess + shutil.which), tylko dwie rzeczy:
+
+1. KONFIGUROWALNY BACKEND:
+   - Dodaj do config.toml pole mineru_backend: str = "pipeline" (bezpieczny domyślny).
+     Zaktualizuj model konfiguracji (core/config.py) i — jeśli masz GUI ustawień —
+     pole wyboru, ale to opcjonalne.
+   - W convert() doklej do komendy: "-b", <backend z configu>.
+     Czyli: [mineru_path, "-p", pdf_path, "-o", out_dir, "-b", backend].
+   - Uzasadnienie domyślnego "pipeline": backend vLLM/VLM wymaga sprawnego stosu
+     vLLM + flashinfer + nvcc/CUDA Toolkit, co na nowym GPU (np. Blackwell sm_120)
+     bywa kruche. "pipeline" omija to i działa na GPU przez torch. Użytkownik z działającym
+     stackiem VLM może przełączyć w config.toml na wariant vlm.
+
+2. ENV DLA BACKENDU VLM (żeby vlm ruszył bez CUDA Toolkitu):
+   - Gdy wybrany backend to wariant vlm (nazwa zaczyna się od "vlm" / nie jest "pipeline"),
+     ustaw w środowisku subprocesu: VLLM_USE_FLASHINFER_SAMPLER=0.
+     Przekaż env do subprocess.run jako env={**os.environ, "VLLM_USE_FLASHINFER_SAMPLER": "0"}.
+   - Powód: na nowym GPU (np. Blackwell sm_120) flashinfer nie ma gotowego cubina i
+     JIT-kompiluje sampler przez nvcc — bez CUDA Toolkitu to pada. Ta zmienna wymusza
+     natywny sampler PyTorch (atencja i tak idzie przez FLASH_ATTN), więc vlm startuje
+     bez nvcc, kosztem nieistotnie wolniejszego samplingu (wąskim gardłem jest enkoder
+     wizyjny, nie sampling). Dla backendu "pipeline" zmiennej NIE ustawiaj (zbędna).
+
+3. LOGOWANIE BŁĘDU:
+   - Owiń subprocess.run(...) w try/except subprocess.CalledProcessError as e.
+   - W except: zaloguj logger.error z e.stderr i e.stdout (każde obetnij do ~2000 znaków,
+     żeby nie zalać logu), zanim podniesiesz wyjątek / zwrócisz ConversionResult z błędem.
+   - Komunikat błędu zwracany do GUI ma zawierać skróconą końcówkę stderr (ostatnie ~500
+     znaków), żeby przyczyna była widoczna bez grzebania w terminalu.
+
+4. Zachowaj capture_output=True, text=True i check=True (check przez try/except).
+
+5. Jeśli masz test adaptera MinerU, dodaj/zaktualizuj testy:
+   - komenda zawiera "-b pipeline" przy domyślnym configu (mock subprocess.run, asercja na argv);
+   - dla backendu vlm w env subprocesu jest VLLM_USE_FLASHINFER_SAMPLER=0, a dla pipeline nie ma.
+
+Pokaż diff.
+```
+
+> Uwaga (poza promptem, do INSTALL.md / troubleshooting): backend `vlm` MinerU wymaga
+> `build-essential` (gcc dla Tritona — inaczej „Failed to find C compiler"). Dodatkowo na
+> nowym GPU flashinfer JIT-kompiluje sampler przez nvcc i bez CUDA Toolkitu pada
+> („Could not find nvcc" / `FileNotFoundError: 'nvcc'`). Właściwy, najlżejszy fix to
+> `VLLM_USE_FLASHINFER_SAMPLER=0` (adapter ustawia to sam — patrz pkt 2). UWAGA: cofanie
+> flashinfera do 0.3.0 NIE pomaga na świeżej architekturze (np. Blackwell sm_120), bo brak
+> gotowego cubina wymusza JIT niezależnie od wersji — to ślepa uliczka. Backend `pipeline`
+> nie wymaga ani gcc-do-flashinfera, ani nvcc.
+
+---
+
+## PROMPT D8 — Marker: konfigurowalne rozmiary batchy GPU + TORCH_DEVICE
+
+> Wymaga: adapter Marker (Etap 8). Powód: Marker (surya) używa GPU, ale domyślne rozmiary
+> batchy są zachowawcze (pod małe karty), więc na mocnym GPU (RTX 5090, 24 GB) karta jest
+> niedociążona. Główna dźwignia wydajności to env-vary batchy surya, ustawiane PRZED
+> importem markera. Marker jest silnikiem importowanym w procesie, więc nie da się ich
+> podać flagą CLI per-wywołanie — trzeba ustawić os.environ zanim zaimportujesz/uruchomisz
+> marker w convert(). UWAGA: to NIE zrobi z Markera vLLM — pełne nasycenie GPU to rola
+> MinerU/vlm; D8 tylko podnosi wykorzystanie Markera z domyślnego „zachowawczego" wyżej.
+
+```
+W engines/marker_engine.py dodaj konfigurowalne strojenie GPU dla Markera (surya).
+NIE zmieniaj architektury (dalej leniwy import w convert()).
+
+1. KONFIG:
+   - Dodaj do config.toml (i modelu w core/config.py) pola, wszystkie opcjonalne (None = nie ruszaj):
+     marker_torch_device: str | None = None          # np. "cuda", "cpu"
+     marker_recognition_batch_size: int | None = None
+     marker_detector_batch_size: int | None = None
+     marker_layout_batch_size: int | None = None
+     marker_table_rec_batch_size: int | None = None
+   - Dokładna lista nazw env surya bywa wersjozależna — odczytaj aktualny zestaw z
+     surya/settings.py w zainstalowanej wersji i zmapuj tylko te, które istnieją.
+
+2. USTAWIANIE PRZED IMPORTEM:
+   - W convert(), PRZED self._load_marker_api()/importem markera, dla każdego pola != None
+     ustaw odpowiedni os.environ:
+       marker_torch_device          -> TORCH_DEVICE
+       marker_recognition_batch_size -> RECOGNITION_BATCH_SIZE
+       marker_detector_batch_size    -> DETECTOR_BATCH_SIZE
+       marker_layout_batch_size      -> LAYOUT_BATCH_SIZE
+       marker_table_rec_batch_size   -> TABLE_REC_BATCH_SIZE
+     (wartości int jako str). Jeśli pole None — NIE ustawiaj env (zostaw auto-dobór surya).
+   - Zrób to idempotentnie i tylko dla istniejących w danej wersji nazw (patrz pkt 1).
+
+3. DOKUMENTACJA/UX:
+   - W komentarzu/docstringu zaznacz: batche dobiera się empirycznie patrząc na
+     `nvidia-smi -l 1`; podnoś aż VRAM/util sensownie rośnie, ale przed OOM. Na 24 GB
+     jest duży zapas (rząd ~50-280 MB VRAM na element batcha, zależnie od modelu/wersji).
+   - Zaznacz, że batche działają niezależnie od dławienia multiprocessingu z D2
+     (disable_multiprocessing dotyczy CPU-side, nie GPU batchy).
+
+4. TEST: jeśli masz test adaptera Markera, dodaj test sprawdzający, że przy ustawionym
+   marker_recognition_batch_size w configu odpowiedni os.environ jest ustawiony przed importem
+   (monkeypatch os.environ + mock importu/_load_marker_api, asercja na wartość).
+
+Pokaż diff.
+```
+
+> Uwaga (poza promptem): D8 to nie jest „tryb pełnego GPU jak MinerU". Marker (surya) to
+> zwykłe modele PyTorch uruchamiane sekwencyjnie (detekcja → layout → rozpoznawanie), bez
+> serwerowego silnika typu vLLM. Na pojedynczym, małym dokumencie 5090 i tak będzie
+> niedociążony — to natura Markera, nie wada configu. Do faktycznego nasycenia karty służy
+> MinerU/vlm. D8 jest komplementarny: poprawia wykorzystanie Markera tam, gdzie batch realnie
+> rośnie (większe/wielostronicowe skany, wsad plików).
 
 ---
 

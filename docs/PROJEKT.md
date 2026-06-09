@@ -25,7 +25,8 @@ Aplikacja będąca **orkiestratorem** gotowych, sprawdzonych silników konwersji
 
 ### Zakres v1.0
 - **3 silniki rdzeniowe** (stabilne, testowane): PyMuPDF4LLM, Marker, Docling
-- **2 silniki opcjonalne** (dodawane później, bardziej ryzykowne instalacyjnie): MinerU, pdf-craft
+- **1 silnik opcjonalny** (izolowany, dwa backendy): MinerU (`pipeline` domyślny, `vlm` dla maksymalnej jakości)
+- **pdf-craft — wykluczony** (nieusuwalny konflikt `transformers` z Markerem; redundantny — zob. macierz zgodności silników)
 - Opcjonalne wspomaganie LLM (lokalny Ollama lub chmura: Claude/OpenAI/Gemini), z trybami chunkowania
 - Interfejs GUI (okienkowy, drag & drop)
 - Interfejs CLI (terminal, batch processing, skrypty) + komenda diagnostyczna `pdf2md doctor`
@@ -33,13 +34,13 @@ Aplikacja będąca **orkiestratorem** gotowych, sprawdzonych silników konwersji
 - Działanie w 100% lokalnie (LLM chmurowy — opcjonalne)
 - Cross-platform: Windows (WSL), Linux, macOS
 
-> **Uwaga o skanach w v1.0:** v1.0 obsługuje proste skany przez istniejące silniki (Marker/Docling z OCR), ale **bez gwarancji jakości książkowej**. Wysokiej jakości pipeline do skanowanych książek to dopiero Faza 2 (premium scan pipeline). pdf-craft w v1.0 daje podstawową obsługę, nie pełen pipeline.
+> **Uwaga o skanach w v1.0:** v1.0 obsługuje proste skany przez istniejące silniki (Marker/Docling z OCR), ale **bez gwarancji jakości książkowej**. Lepszą jakość daje MinerU (backend `vlm` na GPU), a wysokiej jakości pipeline do skanowanych książek to dopiero Faza 2 (premium scan pipeline).
 
 ### Zakres Fazy 2 (premium scan pipeline)
 Po ukończeniu v1.0 — dedykowany pipeline do skanowanych książek oparty na VLM-OCR (olmOCR / PaddleOCR-VL / Surya), z preprocessingiem obrazu, korektą LLM per-strona, walidacją jakości i składaniem książki do Markdown/EPUB. Szczegóły w ROADMAP (etapy 11–15). Materiał źródłowy: notatki z badań nad modelami OCR/LLM do skanów książek.
 
 > **⚠️ Dwa twarde ograniczenia Fazy 2 na sprzęcie 24 GB VRAM:**
-> 1. **VRAM — modele NIE współistnieją.** olmOCR-2-7B (~7–8 GB) i qwen2.5:14b (~9–10 GB) + narzut PyTorch + bufory obrazów 400–600 DPI przebiją 24 GB → OOM CUDA. Pipeline musi działać **sekwencyjnie**: najpierw cała faza VLM-OCR, potem **wyładowanie modelu wizyjnego** (Ollama: `keep_alive=0`; vLLM: zamknięcie procesu/`torch.cuda.empty_cache()`), dopiero potem faza korekty LLM. Nigdy oba modele załadowane naraz.
+> 1. **VRAM — modele NIE współistnieją.** olmOCR-2-7B (~7–8 GB) i qwen3:14b (~9–10 GB) + narzut PyTorch + bufory obrazów 400–600 DPI przebiją 24 GB → OOM CUDA. Pipeline musi działać **sekwencyjnie**: najpierw cała faza VLM-OCR, potem **wyładowanie modelu wizyjnego** (Ollama: `keep_alive=0`; vLLM: zamknięcie procesu/`torch.cuda.empty_cache()`), dopiero potem faza korekty LLM. Nigdy oba modele załadowane naraz.
 > 2. **Dysk — preprocessing strumieniowo.** 500 stron PNG przy 600 DPI to 15–25 GB plików tymczasowych. Pipeline przetwarza strony **paczkami** (np. po 20): preprocessing → OCR → zapis MD/JSON → natychmiastowe usunięcie PNG paczki. `work/` czyszczony automatycznie po udanym buildzie EPUB.
 
 ### Poziomy sprzętu — co realnie zadziała na danej maszynie
@@ -50,7 +51,7 @@ Projekt celuje docelowo w mocny sprzęt (RTX 5090 Laptop 24 GB / 128 GB RAM), al
 | PyMuPDF4LLM (bez ML) | ✅ idealny, podstawowy silnik | ✅ |
 | Docling (CPU) | ✅ działa | ✅ |
 | Marker | ⚠️ tylko pojedyncze, małe pliki, multiprocessing OFF, 1 worker | ✅ |
-| LLM lokalny (Ollama) | ⚠️ tylko małe modele (~7B Q4, ~5 GB); 14B się nie zmieści | ✅ qwen2.5:14b |
+| LLM lokalny (Ollama) | ⚠️ tylko małe modele (~7B Q4, ~5 GB); 14B się nie zmieści | ✅ qwen3:14b (lub 27–32B przy 24 GB) |
 | LLM chmurowy (Claude/Gemini) | ✅ zalecany do post-processingu | ✅ |
 | Faza 2 — VLM-OCR (olmOCR FP8) | ❌ **niewykonalne** (Pascal nie ma FP8; 7B nie zmieści się w 8 GB) | ✅ |
 
@@ -61,7 +62,7 @@ Projekt celuje docelowo w mocny sprzęt (RTX 5090 Laptop 24 GB / 128 GB RAM), al
 ## Stack technologiczny
 
 ### Język
-**Python 3.11–3.12** — używaj Pythona 3.11–3.12, ekosystem ML nie nadąża za 3.13/3.14
+**Python 3.11+** — najlepsze wsparcie bibliotek konwersji PDF
 
 ### Silniki konwersji (adaptery)
 
@@ -71,13 +72,45 @@ Projekt celuje docelowo w mocny sprzęt (RTX 5090 Laptop 24 GB / 128 GB RAM), al
 | **Marker** | `marker-pdf` | Uniwersalny, OCR, `--use_llm` | ⭐⭐ Łatwa | **GPL** (wyjątek <$2M) |
 | **MinerU** | `uv tool` (izolowany) | Naukowe, wielokolumnowe, CJK | ⭐⭐⭐ Średnia | AGPL |
 | **Docling** | `docling` | Enterprise, tabele, RAG | ⭐⭐ Łatwa | MIT |
-| **pdf-craft** | `pdf-craft` | Skanowane książki | ⭐⭐ Łatwa | sprawdź |
+| **pdf-craft** | ~~`pdf-craft`~~ | Skanowane książki | ❌ wykluczony | sprawdź |
 
 > **⚠️ Uwaga licencyjna (ważna dla dystrybucji).** Sam kod pdf2md Squeezer jest MIT, ale kilka silników ma licencje copyleft (Marker — GPL, MinerU **i PyMuPDF/PyMuPDF4LLM** — AGPL). Dlatego **główny kanał dystrybucji v1.0 to pakiet pip/uv**: publikujesz wyłącznie swój kod MIT, a silniki copyleft instaluje sam użytkownik u siebie (`uv pip install ...`) — to nie jest dystrybucja tych pakietów przez Ciebie. Problem pojawiłby się dopiero przy **wkompilowaniu silnika copyleft w jedno frozen binary** — wtedy dystrybucja binarki musiałaby respektować GPL/AGPL. Stąd: frozen binary dopiero w Etapie 10b (po Fazie 2), bundlujące **wyłącznie własny silnik MIT** (F02: pdfplumber/pdfminer.six/Tesseract — permisywne) i żadnego copyleft. Dotyczy to też przyszłego camelot (F02): sam camelot jest MIT, ale jego historyczna zależność Ghostscript to AGPL — w aktualnych wersjach camelota domyślny backend to pdfium (BSD), więc używaj pdfium i nie instaluj Ghostscriptu.
 
 > **⚙️ Dwie kategorie silników — ważne dla instalacji i konfliktów zależności.**
-> - **Importowane w procesie** (PyMuPDF4LLM, Marker, Docling, pdf-craft) — żyją we wspólnym środowisku projektu (`uv add ...`) i **nawzajem ograniczają zależności**. Stąd realny konflikt: Marker przypina `pillow<11`, więc nic w tym środowisku nie może wymagać `pillow>=11`.
+> - **Importowane w procesie** (PyMuPDF4LLM, Marker, Docling) — żyją we wspólnym środowisku projektu (`uv add ...`) i **nawzajem ograniczają zależności**. Stąd realne konflikty: Marker przypina `pillow<11` (nic w środowisku nie może wymagać `pillow>=11`); Marker/Docling vs pdf-craft kłócą się o wersję `transformers` (zob. macierz zgodności).
 > - **Wołane przez CLI/subprocess** (MinerU) — instalowane **izolowanie** przez `uv tool install mineru --with mineru[all]`, w osobnym środowisku. Ich zależności (np. `pillow>=11` w MinerU) **nie kolidują** z głównym środowiskiem. Adapter znajduje komendę przez `shutil.which("mineru")`. **MinerU nie jest zależnością pip projektu.** (CLI nazywa się `mineru` w wersji 2.x+; `magic-pdf` to przestarzała komenda 1.x.)
+
+#### Macierz zgodności silników (zweryfikowana empirycznie, czerwiec 2026)
+
+Wersje testowe: docling 2.100.0, marker-pdf 1.10.2, surya-ocr 0.17.1. Zgodności bywają wersjozależne — przy aktualizacjach warto je przejrzeć ponownie.
+
+| Silnik | Środowisko | Wymóg `transformers` | Wymogi runtime | Status v1.0 |
+|---|---|---|---|---|
+| **PyMuPDF4LLM** | wspólne | brak (nie używa) | brak | ✅ podstawowy, zawsze działa |
+| **Marker** (surya) | wspólne | **≥4.48** (symbol `ALL_ATTENTION_FUNCTIONS`) | Tesseract do skanów | ✅ |
+| **Docling** | wspólne | **≥4.48** (zgodny z Markerem po aktualizacji Doclinga) | — | ✅ |
+| **MinerU `pipeline`** | izolowane (`uv tool`) | n/d (osobne env) | omija vLLM/flashinfer; działa na GPU przez torch | ✅ pewny domyślny |
+| **MinerU `vlm`** | izolowane (`uv tool`) | n/d (osobne env) | `build-essential` (gcc dla Tritona) + `VLLM_USE_FLASHINFER_SAMPLER=0` na nowym GPU | ✅ max jakość skanów |
+| **pdf-craft** (DeepSeek-OCR) | wspólne | **<4.48** (symbol `LlamaFlashAttention2`, usunięty w 4.48) | — | ❌ **WYKLUCZONY** |
+
+**Kluczowe wnioski:**
+- **Marker i Docling są pogodzone** na `transformers>=4.48,<5`. Pierwotnie Docling 2.100.0 trzymał transformers na 4.47.1 (za stary dla surya); aktualizacja Doclinga zdejmuje ten cap. **Pin przyjęty:** `transformers>=4.48,<5` w extra `engines-core` w pyproject, żeby `uv sync` odtwarzał zgodną wersję na każdej maszynie:
+
+```toml
+[project.optional-dependencies]
+engines-core = [
+    "pymupdf4llm",
+    "marker-pdf",
+    "docling",
+    "transformers>=4.48,<5",   # wspólny mianownik dla Marker(surya) i Docling; <5 bo 5.x łamie API
+]
+```
+> Górne ograniczenie `<5` jest świadome: linia `transformers 5.x` reorganizuje moduły (m.in. przeniesienie `ALL_ATTENTION_FUNCTIONS`) i potrafi zepsuć surya/Docling. Zdejmij je dopiero, gdy obie biblioteki ogłoszą wsparcie 5.x.
+
+
+- **pdf-craft wzajemnie wyklucza się z Markerem.** pdf-craft (przez DeepSeek-OCR) wymaga `transformers<4.48` (`LlamaFlashAttention2`), a Marker `≥4.48` (`ALL_ATTENTION_FUNCTIONS`) — nie istnieje wspólna wersja. pdf-craft jest też redundantny (skany obsługują Marker i MinerU), więc **odpada z domyślnego zestawu**. Adapter może pozostać w kodzie jako opcja „do osobnego środowiska", ale nie jest instalowany ani zalecany w v1.0.
+  - **Gdyby pdf-craft był jednak potrzebny:** da się go zizolować jak MinerU (subprocess + własne środowisko z `transformers<4.48`), ale trudniej — pdf-craft to biblioteka bez CLI, więc trzeba dorobić cienki wrapper (`uv run --with pdf-craft --with "transformers<4.48" python runner.py ...` albo mały standalone tool przez `uv tool install`). Izolacja realnie znosi konflikt (osobny transformers per-środowisko). **Forka NIE rób** — feralny import siedzi w zdalnym kodzie modelu DeepSeek-OCR (`modeling_deepseekv2.py`, `trust_remote_code`), nie w pdf-craft; łatanie go wymaga przypięcia rewizji modelu i walki z re-downloadami. **Najpierw porównaj jakość pdf-craft vs MinerU/vlm na realnym skanie** — izoluj tylko, jeśli pdf-craft wyraźnie wygrywa.
+- **MinerU/vlm na premierowym GPU** (np. Blackwell sm_120): flashinfer nie ma gotowego cubina i JIT-kompiluje sampler przez nvcc; bez CUDA Toolkitu pada. Fix to `VLLM_USE_FLASHINFER_SAMPLER=0` (natywny sampler PyTorch) — **nie** cofanie flashinfera do 0.3.0 (na nowej architekturze JIT i tak wymuszony). Adapter ustawia tę zmienną sam dla backendu vlm (zob. PROMPT D7).
 
 
 #### Silniki VLM-OCR (Faza 2 — premium scan pipeline)
@@ -98,6 +131,8 @@ Te silniki wchodzą do gry dopiero w Fazie 2 (zob. ROADMAP, etapy 11–15). Są 
 | **Claude** (Anthropic) | Chmura | `anthropic` | ✅ wymagany |
 | **OpenAI** | Chmura | `openai` | ✅ wymagany |
 | **Gemini** (Google) | Chmura | `google-genai` | ✅ wymagany |
+
+> **Dobór modelu Ollama (tylko sugestia — model ustawiasz w `config.toml` per-maszyna).** Do post-processingu (czyszczenie Markdown, naprawa tabel — zadanie instrukcyjne, nie rozumowanie) sprawdza się aktualny **Qwen3 instruct**: `qwen3:14b` jako wydajny domyślny, a na 24 GB VRAM można sięgnąć po `qwen3:27b`/`30b` (lub nowsze dense'y). Wyłącz tryb „thinking" — czyszczenie ma być dosłowne i szybkie. Alternatywa: `gemma4` (dobra wielojęzycznie). **Unikaj modeli rozumujących** (DeepSeek-R1) do tego zadania — chain-of-thought tylko spowalnia. Nazwy/tagi modeli zmieniają się często, więc zweryfikuj aktualne w bibliotece Ollamy; na słabym sprzęcie (≤8 GB VRAM) trzymaj się ~7–8B (np. `qwen3:8b`) albo LLM w chmurze.
 
 ### Interfejsy
 - **GUI:** `PySide6` (Qt 6) — nowoczesny, natywny wygląd

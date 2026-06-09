@@ -10,7 +10,6 @@ import pytest
 from pdf2md.core import config
 from pdf2md.core.config import Settings, get_settings, save_settings
 
-
 _ENV_VARS_TO_CLEAR = (
     "ANTHROPIC_API_KEY",
     "OPENAI_API_KEY",

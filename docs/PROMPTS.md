@@ -1449,6 +1449,39 @@ Pokaż diff, uruchom uv run pytest tests/unit -v.
 
 ---
 
+## PROMPT D6 — Izolacja testów config od `.env` i zmiennych środowiskowych
+
+> Wymaga: testy config (Etap 1/9). Powód: na maszynie z plikiem `.env` (lub ustawionymi
+> zmiennymi `OPENAI_API_KEY` itd.) testy `test_config.py` padają, bo `.env`/env nadpisują
+> config także w testach. Objaw po migracji: `assert ... == "dev-key"` dostaje `sk-...`
+> (placeholder z `.env`). Testy są wtedy zależne od maszyny / „flaky".
+
+```
+Testy test_config.py padają na maszynie, która ma plik .env z kluczami API
+(OPENAI_API_KEY, ANTHROPIC_API_KEY itd.), bo .env/zmienne środowiskowe nadpisują config
+także w testach. Napraw IZOLACJĘ testów config, nie zmieniając zachowania aplikacji.
+
+1. W fixture isolated_config (lub w conftest dla testów config):
+   - przez monkeypatch USUŃ zmienne środowiskowe kluczy/configu na czas testu:
+     monkeypatch.delenv dla: ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY,
+     OLLAMA_MODEL, OLLAMA_URL (i innych, które config czyta z env) — raising=False
+   - zapobiegnij wczytaniu .env z katalogu projektu: monkeypatch.chdir(tmp_path)
+     ORAZ jeśli config jawnie ładuje .env (load_dotenv / pydantic-settings env_file),
+     wskaż nieistniejącą ścieżkę .env albo wyłącz to ładowanie w testach
+   - dopiero potem zwróć izolowaną ścieżkę config.toml
+
+2. Sprawdź w core/config.py, JAK .env jest wczytywany i czy override z env stosuje się
+   też przy jawnym Settings(...) — jeśli tak, rozważ, by override z env/.env dotyczył tylko
+   get_settings() (ładowania z dysku), a nie jawnej konstrukcji obiektu Settings.
+
+3. Po poprawce uruchom: uv run pytest tests/unit/test_config.py -v
+   Testy mają przechodzić niezależnie od tego, czy w systemie jest .env z kluczami.
+
+Pokaż diff.
+```
+
+---
+
 ## Wskazówki ogólne
 
 ### Dwie zasady do DOPISANIA na końcu każdego prompta etapowego

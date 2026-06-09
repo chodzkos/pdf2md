@@ -2463,6 +2463,10 @@ pdf-craft = [
 pymupdf = [
     { name = "pymupdf4llm" },
 ]
+scan = [
+    { name = "numpy" },
+    { name = "opencv-python" },
+]
 
 [package.dev-dependencies]
 dev = [
@@ -2483,7 +2487,9 @@ requires-dist = [
     { name = "loguru", specifier = ">=0.7" },
     { name = "marker-pdf", marker = "extra == 'engines-core'", specifier = ">=0.2" },
     { name = "marker-pdf", marker = "extra == 'marker'", specifier = ">=0.2" },
+    { name = "numpy", marker = "extra == 'scan'", specifier = ">=1.26" },
     { name = "openai", marker = "extra == 'llm'", specifier = ">=1.35" },
+    { name = "opencv-python", marker = "extra == 'scan'", specifier = ">=4.8" },
     { name = "pdf-craft", marker = "extra == 'engines-optional'", specifier = ">=0.1" },
     { name = "pdf-craft", marker = "extra == 'pdf-craft'", specifier = ">=0.1" },
     { name = "pydantic-settings", specifier = ">=2.3" },
@@ -2492,7 +2498,7 @@ requires-dist = [
     { name = "pyside6", specifier = ">=6.7" },
     { name = "rich", specifier = ">=13.7" },
 ]
-provides-extras = ["pymupdf", "marker", "docling", "pdf-craft", "engines-core", "engines-optional", "llm"]
+provides-extras = ["pymupdf", "marker", "docling", "pdf-craft", "engines-core", "engines-optional", "llm", "scan"]
 
 [package.metadata.requires-dev]
 dev = [

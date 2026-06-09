@@ -11,14 +11,30 @@ from pdf2md.core import config
 from pdf2md.core.config import Settings, get_settings, save_settings
 
 
+_ENV_VARS_TO_CLEAR = (
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY",
+    "GEMINI_API_KEY",
+    "OLLAMA_MODEL",
+    "OLLAMA_URL",
+    "LLM_ENABLED",
+    "LLM_PROVIDER",
+    "LLM_MODE",
+)
+
+
 @pytest.fixture()
 def isolated_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Przekierowuje config.toml do katalogu tymczasowego."""
+    """Przekierowuje config.toml do katalogu tymczasowego i izoluje od env/.env."""
     config_dir = tmp_path / "config"
     config_file = config_dir / "config.toml"
     monkeypatch.setattr(config, "_CONFIG_DIR", config_dir)
     monkeypatch.setattr(config, "_CONFIG_FILE", config_file)
     monkeypatch.setattr(config, "_settings_cache", None)
+    for var in _ENV_VARS_TO_CLEAR:
+        monkeypatch.delenv(var, raising=False)
+    # pydantic-settings szuka .env względem CWD — tmp_path nie ma .env projektu
+    monkeypatch.chdir(tmp_path)
     return config_file
 
 

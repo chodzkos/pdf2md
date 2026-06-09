@@ -46,7 +46,7 @@ Utwórz katalogi:
 2. PYPROJECT.TOML
 Skonfiguruj dla narzędzia "uv" z:
 - name = "pdf2md"
-- python = ">=3.11"
+- python = ">=3.11,<3.13"
 - zależności: pydantic-settings, loguru, rich, click, PySide6
 - dev zależności: pytest, pytest-cov, ruff, mypy, pre-commit
 - opcjonalne grupy: engines-core (pymupdf4llm, marker-pdf, docling), engines-optional (pdf-craft), llm (anthropic, openai, google-genai)

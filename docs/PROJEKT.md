@@ -61,7 +61,7 @@ Projekt celuje docelowo w mocny sprzęt (RTX 5090 Laptop 24 GB / 128 GB RAM), al
 ## Stack technologiczny
 
 ### Język
-**Python 3.11+** — najlepsze wsparcie bibliotek konwersji PDF
+**Python 3.11–3.12** — używaj Pythona 3.11–3.12, ekosystem ML nie nadąża za 3.13/3.14
 
 ### Silniki konwersji (adaptery)
 

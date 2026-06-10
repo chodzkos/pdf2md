@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import os
 import shutil
 import subprocess
 import tempfile
@@ -11,6 +12,7 @@ from typing import Any
 
 from loguru import logger
 
+from pdf2md.core.config import get_settings
 from pdf2md.engines.base import ConversionEngine, ConversionResult
 
 
@@ -42,13 +44,30 @@ class MinerUEngine(ConversionEngine):
         work_dir = Path(str(output_dir)) if output_dir is not None else Path(tempfile.mkdtemp())
         work_dir.mkdir(parents=True, exist_ok=True)
 
-        command = [executable, "-p", str(path), "-o", str(work_dir)]
-        logger.info(f"Konwertuję {path} przez MinerU: {' '.join(command)}")
+        backend = get_settings().mineru_backend
+        command = [executable, "-p", str(path), "-o", str(work_dir), "-b", backend]
+        env = (
+            {**os.environ, "VLLM_USE_FLASHINFER_SAMPLER": "0"}
+            if backend != "pipeline"
+            else None
+        )
+        logger.info(f"Konwertuję {path} przez MinerU (backend={backend}): {' '.join(command)}")
         try:
-            subprocess.run(command, check=True, capture_output=True, text=True)
+            subprocess.run(command, check=True, capture_output=True, text=True, env=env)
             markdown_path = self._find_markdown(work_dir)
             markdown = markdown_path.read_text(encoding="utf-8")
             pages = self._page_count(path)
+        except subprocess.CalledProcessError as e:
+            logger.error(
+                "MinerU zakończył się błędem (kod %d).\nstdout: %s\nstderr: %s",
+                e.returncode,
+                (e.stdout or "")[:2000],
+                (e.stderr or "")[:2000],
+            )
+            tail = (e.stderr or "")[-500:]
+            raise RuntimeError(
+                f"MinerU failed (code {e.returncode}): {tail}"
+            ) from e
         except Exception:
             logger.exception(f"MinerU nie zdołał przekonwertować pliku: {path}")
             raise

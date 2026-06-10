@@ -46,6 +46,9 @@ marker_max_pages = 1
 [docling]
 docling_device = "auto"
 
+[mineru]
+mineru_backend = "pipeline"
+
 [api_keys]
 # Klucze API — bezpieczniej trzymać w .env, tu tylko fallback
 anthropic_api_key = ""
@@ -129,6 +132,9 @@ class Settings(BaseSettings):
     marker_max_pages: int = 1
     docling_device: str = "auto"
 
+    # MinerU
+    mineru_backend: str = "pipeline"
+
     # LLM
     llm_enabled: bool = False
     llm_provider: str = "none"
@@ -206,6 +212,8 @@ def save_settings(settings: Settings) -> None:
         f"marker_max_pages = {settings.marker_max_pages}\n",
         "\n[docling]\n",
         f'docling_device = "{settings.docling_device}"\n',
+        "\n[mineru]\n",
+        f'mineru_backend = "{settings.mineru_backend}"\n',
         "\n[api_keys]\n",
         f'anthropic_api_key = "{settings.anthropic_api_key}"\n',
         f'openai_api_key = "{settings.openai_api_key}"\n',

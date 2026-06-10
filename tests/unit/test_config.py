@@ -19,6 +19,7 @@ _ENV_VARS_TO_CLEAR = (
     "LLM_ENABLED",
     "LLM_PROVIDER",
     "LLM_MODE",
+    "MINERU_BACKEND",
 )
 
 

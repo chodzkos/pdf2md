@@ -58,6 +58,7 @@ class MarkerEngine(ConversionEngine):
         )
         try:
             self._configure_worker_env(marker_workers)
+            self._configure_gpu_batches(settings)
             self._configure_torch_device(torch_device)
             config_parser_cls, pdf_converter_cls, create_model_dict, text_from_rendered = (
                 self._load_marker_api()
@@ -189,6 +190,26 @@ class MarkerEngine(ConversionEngine):
             return len(doc)
         finally:
             doc.close()
+
+    def _configure_gpu_batches(self, settings: Any) -> None:
+        """Ustawia env surya dla rozmiarów batchy GPU przed importem modeli Markera.
+
+        Wartości dobiera się empirycznie patrząc na `nvidia-smi -l 1`; podnoś aż
+        VRAM/util sensownie rośnie, ale przed OOM. Na 24 GB jest duży zapas
+        (~50-280 MB VRAM na element batcha, zależnie od modelu). Batche działają
+        niezależnie od disable_multiprocessing (który jest CPU-side i nie dotyczy GPU).
+        Env varów nie nadpisujemy jeśli użytkownik ustawił je już z zewnątrz.
+        """
+        if settings.marker_torch_device:
+            os.environ.setdefault("TORCH_DEVICE", settings.marker_torch_device)
+        for env_key, value in (
+            ("RECOGNITION_BATCH_SIZE", settings.marker_recognition_batch_size),
+            ("DETECTOR_BATCH_SIZE", settings.marker_detector_batch_size),
+            ("LAYOUT_BATCH_SIZE", settings.marker_layout_batch_size),
+            ("TABLE_REC_BATCH_SIZE", settings.marker_table_rec_batch_size),
+        ):
+            if value:
+                os.environ.setdefault(env_key, str(value))
 
     def _configure_worker_env(self, workers: int) -> None:
         """Ustawia limity workerów przed importem Markera."""

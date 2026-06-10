@@ -100,7 +100,16 @@ def test_convert_uses_marker_api_without_loading_real_models(
     monkeypatch.setattr(engine, "_configure_worker_env", lambda workers: None)
     monkeypatch.setattr(
         "pdf2md.engines.marker_engine.get_settings",
-        lambda: SimpleNamespace(marker_device="cpu", marker_workers=1, marker_max_pages=1),
+        lambda: SimpleNamespace(
+            marker_device="cpu",
+            marker_workers=1,
+            marker_max_pages=1,
+            marker_torch_device="",
+            marker_recognition_batch_size=0,
+            marker_detector_batch_size=0,
+            marker_layout_batch_size=0,
+            marker_table_rec_batch_size=0,
+        ),
     )
     monkeypatch.setattr(
         engine,
@@ -209,7 +218,16 @@ def test_convert_falls_back_without_llm_when_service_unavailable(
     monkeypatch.setattr(engine, "_configure_worker_env", lambda workers: None)
     monkeypatch.setattr(
         "pdf2md.engines.marker_engine.get_settings",
-        lambda: SimpleNamespace(marker_device="cpu", marker_workers=1, marker_max_pages=1),
+        lambda: SimpleNamespace(
+            marker_device="cpu",
+            marker_workers=1,
+            marker_max_pages=1,
+            marker_torch_device="",
+            marker_recognition_batch_size=0,
+            marker_detector_batch_size=0,
+            marker_layout_batch_size=0,
+            marker_table_rec_batch_size=0,
+        ),
     )
     monkeypatch.setattr(
         engine,
@@ -251,6 +269,51 @@ def test_marker_helper_methods_parse_limits_and_metadata() -> None:
     assert engine._coerce_optional_positive_int("-1") is None
     assert engine._extract_metadata(SimpleNamespace(metadata={"a": 1})) == {"a": 1}
     assert engine._extract_metadata(SimpleNamespace(metadata=["bad"])) == {}
+
+
+def test_configure_gpu_batches_sets_env_for_nonzero_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Niezerowe batch size w configu ustawiają odpowiednie env vars surya przed importem."""
+    for key in (
+        "RECOGNITION_BATCH_SIZE",
+        "DETECTOR_BATCH_SIZE",
+        "LAYOUT_BATCH_SIZE",
+        "TABLE_REC_BATCH_SIZE",
+        "TORCH_DEVICE",
+    ):
+        monkeypatch.delenv(key, raising=False)
+
+    settings = SimpleNamespace(
+        marker_torch_device="cuda",
+        marker_recognition_batch_size=64,
+        marker_detector_batch_size=32,
+        marker_layout_batch_size=16,
+        marker_table_rec_batch_size=0,
+    )
+    MarkerEngine()._configure_gpu_batches(settings)
+
+    assert os.environ["TORCH_DEVICE"] == "cuda"
+    assert os.environ["RECOGNITION_BATCH_SIZE"] == "64"
+    assert os.environ["DETECTOR_BATCH_SIZE"] == "32"
+    assert os.environ["LAYOUT_BATCH_SIZE"] == "16"
+    assert "TABLE_REC_BATCH_SIZE" not in os.environ
+
+
+def test_configure_gpu_batches_respects_existing_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Istniejące env vars nie są nadpisywane (setdefault)."""
+    monkeypatch.setenv("RECOGNITION_BATCH_SIZE", "8")
+
+    settings = SimpleNamespace(
+        marker_torch_device="",
+        marker_recognition_batch_size=128,
+        marker_detector_batch_size=0,
+        marker_layout_batch_size=0,
+        marker_table_rec_batch_size=0,
+    )
+    MarkerEngine()._configure_gpu_batches(settings)
+
+    assert os.environ["RECOGNITION_BATCH_SIZE"] == "8"  # zachowane, nie nadpisane
 
 
 def test_configure_worker_env_sets_worker_limits(monkeypatch: pytest.MonkeyPatch) -> None:

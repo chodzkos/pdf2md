@@ -42,6 +42,14 @@ default_language = "pol+eng"
 marker_device = "cpu"
 marker_workers = 1
 marker_max_pages = 1
+# GPU batch tuning — 0 = auto (surya dobiera samodzielnie)
+# Dostrajaj empirycznie patrząc na `nvidia-smi -l 1`; podnoś aż VRAM/util sensownie rośnie.
+# Batche działają niezależnie od disable_multiprocessing (który dotyczy CPU-side, nie GPU).
+marker_torch_device = ""
+marker_recognition_batch_size = 0
+marker_detector_batch_size = 0
+marker_layout_batch_size = 0
+marker_table_rec_batch_size = 0
 
 [docling]
 docling_device = "auto"
@@ -130,6 +138,11 @@ class Settings(BaseSettings):
     marker_device: str = "cpu"
     marker_workers: int = 1
     marker_max_pages: int = 1
+    marker_torch_device: str = ""  # "" = użyj marker_device / auto-detect
+    marker_recognition_batch_size: int = 0  # 0 = auto (surya default)
+    marker_detector_batch_size: int = 0
+    marker_layout_batch_size: int = 0
+    marker_table_rec_batch_size: int = 0
     docling_device: str = "auto"
 
     # MinerU
@@ -210,6 +223,11 @@ def save_settings(settings: Settings) -> None:
         f'marker_device = "{settings.marker_device}"\n',
         f"marker_workers = {settings.marker_workers}\n",
         f"marker_max_pages = {settings.marker_max_pages}\n",
+        f'marker_torch_device = "{settings.marker_torch_device}"\n',
+        f"marker_recognition_batch_size = {settings.marker_recognition_batch_size}\n",
+        f"marker_detector_batch_size = {settings.marker_detector_batch_size}\n",
+        f"marker_layout_batch_size = {settings.marker_layout_batch_size}\n",
+        f"marker_table_rec_batch_size = {settings.marker_table_rec_batch_size}\n",
         "\n[docling]\n",
         f'docling_device = "{settings.docling_device}"\n',
         "\n[mineru]\n",

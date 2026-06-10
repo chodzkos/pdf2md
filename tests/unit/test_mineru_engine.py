@@ -118,9 +118,7 @@ def test_convert_vlm_backend_sets_flashinfer_env(
 
     MinerUEngine().convert(str(pdf_path), output_dir=str(output_dir))
 
-    assert calls == [
-        ["/opt/bin/mineru", "-p", str(pdf_path), "-o", str(output_dir), "-b", "vlm"]
-    ]
+    assert calls == [["/opt/bin/mineru", "-p", str(pdf_path), "-o", str(output_dir), "-b", "vlm"]]
     assert len(envs) == 1
     assert envs[0] is not None
     assert envs[0]["VLLM_USE_FLASHINFER_SAMPLER"] == "0"

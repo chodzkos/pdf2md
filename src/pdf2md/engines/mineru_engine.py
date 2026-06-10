@@ -46,11 +46,7 @@ class MinerUEngine(ConversionEngine):
 
         backend = get_settings().mineru_backend
         command = [executable, "-p", str(path), "-o", str(work_dir), "-b", backend]
-        env = (
-            {**os.environ, "VLLM_USE_FLASHINFER_SAMPLER": "0"}
-            if backend != "pipeline"
-            else None
-        )
+        env = {**os.environ, "VLLM_USE_FLASHINFER_SAMPLER": "0"} if backend != "pipeline" else None
         logger.info(f"Konwertuję {path} przez MinerU (backend={backend}): {' '.join(command)}")
         try:
             subprocess.run(command, check=True, capture_output=True, text=True, env=env)
@@ -65,9 +61,7 @@ class MinerUEngine(ConversionEngine):
                 (e.stderr or "")[:2000],
             )
             tail = (e.stderr or "")[-500:]
-            raise RuntimeError(
-                f"MinerU failed (code {e.returncode}): {tail}"
-            ) from e
+            raise RuntimeError(f"MinerU failed (code {e.returncode}): {tail}") from e
         except Exception:
             logger.exception(f"MinerU nie zdołał przekonwertować pliku: {path}")
             raise

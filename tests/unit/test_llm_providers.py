@@ -149,6 +149,38 @@ class TestOllamaProvider:
         assert call_count > 1
         assert isinstance(result, LLMResult)
 
+    def test_correct_sends_system_user_think_false_and_temperature(self) -> None:
+        """correct(): /api/chat z system+user, think=False na poziomie body, options.temperature."""
+        captured: dict[str, object] = {}
+        response_body = json.dumps({"message": {"content": "skorygowany"}}).encode()
+
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = response_body
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        def fake_urlopen(req: object, **kwargs: object) -> object:
+            captured["url"] = req.full_url  # type: ignore[attr-defined]
+            captured["data"] = json.loads(req.data.decode())  # type: ignore[attr-defined]
+            return mock_resp
+
+        fake_settings = _fake_settings(ollama_model="qwen3:14b")
+        with (
+            patch("pdf2md.llm.ollama_provider.urllib.request.urlopen", side_effect=fake_urlopen),
+            patch("pdf2md.llm.ollama_provider.get_settings", return_value=fake_settings),
+        ):
+            out = OllamaProvider().correct("0CR tekst", system_prompt="KOREKTA", temperature=0.0)
+
+        assert out == "skorygowany"
+        data = captured["data"]
+        assert str(captured["url"]).endswith("/api/chat")
+        assert data["think"] is False  # type: ignore[index]
+        assert data["options"]["temperature"] == 0.0  # type: ignore[index]
+        assert data["messages"] == [  # type: ignore[index]
+            {"role": "system", "content": "KOREKTA"},
+            {"role": "user", "content": "0CR tekst"},
+        ]
+
 
 # ---------------------------------------------------------------------------
 # AnthropicProvider

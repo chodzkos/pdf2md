@@ -62,3 +62,25 @@ class GeminiProvider(PostprocessMixin, LLMProvider):
         logger.info(f"Gemini post-processing: model={model}, mode={mode}")
         processed = self._postprocess_chunks(markdown, mode, instructions)
         return LLMResult(text=processed, provider_used=self.name)
+
+    def correct(self, text: str, *, system_prompt: str, temperature: float = 0.0) -> str:
+        """Korekta: system_instruction=system_prompt, contents=text, bez POST_PROCESSING_PROMPT."""
+        try:
+            genai = importlib.import_module("google.genai")
+            types = importlib.import_module("google.genai.types")
+        except ImportError as exc:
+            raise RuntimeError(
+                "google-genai nie jest zainstalowany. Uruchom: uv sync --extra llm"
+            ) from exc
+        settings = get_settings()
+        model_name = settings.gemini_model or self.default_model
+        client = genai.Client(api_key=settings.gemini_api_key)
+        resp = client.models.generate_content(
+            model=model_name,
+            contents=text,
+            config=types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                temperature=temperature,
+            ),
+        )
+        return str(resp.text)

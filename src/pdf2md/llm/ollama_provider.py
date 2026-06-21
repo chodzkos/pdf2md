@@ -72,3 +72,32 @@ class OllamaProvider(PostprocessMixin, LLMProvider):
         logger.info(f"Ollama post-processing: model={model}, mode={mode}")
         processed = self._postprocess_chunks(markdown, mode, instructions)
         return LLMResult(text=processed, provider_used=self.name)
+
+    def correct(self, text: str, *, system_prompt: str, temperature: float = 0.0) -> str:
+        """Korekta przez /api/chat: system+user dokładnie, bez dodatkowego promptu.
+
+        ``think=False`` na poziomie głównym body wyłącza rozumowanie (qwen3 ma je domyślnie
+        ON) — przy korekcie nie chcemy „ulepszania"/parafrazy. W options działać nie będzie.
+        """
+        model = get_settings().ollama_model or self.default_model
+        payload = json.dumps(
+            {
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": text},
+                ],
+                "stream": False,
+                "think": False,
+                "options": {"temperature": temperature},
+            }
+        ).encode()
+        req = urllib.request.Request(
+            f"{self._base_url()}/api/chat",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req) as resp:
+            result = json.loads(resp.read())
+            return str(result.get("message", {}).get("content", text))

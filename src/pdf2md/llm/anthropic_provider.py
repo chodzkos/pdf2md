@@ -56,3 +56,18 @@ class AnthropicProvider(PostprocessMixin, LLMProvider):
         logger.info(f"Anthropic post-processing: model={model}, mode={mode}")
         processed = self._postprocess_chunks(markdown, mode, instructions)
         return LLMResult(text=processed, provider_used=self.name)
+
+    def correct(self, text: str, *, system_prompt: str, temperature: float = 0.0) -> str:
+        """Korekta: system=system_prompt, user=text, bez POST_PROCESSING_PROMPT."""
+        anthropic = importlib.import_module("anthropic")
+        settings = get_settings()
+        model = settings.anthropic_model or self.default_model
+        client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        message = client.messages.create(
+            model=model,
+            max_tokens=8192,
+            temperature=temperature,
+            system=system_prompt,
+            messages=[{"role": "user", "content": text}],
+        )
+        return str(message.content[0].text)

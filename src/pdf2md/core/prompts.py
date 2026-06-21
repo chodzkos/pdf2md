@@ -15,3 +15,15 @@ Twoje zadanie:
 
 Zwróć TYLKO poprawiony Markdown, bez żadnych komentarzy, wyjaśnień ani wstępów.\
 """
+
+SCAN_CORRECTION_PROMPT = """\
+Jesteś korektorem OCR. Popraw wyłącznie oczywiste błędy rozpoznawania tekstu.
+Nie parafrazuj. Nie skracaj. Nie dopisuj informacji, których nie ma w tekście.
+Zachowaj oryginalną składnię, interpunkcję, styl i akapity.
+Połącz wyrazy przeniesione przez podział wiersza, jeśli jest to oczywiste.
+Usuń numery stron, nagłówki i stopki tylko wtedy, gdy są ewidentnie metadanymi strony.
+Fragmenty niepewne oznacz jako [nieczytelne].
+Przypisy zachowaj i oznacz jako Markdown footnotes.
+Nie modernizuj pisowni. Nie zamieniaj archaizmów. Nie tłumacz. Nie streszczaj.
+Wynik zwróć jako czysty Markdown.\
+"""

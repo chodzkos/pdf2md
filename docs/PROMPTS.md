@@ -1795,6 +1795,122 @@ Pokaż diff (KROK 2) i wynik testu (KROK 4).
 
 ---
 
+## PROMPT D11 — Korekta przez dedykowaną metodę `LLMProvider.correct()` (dopełnienie Etapu 13)
+
+> Powód: Etap 13 zaimplementowany, ale korekta woła `postprocess()`, które prependuje
+> `POST_PROCESSING_PROMPT` (ogólne czyszczenie/reformatowanie) i dokleja `SCAN_CORRECTION_PROMPT`
+> obok — to **instrukcje sprzeczne** (ogólny prompt: „posprzątaj, popraw formatowanie"; korekta:
+> „nie zmieniaj nic poza błędami OCR, nie parafrazuj"). Ryzyko: model parafrazuje/reformatuje
+> zamiast tylko naprawić literówki — wbrew celowi korekty i wbrew wierności źródłu. Brak też
+> kontroli temperatury (konserwatywna korekta potrzebuje `temp=0`). Rozwiązanie (zatwierdzona,
+> **addytywna** zmiana interfejsu — zasada nr 1): dedykowana metoda `correct()`. `postprocess()`
+> zostaje nietknięte (kompatybilność wstecz, Faza 1 bez zmian).
+
+```
+Dopełnienie Etapu 13. Zmiana ADDYTYWNA — postprocess() NIE zmieniane.
+
+1. LLMProvider (klasa bazowa) — nowa metoda:
+   def correct(self, text: str, *, system_prompt: str, temperature: float = 0.0) -> str
+   - wysyła do modelu DOKŁADNIE: system = system_prompt, user = text. Nic więcej.
+   - NIE prependuje POST_PROCESSING_PROMPT ani żadnego innego promptu.
+   - jeśli base ma wspólną ścieżkę wysyłki — zaimplementuj correct() raz w base;
+     jeśli nie — dodaj abstrakcyjną sygnaturę i zaimplementuj w KAŻDYM providerze (krok 2).
+   - postprocess() bez zmian.
+
+2. Implementacja correct() w każdym providerze (równolegle do postprocess()):
+   - Ollama: messages=[{role:"system",content:system_prompt},{role:"user",content:text}],
+     "options":{"temperature":temperature}, ORAZ "think": False na POZIOMIE GŁÓWNYM body
+     (NIE w options — tam ignorowane; qwen3 ma thinking domyślnie ON, a przy korekcie nie chcemy
+     rozumowania/„ulepszania"). Reużyj istniejącej obsługi think z postprocess()/PROMPT #4.
+   - Claude: system=system_prompt, messages=[{role:"user",content:text}], temperature=temperature.
+   - OpenAI: messages=[{role:"system",content:system_prompt},{role:"user",content:text}], temperature.
+   - Gemini: system_instruction=system_prompt, contents=text, generation_config z temperature.
+   - Zwróć czysty tekst odpowiedzi (jak postprocess()).
+
+3. scan/correction.py — przełącz korektę na correct():
+   - correct_page(md, provider):
+       provider.correct(md, system_prompt=SCAN_CORRECTION_PROMPT, temperature=0.0)
+     zamiast postprocess(..., instructions=SCAN_CORRECTION_PROMPT).
+   - Puste/nieczytelne strony NADAL pomijają LLM (zostaw obecną logikę).
+   - correct_pages_batch, log_free_vram, release_ollama_model (keep_alive=0) — bez zmian.
+
+4. test_correction.py — zaktualizuj/dodaj asercje (mock LLM):
+   - correct() dostaje system == SCAN_CORRECTION_PROMPT i NIE zawiera POST_PROCESSING_PROMPT
+     (asercja na przekazanym system prompt; brak fragmentu ogólnego promptu czyszczenia).
+   - przekazywane temperature == 0.0.
+   - (Ollama) "think" == False na poziomie głównym; keep_alive == 0 przy release.
+   - zostaw istniejącą asercję, że treść promptu zawiera zakaz parafrazy.
+   - pusta strona → LLM NIE wołany.
+
+5. Nie zmieniaj innych miejsc wołających postprocess() (Faza 1 bez zmian). ruff + mypy czyste.
+
+Pokaż diff.
+```
+
+> Po zielonych testach: **jeden commit na cały Etap 13** (z tą metodą) → merge jak zielone.
+> Bez osobnego checkpoint-commita wersji z mieszanymi promptami.
+
+---
+
+## PROMPT D12 — GUI: zmiana domyślnego modelu Ollama (naprawa precedencji + persystencja)
+
+> Powód: w ustawieniach Ollamy w GUI wybór innego dostępnego modelu jako domyślnego nie działa —
+> konwersja zawsze używa modelu „przypisanego z linii poleceń"/z konstruktora, ignorując wybór z
+> GUI. To klasyczny błąd **źródła prawdy + precedencji**: GUI zapisuje wybór gdzie indziej, niż
+> czyta go ścieżka konwersji, albo provider/konwerter trzyma model ustawiony przy starcie i nie
+> odświeża go po zmianie. Cel: `config.ollama_model` jako **jedno źródło prawdy** domyślnego
+> modelu; GUI go edytuje i utrwala; konwersja go czyta; jawny override z CLI działa
+> per-uruchomienie i nie kasuje na stałe ustawienia z GUI.
+
+```
+Najpierw ZDIAGNOZUJ, potem napraw. NIE zgaduj — pokaż znaleziony łańcuch.
+
+KROK A — DIAGNOZA (zrelacjonuj zwięźle, zanim ruszysz kod):
+- Skąd ścieżka konwersji bierze model Ollamy? (argument konstruktora OllamaProvider / pole configu
+  / flaga CLI / wartość zahardkodowana). Prześledź od GUI „Konwertuj" do faktycznego wywołania Ollamy.
+- Gdzie GUI zapisuje wybór z dropdowna ustawień modelu? (zmienna widgetu / config / nigdzie).
+- Wskaż DOKŁADNY punkt rozjazdu, dlaczego wybór z GUI nie trafia do konwersji. Typowe przyczyny:
+  „GUI ustawia tylko pole widgetu, nie zapisuje configu", albo „konwerter/provider tworzony raz przy
+  starcie z modelem z X i nie czyta configu ponownie", albo „precedencja arg-konstruktora > config,
+  a GUI pisze do config".
+
+KROK B — NAPRAWA (źródło prawdy + precedencja):
+1. core/config.py: ollama_model = JEDNO źródło prawdy domyślnego modelu (jeśli pola brak — dodaj;
+   jeśli jest — użyj). Zapis do ~/.config/pdf2md/config.toml.
+2. GUI (ustawienia Ollamy):
+   - dropdown wypełniany REALNIE dostępnymi modelami z Ollamy (zapytanie /api/tags), preselekcja =
+     aktualny config.ollama_model.
+   - po zmianie wyboru: zapisz do config.ollama_model i UTRWAL config.toml (save). Zmiana ma być
+     trwała (zostaje po restarcie GUI).
+3. Ścieżka konwersji — precedencja:
+   jawny override per-uruchomienie (CLI --ollama-model / ewentualny wybór ad hoc)
+     > config.ollama_model (domyślny, edytowalny z GUI)
+     > sensowny fallback.
+   - W trybie GUI NIE może istnieć „cichy" model z konstruktora nadpisujący config. Jeśli
+     OllamaProvider trzyma model jako pole ustawiane przy tworzeniu — albo ODŚWIEŻ je po zmianie w
+     GUI, albo czytaj config leniwie przy każdym żądaniu, żeby aktualny wybór realnie trafiał do
+     konwersji (gdyby konwerter był tworzony raz przy starcie GUI — zadbaj, by używał bieżącej
+     wartości configu, nie zamrożonej z momentu startu).
+4. CLI bez regresji: pdf2md convert --ollama-model X nadal nadpisuje model dla TEGO uruchomienia,
+   ale NIE kasuje na stałe domyślnego z GUI (chyba że istnieje osobna jawna komenda do ustawiania
+   domyślnego — wtedy jej nie zmieniaj).
+
+KROK C — TESTY:
+- wybór modelu w GUI zapisuje config.ollama_model i przetrwa reload configu.
+- konwersja bez jawnego override używa config.ollama_model (NIE starej/konstruktorowej wartości).
+- jawny override (CLI --ollama-model) wygrywa dla danego uruchomienia.
+- dropdown listuje modele z /api/tags i preselekcjonuje bieżący domyślny.
+
+ruff + mypy czyste. Pokaż diff i KRÓTKIE podsumowanie znalezionego root-cause'u.
+```
+
+> Po naprawie: w GUI zmień domyślny na np. `qwen3.6:27b`, zrób konwersję i potwierdź w logu, że
+> poszedł wybrany model (log konwertera już wypisuje silnik/model). Jeśli chcesz dodatkowo wybór
+> modelu **per-konwersję** (dropdown na ekranie konwersji, niezależny od trwałego domyślnego) — to
+> osobny, mały feature; ten prompt naprawia „domyślny ustawiony z GUI realnie się stosuje".
+
+---
+
 ## Wskazówki ogólne
 
 ### Dwie zasady do DOPISANIA na końcu każdego prompta etapowego

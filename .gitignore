@@ -44,6 +44,9 @@ Thumbs.db
 # Lokalny katalog roboczy skryptu preprocess_test.py
 work/
 
+# Artefakty ręcznych testów OCR (surowy output, nie fixture)
+tests/fixtures/test_scan.md
+
 # Logi i pliki tymczasowe
 *.log
 *.tmp

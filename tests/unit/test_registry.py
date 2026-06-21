@@ -53,6 +53,9 @@ class _MockLLM(LLMProvider):
     ) -> LLMResult:
         return LLMResult(text=markdown + " [LLM]", provider_used=self.name)
 
+    def correct(self, text: str, *, system_prompt: str, temperature: float = 0.0) -> str:
+        return text + " [CORRECTED]"
+
 
 class TestEngineRegistry:
     def test_register_and_get_all(self) -> None:

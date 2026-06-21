@@ -57,3 +57,19 @@ class OpenAIProvider(PostprocessMixin, LLMProvider):
         logger.info(f"OpenAI post-processing: model={model}, mode={mode}")
         processed = self._postprocess_chunks(markdown, mode, instructions)
         return LLMResult(text=processed, provider_used=self.name)
+
+    def correct(self, text: str, *, system_prompt: str, temperature: float = 0.0) -> str:
+        """Korekta: system=system_prompt, user=text, bez POST_PROCESSING_PROMPT."""
+        openai = importlib.import_module("openai")
+        settings = get_settings()
+        model = settings.openai_model or self.default_model
+        client = openai.OpenAI(api_key=settings.openai_api_key)
+        response = client.chat.completions.create(
+            model=model,
+            temperature=temperature,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": text},
+            ],
+        )
+        return str(response.choices[0].message.content)

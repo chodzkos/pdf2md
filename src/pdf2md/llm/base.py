@@ -47,3 +47,19 @@ class LLMProvider(ABC):
         Returns:
             Wynik z poprawionym tekstem i statystykami.
         """
+
+    @abstractmethod
+    def correct(self, text: str, *, system_prompt: str, temperature: float = 0.0) -> str:
+        """Korekta tekstu: wysyła do modelu DOKŁADNIE system=system_prompt, user=text.
+
+        W przeciwieństwie do postprocess() NIE prependuje POST_PROCESSING_PROMPT ani żadnego
+        innego promptu. Używane do konserwatywnej korekty OCR (scan/correction.py).
+
+        Args:
+            text: Tekst do skorygowania (jedna strona Markdown).
+            system_prompt: Pełny prompt systemowy (np. SCAN_CORRECTION_PROMPT).
+            temperature: Temperatura próbkowania — 0.0 dla korekty bez kreatywności.
+
+        Returns:
+            Skorygowany tekst (czysta odpowiedź modelu).
+        """

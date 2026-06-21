@@ -120,8 +120,28 @@ Te silniki wchodzą do gry dopiero w Fazie 2 (zob. ROADMAP, etapy 11–15). Są 
 | Silnik | Typ | Mocna strona | GPU |
 |---|---|---|---|
 | **olmOCR** (olmOCR-2-7B) | VLM 7B | Czysty Markdown, równania, tabele, kolejność czytania | ✅ wymagany |
-| **PaddleOCR-VL** | VLM lekki | Wydajny parser dokumentów, wielojęzyczny | ✅ zalecany |
+| **PaddleOCR-VL** | VLM lekki (0.9B) | Wydajny parser dokumentów, wielojęzyczny | ✅ **potwierdzony na Blackwellu** (zob. niżej) |
 | **Surya** | OCR + layout | Layout, reading order, fallback kontrolny | ✅ zalecany |
+
+> **PaddleOCR-VL — zweryfikowany na RTX 5090 (Blackwell sm_120), czerwiec 2026.** Działa jako
+> **trwały serwer HTTP** (OpenAI-compatible), nie podproces — startuje raz, model siedzi ciepły,
+> kolejne strony lecą szybko. To czyni go **dobrym do wsadu / całych książek**; do pojedynczych
+> konwersji prostszy operacyjnie jest MinerU (podproces, bez serwera do pilnowania).
+> - **Środowisko:** osobny venv `~/.venvs/paddleocr`, izolowany od projektu (ma `transformers 5.x`
+>   z nightly — nie wolno mieszać z `engines-core`, które jest `<5`). Adapter `paddleocr_vl_engine.py`
+>   to tylko klient HTTP na `http://localhost:8000/v1`.
+> - **Przepis instalacji (Blackwell):** świeży venv → `uv pip install -U vllm --pre
+>   --torch-backend=auto --extra-index-url https://wheels.vllm.ai/nightly` (NIE wymuszać ręcznie
+>   `cu129` + `unsafe-best-match` — daje rozjazd cu12/cu13 i `libcudart.so.13`). Start:
+>   `VLLM_USE_FLASHINFER_SAMPLER=0 vllm serve PaddlePaddle/PaddleOCR-VL-1.6 --trust-remote-code
+>   --no-enable-prefix-caching` (env wymagane — flashinfer JIT-uje sampler i pada na nvcc, ten sam
+>   fix co MinerU/vlm). `paddle` (framework) niepotrzebny do samego VLM; pełny pipeline z layoutem
+>   = osobny venv-klient. Szczegóły krok po kroku w SILNIKI_INSTALACJA.md (sek. 2.8).
+> - **Jakość (skan polskiej książki historycznej):** bardzo dobra — poprawne diakrytyki, zachowane
+>   akapity, wierne odtworzenie nawiasów kwadratowych z oryginału. Drobne artefakty na zawijaniach
+>   wierszy (sklejone słowa, pojedyncze literówki) — do dobicia modelem korekty w Etapie 13.
+> - **VRAM:** serwer bierze domyślnie ~92% (`--gpu-memory-utilization=0.92`, ~22 GB z 24). Obok nie
+>   zmieści się model korekty — stąd sekwencja „zabij serwer → załaduj qwen3" w Etapie 13.
 
 ### Dostawcy LLM
 

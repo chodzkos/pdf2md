@@ -584,36 +584,39 @@ Rozbicie PDF na obrazy stron i ich obróbka przed OCR. Tu nie ma żadnego LLM �
 **Czas:** ~6 godzin
 
 ### Cel
-Trzy silniki OCR oparte na modelach wizyjno-językowych, jako adaptery `ConversionEngine`. To serce jakości w Fazie 2.
+Cztery silniki OCR oparte na modelach wizyjno-językowych, jako adaptery `ConversionEngine`. To serce jakości w Fazie 2. **Dwie kategorie** (wynik debugowania zależności w praktyce): Surya działa **in-process** w głównym venv (torch, transformers≥4.48, zgodny z Markerem), a olmOCR i PaddleOCR-VL są **izolowane** (osobne środowiska, wołane przez subprocess/HTTP) — bo ich stosy (vLLM / PaddlePaddle) konfliktują z projektem.
 
 ### Zadania dla Claude Code
-- [ ] `engines/olmocr_engine.py` — adapter olmOCR (model olmOCR-2-7B-FP8, flaga `--markdown`, uruchomienie przez vLLM lub serwer lokalny)
-- [ ] `engines/paddleocr_vl_engine.py` — adapter PaddleOCR-VL
-- [ ] `engines/surya_engine.py` — adapter Surya (layout + OCR + reading order)
-- [ ] Wspólna baza `engines/vlm_base.py` z detekcją GPU (`torch.cuda.is_available()`) i ostrzeżeniem gdy brak GPU
-- [ ] **Zarządzanie VRAM**: metody `load_model()` / `unload_model()`. `unload_model()` realnie zwalnia pamięć (usuń referencje, `gc.collect()`, `torch.cuda.empty_cache()`; vLLM → zamknij proces). Konieczne, bo olmOCR (~7-8 GB) i model korekty qwen3:14b (~9-10 GB) NIE zmieszczą się naraz w 24 GB.
-- [ ] Każdy silnik: `is_available()` przez `importlib.metadata.version()` + `has_gpu()` (BEZ importu modelu), `requires_gpu = True`
+- [ ] `engines/vlm_base.py` — baza z `has_gpu()`; rozdziel na `InProcessVLMEngine` i `ExternalVLMEngine` (subprocess/usługa), bo logika is_available()/load/unload się różni
+- [ ] `engines/surya_engine.py` — **in-process** (główny venv); zrób jako pierwszy, domyka „≥1 silnik VLM działa"
+- [ ] `engines/olmocr_engine.py` — **izolowany subprocess**: osobny venv (`~/.venvs/olmocr`), ścieżka do jego pythona w configu, uruchomienie przez `python -m olmocr.pipeline` z env `VLLM_USE_FLASHINFER_SAMPLER=0`
+- [ ] `engines/paddleocr_vl_engine.py` — **izolowana usługa HTTP**: model chodzi jako `paddleocr genai_server --backend vllm`, adapter rozmawia po HTTP (API OpenAI, jak Ollama) lub przez `paddleocr doc_parser`; config: `paddleocr_vl_url`
+- [ ] **Zarządzanie VRAM**: `load_model()`/`unload_model()`. In-process (Surya) → `gc.collect()`+`torch.cuda.empty_cache()`. Izolowane (olmOCR/PaddleOCR-VL) → **unload = zamknięcie procesu/serwera** (VRAM zwalnia OS; prościej i pewniej). olmOCR (~7-8 GB) i qwen3:14b (~9-10 GB) NIE zmieszczą się naraz w 24 GB
+- [ ] Każdy silnik: `requires_gpu = True`; `is_available()` bez importu modelu (in-process → `importlib.metadata.version()`+`has_gpu()`; izolowany → obecność venv/usługi+`has_gpu()`)
 - [ ] Output per strona do `work/ocr_json/` i `work/md_pages/`, przetwarzanie paczkowe (iter_page_batches)
 - [ ] Aktualizacja Registry
-- [ ] Testy z `skipif` gdy brak GPU lub silnika
+- [ ] Testy z `skipif` gdy brak GPU lub silnika/środowiska
 
 ### Co robisz Ty
 - [ ] `git checkout -b etap-12-vlm-ocr`
-- [ ] Instalacja w czystym środowisku (olmOCR wymaga osobnego env — sprawdź dokumentację):
-  ```bash
-  # olmOCR — najlepiej osobne środowisko conda/uv, wymaga CUDA
-  # Pobiera model 7B przy pierwszym uruchomieniu
-  ```
+- [ ] **Instalacja zewnętrznych silników wg `SILNIKI_INSTALACJA.md`** (Surya w głównym venv; olmOCR i PaddleOCR-VL w osobnych środowiskach; PaddleOCR-VL na Blackwellu → vLLM nightly cu129 + prekompilowany flash-attn)
 - [ ] Sprawdzasz że GPU jest wykrywane (`nvidia-smi`, `torch.cuda.is_available()`)
-- [ ] Testujesz olmOCR na 2-3 stronach skanu — porównujesz z Markerem z Fazy 1
-- [ ] Po teście sprawdzasz `nvidia-smi` — czy `unload_model()` faktycznie zwolnił VRAM
+- [ ] Testujesz każdy silnik na 2-3 stronach skanu — porównujesz z Markerem z Fazy 1
+- [ ] Po teście sprawdzasz `nvidia-smi` — czy `unload_model()` (kill procesu) faktycznie zwolnił VRAM
 - [ ] Pull Request → scal
 
 ### Definicja ukończenia
-✅ olmOCR konwertuje skan strony do Markdown na GPU  
-✅ `unload_model()` realnie zwalnia VRAM (widoczne w nvidia-smi)  
-✅ `is_available()` zwraca False (bez błędu) gdy brak GPU lub modelu  
-✅ Co najmniej jeden silnik VLM działa end-to-end  
+✅ Surya konwertuje skan strony do Markdown na GPU (in-process)  
+✅ `unload_model()` realnie zwalnia VRAM — dla izolowanych przez zamknięcie procesu (widoczne w nvidia-smi)  
+✅ `is_available()` zwraca False (bez błędu) gdy brak GPU lub silnika/środowiska  
+✅ Co najmniej jeden silnik VLM działa end-to-end (minimum Surya; olmOCR/PaddleOCR-VL jeśli środowiska gotowe)  
+
+> **Minimum etapu spełnia Surya** (in-process, bez serwera) — to ona formalnie domyka etap.
+> **PaddleOCR-VL: POTWIERDZONY jako działający na RTX 5090/Blackwellu** (czerwiec 2026, przepis
+> i notka o jakości w PROJEKT.md → macierz silników). Działa jako trwały serwer HTTP; dobry do
+> wsadu/książek, ale operacyjnie cięższy (cykl życia serwera, ~92% VRAM, stos vLLM nightly) — więc
+> **domyślnym** zrób coś prostszego (MinerU/vlm lub Surya), a Paddle trzymaj jako izolowaną opcję.
+> olmOCR (izolowany) — wciąż do zrobienia. Kolejność: **Surya → (Paddle gotowy) → olmOCR**.
 
 ---
 

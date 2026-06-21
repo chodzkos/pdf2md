@@ -1014,60 +1014,107 @@ Po zakończeniu pokaż wynik scripts/preprocess_test.py na skanie testowym.
 
 ## PROMPT #12 — Silniki VLM-OCR
 
+> ⚠️ **PROMPT HISTORYCZNY / CZĘŚCIOWO ZASTĄPIONY (czerwiec 2026).** Etap 12 zrealizowano wg
+> pierwotnej wersji tego promptu i **domknięto** na MinerU/vlm + PaddleOCR-VL (zob. ROADMAP →
+> Etap 12). **NIE uruchamiaj tej wersji ponownie na działającym kodzie** — przepisałaby
+> sprawne adaptery. Nieaktualne fragmenty:
+> 1. **Surya** — odłożona: marker pinuje `surya-ocr>=0.6.13,<0.7.0` (stare, funkcyjne API; brak
+>    `DetectionPredictor`), więc w głównym venv Surya jest redundantna z Markerem. Surya 2.0
+>    (serwowany VLM) → FEATURES **F19**. Sekcja „Surya" poniżej jest nieaktualna.
+> 2. **PaddleOCR-VL** — NIE startuj serwera z adaptera (`load_model = start genai_server`).
+>    Serwer jest **user-managed** (`vllm serve` ręcznie), adapter tylko **pinguje** go w
+>    `is_available()` i gada po HTTP → **użyj PROMPTU D9** (zastępuje sekcję PaddleOCR-VL poniżej).
+> 3. **Split `InProcessVLMEngine`/`ExternalVLMEngine`** — odłożony: po odłożeniu Suryi nie ma
+>    silnika in-process, więc ta podklasa nie miałaby użytkownika (przedwczesna abstrakcja).
+>    Obecny pojedynczy `VLMEngine` obsługuje izolowane (olmOCR + PaddleOCR-VL).
+> 4. **olmOCR** — do zrobienia później osobnym, celowanym **PROMPTEM D10** (poniżej, w sekcji
+>    retrofit). Sekcja „olmOCR" tutaj zostaje jako referencja.
+>
+> Poniższa treść pozostaje jako **referencja architektury dwóch kategorii silników** — nie do
+> ponownego wykonania w całości.
+
 ```
 Jesteśmy na gałęzi etap-12-vlm-ocr.
 
-Zaimplementuj trzy silniki OCR oparte na modelach wizyjno-językowych jako adaptery ConversionEngine.
-WAŻNE: wszystkie wymagają GPU. is_available() musi zwracać False BEZ błędu gdy brak GPU lub modelu.
+Zaimplementuj cztery silniki OCR oparte na modelach wizyjno-językowych jako adaptery ConversionEngine.
+WAŻNE: wszystkie wymagają GPU. is_available() musi zwracać False BEZ błędu gdy brak GPU lub silnika.
+
+ARCHITEKTURA — dwie kategorie silników VLM (to wynik realnego debugowania zależności):
+- IN-PROCESS: Surya — torch + transformers w GŁÓWNYM środowisku projektu (zgodny z Markerem,
+  transformers>=4.48). Importowany normalnie, unload przez gc/empty_cache.
+- IZOLOWANE (subprocess/usługa): olmOCR i PaddleOCR-VL — ciężkie stosy (vLLM / PaddlePaddle),
+  konfliktują z głównym środowiskiem, więc żyją w OSOBNYCH środowiskach i są wołane przez
+  subprocess lub HTTP. NIE importuj ich do procesu projektu. unload = zamknięcie procesu/serwera
+  (VRAM zwalnia się sam przy wyjściu procesu — prościej i pewniej niż empty_cache).
 
 1. src/pdf2md/engines/vlm_base.py
 Klasa bazowa VLMEngine(ConversionEngine):
 - requires_gpu = True
 - has_gpu() -> bool: try import torch; return torch.cuda.is_available() / except: False
   (import torch wewnątrz metody, nie na górze pliku)
-- is_available() w podklasach: importlib.metadata.version(...) dla pakietu silnika ORAZ has_gpu().
-  NIE importuj samego modelu/biblioteki wizyjnej w is_available().
-- ZARZĄDZANIE VRAM (krytyczne na 24 GB): metody load_model() i unload_model().
-  unload_model() musi REALNIE zwolnić VRAM: usuń referencje do modelu, gc.collect(),
-  torch.cuda.empty_cache(); dla backendów serwerowych (vLLM) zamknij proces serwera.
+- is_available() w podklasach: dla in-process — importlib.metadata.version(...) + has_gpu();
+  dla izolowanych — sprawdzenie obecności środowiska/komendy (np. ścieżka do venv/CLI,
+  shutil.which) + has_gpu(), BEZ importu modelu.
+- ZARZĄDZANIE VRAM (krytyczne na 24 GB): load_model() i unload_model().
+  * in-process (Surya): unload_model() usuwa referencje, gc.collect(), torch.cuda.empty_cache().
+  * izolowane (olmOCR/PaddleOCR-VL): load = start procesu/serwera, unload = zamknięcie procesu
+    (terminate + wait; VRAM zwalnia OS przy wyjściu). To prostsze i pewniejsze.
   Powód: olmOCR-2-7B (~7-8 GB) i model korekty qwen3:14b (~9-10 GB) NIE zmieszczą się
   jednocześnie w 24 GB. Pipeline ładuje VLM → przetwarza WSZYSTKIE strony → unload_model()
   → dopiero potem faza korekty LLM (Etap 13). Nigdy oba modele naraz.
+- Rozważ dwie podklasy bazowe: InProcessVLMEngine i ExternalVLMEngine (subprocess/HTTP),
+  żeby logika is_available()/load/unload nie mieszała się między kategoriami.
 - wspólna logika: przetwarzanie paczkowe (scan/preprocessing.iter_page_batches),
   OCR per strona, zapis do work/ocr_json/ i work/md_pages/, usuwanie PNG po paczce
 
-2. src/pdf2md/engines/olmocr_engine.py
-Klasa OlmOCREngine(VLMEngine):
+2. src/pdf2md/engines/surya_engine.py  [IN-PROCESS — zrób jako pierwszy, najłatwiejszy]
+Klasa SuryaEngine(InProcessVLMEngine):
+- name = "Surya"
+- description = "Layout + OCR + reading order, dobry jako kontrola/fallback"
+- używa API surya w głównym venv (ten sam surya co Marker; transformers>=4.48). Import leniwy.
+- is_available(): importlib.metadata.version("surya-ocr") w try/except + has_gpu().
+- To domyka „co najmniej jeden silnik VLM działa end-to-end" bez ruszania izolowanych stosów.
+
+3. src/pdf2md/engines/olmocr_engine.py  [IZOLOWANY — subprocess]
+Klasa OlmOCREngine(ExternalVLMEngine):
 - name = "olmOCR"
 - description = "VLM 7B do skanów: czysty Markdown, równania, tabele, kolejność czytania"
 - supports_ocr = True
-- model: allenai/olmOCR-2-7B-1025-FP8 (sprawdź najnowszą wersję na PyPI/GitHub)
-- is_available(): importlib.metadata.version("olmocr") w try/except + has_gpu(). Bez importu olmocr.
-- convert(): load_model() → uruchom olmOCR z flagą --markdown (API Pythona lub subprocess)
-  → po wszystkich stronach unload_model(). Sprawdź aktualną dokumentację olmocr na PyPI.
+- model: allenai/olmOCR-2-7B-1025-FP8 (sprawdź najnowszą wersję; FP8 OK na Blackwellu sm_120)
+- środowisko: osobny venv (np. ~/.venvs/olmocr), ścieżka do jego python w config.toml
+  (pole olmocr_python: str | None). is_available(): venv istnieje + has_gpu(). Bez importu olmocr.
+- convert(): subprocess do `python -m olmocr.pipeline ...` (sprawdź aktualną komendę w docs),
+  z env VLLM_USE_FLASHINFER_SAMPLER=0 (bez tego flashinfer JIT-uje sampler przez nvcc i pada
+  na nowym GPU). unload = zamknięcie procesu.
 
-3. src/pdf2md/engines/paddleocr_vl_engine.py
-Klasa PaddleOCRVLEngine(VLMEngine):
+4. src/pdf2md/engines/paddleocr_vl_engine.py  [IZOLOWANY — usługa HTTP]
+Klasa PaddleOCRVLEngine(ExternalVLMEngine):
 - name = "PaddleOCR-VL"
-- description = "Lekki parser dokumentów VLM, wielojęzyczny, wydajny"
-- sprawdź aktualne API PaddleOCR-VL
-
-4. src/pdf2md/engines/surya_engine.py
-Klasa SuryaEngine(VLMEngine):
-- name = "Surya"
-- description = "Layout + OCR + reading order, dobry jako kontrola/fallback"
-- użyj API surya (detekcja layoutu + OCR)
+- description = "Lekki (0.9B) parser dokumentów VLM, wielojęzyczny, SOTA, wydajny"
+- MODEL DZIAŁA JAKO USŁUGA: `paddleocr genai_server --model_name PaddleOCR-VL-1.6-0.9B
+  --backend vllm --port <port>` w osobnym środowisku. Adapter rozmawia z nim po HTTP
+  (API zgodne z OpenAI, jak Ollama) albo woła CLI `paddleocr doc_parser --vl_rec_backend
+  vllm-server --vl_rec_server_url http://127.0.0.1:<port>/v1`.
+- config.toml: paddleocr_vl_url: str | None (jeśli usługa już chodzi) ORAZ opcjonalnie
+  paddleocr_env: str | None (ścieżka do venv, gdy adapter ma sam wystartować serwer).
+- is_available(): jeśli podany URL — ping serwera; w przeciwnym razie obecność środowiska
+  + has_gpu(). Bez importu paddle.
+- load_model() = start genai_server (subprocess) jeśli nie podano gotowego URL; unload = zamknięcie.
+- UWAGA Blackwell (sm_120): wymaga vLLM z nightly (cu129) + prekompilowany flash-attn — patrz
+  „PaddleOCR-VL NVIDIA Blackwell GPUs Usage Tutorial". To należy do INSTALACJI środowiska, nie kodu.
 
 5. Rejestracja w engines/__init__.py (po silnikach Fazy 1).
 
 6. Testy tests/integration/test_vlm_engines.py:
-- skipif not has_gpu() lub silnik niezainstalowany
-- konwersja jednej strony skanu, sprawdzenie że wynik niepusty
+- skipif not has_gpu() lub silnik/środowisko niezainstalowane
+- Surya: konwersja jednej strony skanu, wynik niepusty
+- olmOCR/PaddleOCR-VL: jeśli środowisko/usługa dostępne — smoke test; inaczej skip
 
 Po zakończeniu:
-1. Pokaż jak zainstalować olmOCR (osobne środowisko, wymaga CUDA)
+1. Pokaż jak zainstalować każdy silnik (Surya w głównym venv; olmOCR i PaddleOCR-VL w osobnych
+   środowiskach — odeślij do SILNIKI_INSTALACJA.md)
 2. Pokaż jak sprawdzić GPU: python -c "import torch; print(torch.cuda.is_available())"
-3. pdf2md list-engines (olmOCR/PaddleOCR-VL/Surya widoczne, oznaczone wymaganiem GPU)
+3. pdf2md list-engines (Surya/olmOCR/PaddleOCR-VL widoczne, oznaczone wymaganiem GPU i kategorią)
 ```
 
 ---
@@ -1605,6 +1652,146 @@ Pokaż diff.
 > niedociążony — to natura Markera, nie wada configu. Do faktycznego nasycenia karty służy
 > MinerU/vlm. D8 jest komplementarny: poprawia wykorzystanie Markera tam, gdzie batch realnie
 > rośnie (większe/wielostronicowe skany, wsad plików).
+
+---
+
+## PROMPT D9 — PaddleOCR-VL: `is_available()` pinguje serwer + konwersja po HTTP
+
+> Wymaga: adapter PaddleOCR-VL (Etap 12). Powód: PaddleOCR-VL to **silnik-usługa** — model
+> stoi w izolowanym serwerze vLLM (API zgodne z OpenAI na `paddleocr_vl_url`), a adapter gada
+> z nim po HTTP, jak OllamaProvider. Obecny `is_available()` sprawdza import `paddle`/
+> `paddlepaddle`, co jest błędne na dwa sposoby: (1) do samego VLM `paddle` nie jest potrzebny
+> (framework layoutu to osobna, opcjonalna warstwa), (2) „dostępność" silnika-usługi to
+> **osiągalność serwera**, nie obecność pakietu w venv. Efekt: `doctor` pokazuje ❌
+> „Niezainstalowany" z błędną podpowiedzią „pip install paddlepaddle", mimo że serwer działa
+> i poprawnie zwraca OCR. To świadome odstępstwo od domyślnej reguły „`is_available()` przez
+> `importlib.metadata`" — uzasadnione typem silnika (usługa, nie pakiet).
+
+```
+W engines/paddleocr_vl_engine.py popraw adapter PaddleOCR-VL. Architektura bez zmian
+(silnik-usługa, klient HTTP). Zmień cztery rzeczy:
+
+1. is_available() = PING SERWERA, nie import paddle:
+   - Dodaj do konfiguracji (core/config.py) pola:
+       paddleocr_vl_url: str = "http://localhost:8000/v1"
+       paddleocr_vl_model: str = "PaddlePaddle/PaddleOCR-VL-1.6"
+       paddleocr_vl_prompt: str = "OCR:"
+       paddleocr_vl_timeout: float = 120.0   # sekundy na stronę
+   - is_available() robi krótki GET na {paddleocr_vl_url}/models (serwery OpenAI-compatible
+     wystawiają /v1/models), timeout ~2-3 s. Zwróć True przy HTTP 200, False przy
+     ConnectionError/Timeout/innym wyjątku. is_available() NIGDY nie rzuca wyjątku i NIE
+     importuje paddle/paddlepaddle.
+   - Użyj tego samego klienta HTTP co OllamaProvider (httpx/requests).
+
+2. POPRAW PODPOWIEDŹ (hint) w metadanych silnika:
+   - Zamiast „pip install paddlepaddle..." daj sens usługi:
+     „Uruchom serwer: VLLM_USE_FLASHINFER_SAMPLER=0 vllm serve PaddlePaddle/PaddleOCR-VL-1.6
+      --trust-remote-code --no-enable-prefix-caching (zob. SILNIKI_INSTALACJA.md 2.8)".
+   - Jeśli masz pole opisujące, co znaczy „dostępny", napisz: „serwer pod paddleocr_vl_url
+     odpowiada".
+
+3. convert() = OCR strony po HTTP (zostaw renderowanie stron w vlm_base):
+   - Renderowanie PDF→obraz i pętla po stronach/batchach zostają w vlm_base (preprocessing:
+     DPI, PIL). W metodzie, którą vlm_base woła per-stronę (tej, którą nadpisuje adapter),
+     zamiast lokalnego modelu wyślij obraz po HTTP:
+       * zakoduj stronę PNG → base64,
+       * POST na {paddleocr_vl_url}/chat/completions z ciałem:
+         {
+           "model": <paddleocr_vl_model>,
+           "messages": [{"role":"user","content":[
+             {"type":"image_url","image_url":{"url":"data:image/png;base64,<B64>"}},
+             {"type":"text","text": <paddleocr_vl_prompt>}]}],
+           "temperature": 0.0
+         }
+       * timeout = paddleocr_vl_timeout,
+       * tekst strony = resp["choices"][0]["message"]["content"].
+   - Składanie stron w jeden Markdown jak w pozostałych silnikach VLM (separator stron
+     zgodny z konwencją vlm_base).
+
+4. unload_model() = no-op z logiem:
+   - Silnik-usługa nie trzyma modelu w procesie pdf2md — VRAM jest po stronie serwera.
+     Nie zabijaj serwera z adaptera (cykl życia serwera jest zewnętrzny/user-managed w v1.0).
+     unload_model() zaloguj na DEBUG: „PaddleOCR-VL to serwer zewnętrzny; VRAM zwalnia się
+     przez zatrzymanie serwera (pkill -f 'vllm serve')".
+
+OBSŁUGA BŁĘDÓW w convert():
+   - ConnectionError/Timeout → ConversionResult z błędem:
+     „Serwer PaddleOCR-VL pod {paddleocr_vl_url} nie odpowiada — uruchom go
+      (SILNIKI_INSTALACJA.md 2.8)".
+   - HTTP != 200 → zaloguj logger.error ze statusem i obciętym body (~500 znaków) i zwróć
+     ConversionResult z błędem zawierającym tę końcówkę.
+
+TESTY (mock klienta HTTP, bez realnego serwera):
+   - is_available(): True gdy GET /models zwraca 200; False gdy klient rzuca ConnectionError.
+   - convert(): asercja na kształcie POST (url /chat/completions, model z configu, content
+     ma image_url+text, temperature 0.0); poprawne wyciągnięcie choices[0].message.content.
+   - is_available() nie woła importu paddle (np. brak paddle w środowisku testowym nie psuje testu).
+
+Pokaż diff.
+```
+
+> Uwaga (poza promptem): docelowo PaddleOCR-VL jako silnik-usługa korzysta najlepiej z trwałego
+> serwera (model ciepły, szybkie strony — dobre do wsadu/książek). Zarządzanie cyklem życia
+> serwera (start/stop, ~92% VRAM) jest w v1.0 ręczne; ewentualne automatyczne podnoszenie/
+> ubijanie serwera z poziomu pdf2md to osobny feature, nie ten prompt. Przepis startu serwera
+> i test `curl` — SILNIKI_INSTALACJA.md sek. 2.8.
+
+---
+
+## PROMPT D10 — olmOCR: izolowany silnik subprocess (DO WYKONANIA PÓŹNIEJ)
+
+> ⏳ **Status: odłożony.** Etap 12 jest już domknięty na MinerU/vlm + PaddleOCR-VL — olmOCR NIE
+> jest wymagany do jego ukończenia. To kandydat na **drugi/trzeci silnik VLM-OCR**, gdy zechcesz
+> rozszerzyć zestaw. Adapter `olmocr_engine.py` już istnieje (z pierwotnego Etapu 12) i importuje
+> się poprawnie (izolowany — nie ciągnie `olmocr` do procesu), ale **nie jest przetestowany
+> end-to-end** i wymaga (a) instalacji izolowanego środowiska, (b) weryfikacji wywołania
+> subprocess pod aktualne API olmOCR.
+>
+> Powód architektury: olmOCR-2-7B to ciężki stos vLLM, konfliktuje z głównym środowiskiem →
+> żyje w OSOBNYM venv i jest wołany przez subprocess (jak MinerU). `is_available()` sprawdza
+> obecność środowiska, NIE importuje `olmocr`. unload = zamknięcie procesu (VRAM zwalnia OS).
+
+```
+KROK 1 — ŚRODOWISKO (to nie jest kod; zrób wg SILNIKI_INSTALACJA.md sek. 2.7):
+- uv venv ~/.venvs/olmocr, instalacja olmocr + model (allenai/olmOCR-2-...-FP8; FP8 OK na sm_120).
+- ZWERYFIKUJ AKTUALNĄ komendę pipeline'u i nazwę modelu w dokumentacji olmOCR — to ruchomy cel,
+  nie polegaj na pamięci. Sprawdź, jak uruchomić olmOCR na pojedynczym PDF/obrazie i w jakim
+  formacie zwraca wynik (Markdown / JSON per strona).
+
+KROK 2 — ADAPTER engines/olmocr_engine.py (ExternalVLMEngine/izolowany; wzór: PROMPT D7 MinerU):
+Architektura bez zmian (subprocess + osobny venv). Upewnij się / popraw:
+
+1. is_available() = obecność środowiska, BEZ importu olmocr:
+   - config.toml: olmocr_python: str | None (ścieżka do pythona z ~/.venvs/olmocr).
+   - is_available(): (olmocr_python istnieje LUB komenda olmOCR w PATH przez shutil.which)
+     ORAZ has_gpu(). Nigdy nie rzuca wyjątku, nie importuje olmocr.
+
+2. convert() = subprocess do pipeline'u olmOCR (aktualna komenda z KROKU 1):
+   - Uruchom przez olmocr_python: [olmocr_python, "-m", "olmocr.pipeline", ...] (lub aktualna forma).
+   - env = {**os.environ, "VLLM_USE_FLASHINFER_SAMPLER": "0"} — bez tego flashinfer JIT-uje
+     sampler przez nvcc i pada na nowym GPU (ten sam fix co MinerU/vlm i PaddleOCR-VL).
+   - Wynik per strona złóż do Markdown wg konwencji vlm_base (work/md_pages/), sprzątnij PNG-i.
+
+3. OBSŁUGA BŁĘDÓW (jak D7):
+   - try/except subprocess.CalledProcessError; w except zaloguj logger.error z e.stderr/e.stdout
+     (obetnij ~2000 znaków), a do GUI zwróć błąd z końcówką stderr (~500 znaków).
+
+4. unload_model() = zamknięcie procesu (terminate + wait); VRAM zwalnia OS przy wyjściu.
+
+KROK 3 — VRAM (krytyczne na 24 GB):
+   - olmOCR-2-7B to ~7-8 GB. Jeśli inny silnik-usługa (np. serwer PaddleOCR-VL ~22 GB) chodzi,
+     olmOCR się NIE zmieści — najpierw zatrzymaj tamten serwer (pkill -f "vllm serve").
+   - Nigdy dwa modele VLM naraz; to ta sama zasada co sekwencja z Etapu 13.
+
+KROK 4 — TEST end-to-end:
+   - uv run pdf2md convert test_scan.pdf --engine olmocr -o /tmp/olmocr.md
+   - Porównaj jakość z PaddleOCR-VL i Markerem na tej samej stronie.
+
+Pokaż diff (KROK 2) i wynik testu (KROK 4).
+```
+
+> Uwaga: instalacja izolowanego środowiska olmOCR — SILNIKI_INSTALACJA.md sek. 2.7. Sekcja
+> „olmOCR" w (historycznym) PROMPCIE #12 jest referencją projektową tego adaptera.
 
 ---
 

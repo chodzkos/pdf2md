@@ -113,8 +113,12 @@ ENGINE_CATALOG: tuple[dict[str, object], ...] = (
         "llm": False,
         "gpu": True,
         "license": "Apache-2.0",
-        "hint": "pip install paddleocr paddlepaddle-gpu",
-        "description": "Lekki parser dokumentów VLM, wielojęzyczny.",
+        "hint": (
+            "Uruchom serwer: VLLM_USE_FLASHINFER_SAMPLER=0 vllm serve "
+            "PaddlePaddle/PaddleOCR-VL-1.6 --trust-remote-code --no-enable-prefix-caching "
+            "(zob. SILNIKI_INSTALACJA.md 2.8)"
+        ),
+        "description": "Serwer VLM (OpenAI-compatible): wielojęzyczny parser dokumentów.",
     },
     {
         "key": "surya",

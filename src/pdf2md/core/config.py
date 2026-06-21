@@ -57,6 +57,13 @@ docling_device = "auto"
 [mineru]
 mineru_backend = "pipeline"
 
+[paddleocr_vl]
+# Silnik-usługa: serwer OpenAI-compatible (vLLM). pdf2md jest tylko klientem HTTP.
+paddleocr_vl_url = "http://localhost:8000/v1"
+paddleocr_vl_model = "PaddlePaddle/PaddleOCR-VL-1.6"
+paddleocr_vl_prompt = "OCR:"
+paddleocr_vl_timeout = 120.0
+
 [api_keys]
 # Klucze API — bezpieczniej trzymać w .env, tu tylko fallback
 anthropic_api_key = ""
@@ -148,6 +155,12 @@ class Settings(BaseSettings):
     # MinerU
     mineru_backend: str = "pipeline"
 
+    # PaddleOCR-VL (silnik-usługa: serwer OpenAI-compatible)
+    paddleocr_vl_url: str = "http://localhost:8000/v1"
+    paddleocr_vl_model: str = "PaddlePaddle/PaddleOCR-VL-1.6"
+    paddleocr_vl_prompt: str = "OCR:"
+    paddleocr_vl_timeout: float = 120.0
+
     # LLM
     llm_enabled: bool = False
     llm_provider: str = "none"
@@ -232,6 +245,11 @@ def save_settings(settings: Settings) -> None:
         f'docling_device = "{settings.docling_device}"\n',
         "\n[mineru]\n",
         f'mineru_backend = "{settings.mineru_backend}"\n',
+        "\n[paddleocr_vl]\n",
+        f'paddleocr_vl_url = "{settings.paddleocr_vl_url}"\n',
+        f'paddleocr_vl_model = "{settings.paddleocr_vl_model}"\n',
+        f'paddleocr_vl_prompt = "{settings.paddleocr_vl_prompt}"\n',
+        f"paddleocr_vl_timeout = {settings.paddleocr_vl_timeout}\n",
         "\n[api_keys]\n",
         f'anthropic_api_key = "{settings.anthropic_api_key}"\n',
         f'openai_api_key = "{settings.openai_api_key}"\n',

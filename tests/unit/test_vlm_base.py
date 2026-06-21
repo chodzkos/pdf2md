@@ -146,8 +146,12 @@ def test_engine_metadata(
     assert engine.supports_llm is False
 
 
-def test_vlm_engines_not_available_without_gpu(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Bez GPU żaden silnik VLM nie jest dostępny (nawet z zainstalowanym pakietem)."""
+def test_gpu_gated_engines_not_available_without_gpu(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Bez GPU silniki bramkowane GPU (olmOCR, Surya) nie są dostępne.
+
+    PaddleOCR-VL jest bramkowane dostępnością serwera (nie GPU) — testowane osobno
+    w test_paddleocr_vl_engine.py.
+    """
     monkeypatch.setattr(VLMEngine, "has_gpu", staticmethod(lambda: False))
-    for engine_cls in (OlmOCREngine, PaddleOCRVLEngine, SuryaEngine):
+    for engine_cls in (OlmOCREngine, SuryaEngine):
         assert engine_cls().is_available() is False

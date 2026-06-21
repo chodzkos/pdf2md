@@ -87,8 +87,8 @@ def test_convert_raises_when_unavailable(monkeypatch: pytest.MonkeyPatch) -> Non
 
 def test_convert_batched_pipeline(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """convert() ładuje model, OCR-uje każdą stronę, zwalnia VRAM i usuwa PNG."""
+    pymupdf = pytest.importorskip("pymupdf")
     pdf = tmp_path / "scan.pdf"
-    import pymupdf
 
     doc = pymupdf.open()
     for _ in range(3):

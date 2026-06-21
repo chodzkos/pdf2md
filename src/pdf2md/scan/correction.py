@@ -71,8 +71,8 @@ def log_free_vram(label: str = "") -> float | None:
         if not torch.cuda.is_available():
             return None
         free, total = torch.cuda.mem_get_info()
-        free_gb = free / 1024**3
-        total_gb = total / 1024**3
+        free_gb = float(free) / 1024**3
+        total_gb = float(total) / 1024**3
         logger.info(f"VRAM ({label}): wolne {free_gb:.1f} / {total_gb:.1f} GB")
         if total and free / total < _LOW_VRAM_FRACTION:
             logger.warning(

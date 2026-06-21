@@ -218,15 +218,25 @@ default_language = "pol+eng"
 marker_device = "cpu"
 marker_workers = 1
 marker_max_pages = 1
+marker_torch_device = ""
+marker_recognition_batch_size = 0
+marker_detector_batch_size = 0
+marker_layout_batch_size = 0
+marker_table_rec_batch_size = 0
 
 [docling]
 docling_device = "auto"
+
+[mineru]
+mineru_backend = "pipeline"
 
 [api_keys]
 anthropic_api_key = ""
 openai_api_key = ""
 gemini_api_key = ""
 ```
+
+Pełna dokumentacja wszystkich pól konfiguracji — zob. [docs/CONFIGURATION.md](CONFIGURATION.md).
 
 Najczestsze zmienne srodowiskowe:
 

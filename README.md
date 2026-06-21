@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/chodzkos/pdf2md/actions/workflows/ci.yml/badge.svg)](https://github.com/chodzkos/pdf2md/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.11%2B-blue.svg)](pyproject.toml)
+[![Python](https://img.shields.io/badge/Python-3.11--3.12-blue.svg)](pyproject.toml)
 
 pdf2md konwertuje pliki PDF do Markdown przez kilka wymiennych silnikow: szybkie ekstraktory tekstu, OCR i parsery dokumentow z tabelami. Aplikacja ma CLI, GUI oraz opcjonalny post-processing LLM dla czyszczenia i strukturyzowania wyniku.
 
@@ -10,7 +10,7 @@ pdf2md konwertuje pliki PDF do Markdown przez kilka wymiennych silnikow: szybkie
 
 - Konwersja pojedynczych PDF-ow i batchy do Markdown.
 - GUI w PySide6 oraz CLI oparte o Click.
-- Silniki wykrywane opcjonalnie: PyMuPDF4LLM, Marker, Docling, MinerU i pdf-craft.
+- Silniki wykrywane opcjonalnie: PyMuPDF4LLM, Marker, Docling, MinerU.
 - OCR dla skanow, dokumentow wielokolumnowych, tabel i materialow naukowych.
 - Opcjonalne LLM: Ollama, Anthropic Claude, OpenAI i Google Gemini.
 - Eksport do Markdown i EPUB przez Pandoc.
@@ -25,7 +25,6 @@ pdf2md konwertuje pliki PDF do Markdown przez kilka wymiennych silnikow: szybkie
 | Marker | Skanowane i mieszane PDF-y, OCR, layout | Tak | `uv pip install marker-pdf` |
 | Docling | Tabele, dokumenty biznesowe, RAG | Tak | `uv pip install docling` |
 | MinerU | Artykuly naukowe, CJK, wielokolumnowe uklady | Tak | `uv tool install mineru --with mineru[all]` |
-| pdf-craft | Skanowane ksiazki, EPUB/Markdown | Tak | `uv pip install pdf-craft` |
 
 Pakiet `pdf2md` jest orkiestratorem MIT. Silniki, zwlaszcza copyleft albo bardzo ciezkie, instaluje u siebie uzytkownik; `pdf2md doctor` pokazuje, czego brakuje.
 
@@ -33,7 +32,7 @@ Pakiet `pdf2md` jest orkiestratorem MIT. Silniki, zwlaszcza copyleft albo bardzo
 
 ### Wymagania wstępne (systemowe)
 
-- Python 3.11 lub nowszy.
+- Python 3.11 lub 3.12 (3.13+ nie jest obsługiwany — ekosystem ML nie nadąża).
 - `uv` do instalacji i uruchamiania projektu.
 - Tesseract OCR dla workflow OCR.
 - Poppler, gdy silnik lub narzedzie pomocnicze wymaga narzedzi PDF z systemu.
@@ -68,7 +67,6 @@ uv sync
 uv pip install pymupdf4llm
 uv pip install marker-pdf
 uv pip install docling
-uv pip install pdf-craft
 ```
 
 LLM:
@@ -188,7 +186,9 @@ Najwazniejsze ustawienia:
 | `marker.marker_device` | `auto`, `cpu` albo `cuda` |
 | `marker.marker_workers` | Liczba workerow Markera |
 | `marker.marker_max_pages` | Limit stron dla Markera, `0` oznacza brak limitu |
+| `marker.marker_recognition_batch_size` | Rozmiar batcha GPU surya (0 = auto) |
 | `docling.docling_device` | `auto`, `cpu` albo `cuda`; `auto` uzywa smoke testu CUDA |
+| `mineru.mineru_backend` | `pipeline` (domyslny) albo `vlm` (max jakosc, wymaga vLLM) |
 | `llm.provider` | `none`, `ollama`, `claude`, `openai`, `gemini` |
 | `llm.mode` | `none`, `whole_document`, `by_page`, `by_chunk`, `by_heading` |
 
@@ -202,7 +202,7 @@ Domyslny lokalny model Ollama to `qwen2.5:14b`.
 
 ## 🤝 Współtworzenie
 
-Plan rozwoju jest w [docs/ROADMAP.md](docs/ROADMAP.md), a szczegoly uzycia w [docs/USAGE.md](docs/USAGE.md).
+Plan rozwoju jest w [docs/ROADMAP.md](docs/ROADMAP.md). Szczegóły użycia w [docs/USAGE.md](docs/USAGE.md), pełna dokumentacja konfiguracji w [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 
 Przed PR-em uruchom:
 

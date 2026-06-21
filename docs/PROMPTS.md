@@ -1911,6 +1911,75 @@ ruff + mypy czyste. Pokaż diff i KRÓTKIE podsumowanie znalezionego root-cause'
 
 ---
 
+## PROMPT D13 — Refaktor lazy-import: graceful degradation silników
+
+> Powód: łańcuch `engines/__init__.py` → `olmocr_engine` → `vlm_base` → `scan/preprocessing` →
+> `import cv2`/`import pymupdf` jest **eager** (na poziomie modułów). Brak JEDNEJ opcjonalnej
+> zależności wywala **całą aplikację** — nie wstaje nawet PyMuPDF4LLM, który z cv2 nie ma nic
+> wspólnego. Wpadliśmy na to dwa razy w jednej sesji (brak cv2 → crash, potem brak pymupdf →
+> crash). To łamie inwarianty projektu: „`is_available()` przez `importlib.metadata`, nie import",
+> „core/ bez frameworków", graceful degradation silników. Cel: import pakietu silników (i start
+> aplikacji) jest **tani** — żadnych ciężkich third-party na imporcie; ciężkie importy w
+> `convert()`/`load_model()`; brakujący silnik = „niedostępny" w `doctor`, błąd dopiero przy
+> realnym użyciu.
+
+```
+ZASADA: żaden moduł silnika ani wspólny helper (vlm_base, scan/preprocessing, engines/base) NIE
+importuje ciężkich third-party (cv2, pymupdf, torch, surya, marker, docling, pymupdf4llm, olmocr,
+...) na poziomie modułu. Ciężkie importy → WEWNĄTRZ metod, które ich używają. Stałe (np.
+DPI_OLD_BOOKS) i sygnatury zostają na górze.
+
+1. scan/preprocessing.py:
+   - przenieś `import cv2` i `import pymupdf` (oraz inne ciężkie) z góry modułu DO WNĘTRZA funkcji,
+     które ich używają (renderowanie stron, iter_page_batches, ...). numpy: jeśli tylko w funkcjach
+     — też lokalnie.
+   - stałe (DPI_OLD_BOOKS itp.) i czysto-stdlib zostają na górze.
+   - PO zmianie: `import pdf2md.scan.preprocessing` musi działać BEZ zainstalowanego cv2/pymupdf.
+
+2. engines/vlm_base.py:
+   - `from ...scan.preprocessing import DPI_OLD_BOOKS, iter_page_batches` jest OK PO kroku 1
+     (preprocessing nie ciągnie już cv2/pymupdf na imporcie). Upewnij się, że vlm_base nie ma innych
+     ciężkich importów na górze (torch jest już leniwy w has_gpu() — zostaw).
+   - definicje klas bazowych muszą być importowalne bez GPU/torch/cv2.
+
+3. Każdy moduł silnika (engines/*_engine.py — Faza 1 i 2):
+   - ZERO ciężkich importów na górze (surya, marker, docling, pymupdf4llm/pymupdf, olmocr, torch).
+     Przenieś je do convert()/load_model().
+   - Definicja klasy + is_available() NIE importują biblioteki silnika.
+
+4. is_available() wszędzie — przez importlib.metadata, NIE import:
+   - in-process: importlib.metadata.version("<dist>") w try/except PackageNotFoundError → False
+     (+ has_gpu() gdzie wymagane). Nigdy `import marker`/`import surya`/...
+   - izolowane/usługa: jak dotąd (ping serwera / shutil.which / ścieżka venv) — też bez importu.
+   - Zweryfikuj nazwy DYSTRYBUCJI (np. "marker-pdf", "surya-ocr", "pymupdf4llm", "docling").
+
+5. engines/base.py i core/: bez ciężkich importów na górze (inwariant „core/ bez frameworków").
+
+6. Zachowanie konwersji BEZ zmian: gdy zależność JEST — convert() działa identycznie (import po
+   prostu dzieje się w metodzie). Gdy zależności BRAK i ktoś użyje silnika → czytelny błąd w
+   convert() („silnik X wymaga <pakiet>; zob. SILNIKI_INSTALACJA.md"), NIE crash na starcie.
+
+TESTY:
+   - regresja „brak ciężkich importów na starcie": w IZOLOWANYM subprocess wykonaj
+     `import pdf2md.engines` i sprawdź, że w sys.modules NIE ma {'cv2','pymupdf','fitz','surya',
+     'marker','docling'} (subprocess, bo inne testy mogły je zaimportować). To łapie ponowne
+     dodanie top-level importu w przyszłości.
+   - is_available(): monkeypatch importlib.metadata.version → PackageNotFoundError ⇒ is_available()
+     zwraca False BEZ importu biblioteki i bez wyjątku.
+   - start aplikacji nie crashuje przy „brakującej" zależności (doctor/list-engines przechodzi).
+   - istniejące 203 testy nadal zielone.
+
+ruff + mypy czyste. Pokaż diff i potwierdź wynikiem testu regresyjnego (sys.modules po imporcie).
+```
+
+> Komplementarna decyzja (POZA tym promptem): rozważ przeniesienie `pymupdf4llm`/`pymupdf` do
+> GŁÓWNYCH zależności (nie tylko `engines-core`), żeby minimalna instalacja zawsze miała ≥1
+> działający silnik bazowy. To kwestia grupowania zależności, niezależna od mechaniki lazy-import —
+> ale ładnie się uzupełniają: lazy-import sprawia, że brak silnika nie wywala startu, a pymupdf4llm
+> w bazie gwarantuje, że zawsze jest czym konwertować.
+
+---
+
 ## Wskazówki ogólne
 
 ### Dwie zasady do DOPISANIA na końcu każdego prompta etapowego

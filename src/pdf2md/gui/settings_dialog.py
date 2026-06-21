@@ -16,7 +16,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QListWidget,
     QMessageBox,
     QPushButton,
     QTabWidget,
@@ -128,8 +127,12 @@ class SettingsDialog(QDialog):
         url_row.addWidget(detect)
         layout.addLayout(url_row)
 
-        self._ollama_models = QListWidget()
-        layout.addWidget(self._ollama_models)
+        model_row = QHBoxLayout()
+        model_row.addWidget(QLabel("Domyślny model:"))
+        self._ollama_model = QComboBox()
+        self._ollama_model.setEditable(True)  # pozwól zachować model spoza listy /api/tags
+        model_row.addWidget(self._ollama_model)
+        layout.addLayout(model_row)
         return tab
 
     def _password_edit(self) -> QLineEdit:
@@ -154,6 +157,8 @@ class SettingsDialog(QDialog):
         self._default_output_dir.setText(self._settings.default_output_dir)
         self._default_language.setText(self._settings.default_language)
         self._ollama_url.setText(self._settings.ollama_url)
+        self._populate_ollama_models(self._fetch_ollama_models())
+        self._select_ollama_model(self._settings.ollama_model)
         self._set_combo_value(self._docling_device, self._settings.docling_device)
 
         target = self._settings.default_engine.lower()
@@ -175,6 +180,8 @@ class SettingsDialog(QDialog):
                 "default_language": self._default_language.text().strip() or "pol+eng",
                 "docling_device": str(self._docling_device.currentData()),
                 "ollama_url": self._ollama_url.text().strip() or "http://localhost:11434",
+                "ollama_model": self._ollama_model.currentText().strip()
+                or self._settings.ollama_model,
             }
         )
         return Settings(**data)
@@ -224,20 +231,41 @@ class SettingsDialog(QDialog):
 
         QMessageBox.information(self, "Test klucza", "Klucz jest wpisany, a pakiet SDK dostępny.")
 
-    def _detect_ollama_models(self) -> None:
+    def _fetch_ollama_models(self) -> list[str]:
+        """Pobiera listę modeli z /api/tags. Po cichu zwraca [] przy błędzie (do _load_settings)."""
         url = (self._ollama_url.text().strip() or "http://localhost:11434").rstrip("/")
-        self._ollama_models.clear()
         try:
             with urllib.request.urlopen(f"{url}/api/tags", timeout=3) as response:
                 data = json.loads(response.read())
-        except Exception as exc:
-            QMessageBox.warning(self, "Ollama", f"Nie udało się połączyć z Ollamą:\n{exc}")
-            return
+        except Exception:
+            return []
+        return [str(model.get("name", "")) for model in data.get("models", []) if model.get("name")]
 
-        models = [
-            str(model.get("name", "")) for model in data.get("models", []) if model.get("name")
-        ]
-        if not models:
-            self._ollama_models.addItem("(brak modeli)")
+    def _populate_ollama_models(self, models: list[str]) -> None:
+        """Wypełnia dropdown modelami, zachowując bieżąco wybrany model."""
+        current = self._ollama_model.currentText().strip()
+        self._ollama_model.clear()
+        self._ollama_model.addItems(models)
+        if current:
+            self._select_ollama_model(current)
+
+    def _select_ollama_model(self, model: str) -> None:
+        """Preselekcjonuje model; dodaje go do listy, jeśli go nie ma (combo jest editable)."""
+        if not model:
             return
-        self._ollama_models.addItems(models)
+        index = self._ollama_model.findText(model)
+        if index < 0:
+            self._ollama_model.addItem(model)
+            index = self._ollama_model.findText(model)
+        self._ollama_model.setCurrentIndex(index)
+
+    def _detect_ollama_models(self) -> None:
+        models = self._fetch_ollama_models()
+        if not models:
+            QMessageBox.warning(
+                self,
+                "Ollama",
+                "Nie udało się pobrać modeli z Ollamy. Sprawdź URL i czy serwer działa.",
+            )
+            return
+        self._populate_ollama_models(models)

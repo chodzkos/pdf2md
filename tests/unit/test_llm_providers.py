@@ -174,6 +174,8 @@ class TestOllamaProvider:
         assert out == "skorygowany"
         data = captured["data"]
         assert str(captured["url"]).endswith("/api/chat")
+        # model pochodzi z configu (lazy read), nie z konstruktora providera
+        assert data["model"] == "qwen3:14b"  # type: ignore[index]
         assert data["think"] is False  # type: ignore[index]
         assert data["options"]["temperature"] == 0.0  # type: ignore[index]
         assert data["messages"] == [  # type: ignore[index]

@@ -10,6 +10,22 @@ from PySide6.QtCore import QThread, Signal
 from pdf2md.core.config import get_settings
 from pdf2md.core.converter import ConversionError, Converter
 from pdf2md.core.registry import engine_registry, llm_registry
+from pdf2md.engines.base import ConversionEngine
+from pdf2md.llm.base import LLMProvider
+
+
+def _model_field_for_provider(provider_name: str) -> str | None:
+    """Mapuje nazwę dostawcy na pole modelu w Settings (dla override per-uruchomienie)."""
+    name = provider_name.lower()
+    if "ollama" in name:
+        return "ollama_model"
+    if "claude" in name or "anthropic" in name:
+        return "anthropic_model"
+    if "openai" in name or "gpt" in name:
+        return "openai_model"
+    if "gemini" in name or "google" in name:
+        return "gemini_model"
+    return None
 
 
 class ConversionWorker(QThread):
@@ -56,6 +72,31 @@ class ConversionWorker(QThread):
         if self._llm_name not in ("none", ""):
             llm = llm_registry.get_by_name(self._llm_name)
 
+        # Override modelu per-uruchomienie: ma pierwszeństwo nad config.<provider>_model,
+        # ale NIE jest utrwalany (nie kasuje domyślnego ustawionego w GUI). Provider czyta
+        # model leniwie z get_settings(), więc nadpisujemy singleton na czas przebiegu.
+        settings = get_settings()
+        override_field = (
+            _model_field_for_provider(self._llm_name)
+            if (llm is not None and self._llm_model)
+            else None
+        )
+        original_model = getattr(settings, override_field) if override_field else None
+        if override_field:
+            setattr(settings, override_field, self._llm_model)
+
+        try:
+            self._convert_all(converter, engine, llm)
+        finally:
+            if override_field:
+                setattr(settings, override_field, original_model)
+
+    def _convert_all(
+        self,
+        converter: Converter,
+        engine: ConversionEngine,
+        llm: LLMProvider | None,
+    ) -> None:
         total_start = time.monotonic()
         success = 0
         errors = 0

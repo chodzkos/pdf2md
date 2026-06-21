@@ -309,3 +309,29 @@ def test_select_llm_errors_for_unavailable_provider(
 
     with pytest.raises(click.ClickException, match="Dostawca LLM nie jest gotowy"):
         cli_main._select_llm("openai", None, Settings())
+
+
+def test_select_llm_override_sets_run_model_without_persisting(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """--llm-model nadpisuje model TYLKO dla tego uruchomienia (nie utrwala configu)."""
+    from pdf2md.cli import main as cli_main
+    from pdf2md.core.config import Settings
+
+    provider = SimpleNamespace(
+        name="Ollama (lokalny)",
+        requires_api_key=False,
+        default_model="qwen2.5:14b",
+        description="",
+        is_available=lambda: True,
+    )
+    monkeypatch.setattr(cli_main, "_find_provider", lambda name: provider)
+    saved: list[object] = []
+    monkeypatch.setattr(cli_main, "save_settings", lambda s: saved.append(s), raising=False)
+
+    settings = Settings(ollama_model="domyslny-z-gui")
+    result = cli_main._select_llm("ollama", "override-na-run", settings)
+
+    assert result is provider
+    assert settings.ollama_model == "override-na-run"  # override wygrywa dla tego uruchomienia
+    assert saved == []  # nic nie utrwalono na stałe

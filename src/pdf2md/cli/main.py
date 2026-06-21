@@ -92,6 +92,42 @@ ENGINE_CATALOG: tuple[dict[str, object], ...] = (
         "hint": "uv pip install pdf-craft",
         "description": "Skanowane książki, Markdown i natywny EPUB.",
     },
+    {
+        "key": "olmocr",
+        "name": "olmOCR",
+        "package": "olmocr",
+        "scope": "Opc.",
+        "ocr": True,
+        "llm": False,
+        "gpu": True,
+        "license": "Apache-2.0",
+        "hint": "pip install olmocr (osobne środowisko + CUDA)",
+        "description": "VLM 7B do skanów: czysty Markdown, równania, tabele.",
+    },
+    {
+        "key": "paddleocr-vl",
+        "name": "PaddleOCR-VL",
+        "package": "paddleocr",
+        "scope": "Opc.",
+        "ocr": True,
+        "llm": False,
+        "gpu": True,
+        "license": "Apache-2.0",
+        "hint": "pip install paddleocr paddlepaddle-gpu",
+        "description": "Lekki parser dokumentów VLM, wielojęzyczny.",
+    },
+    {
+        "key": "surya",
+        "name": "Surya",
+        "package": "surya-ocr",
+        "scope": "Opc.",
+        "ocr": True,
+        "llm": False,
+        "gpu": True,
+        "license": "GPL/komercyjna",
+        "hint": "uv pip install surya-ocr",
+        "description": "Layout + OCR + reading order, kontrola/fallback.",
+    },
 )
 
 
@@ -285,6 +321,7 @@ def _print_engine_table() -> None:
     table.add_column("Status")
     table.add_column("Core/Opc.")
     table.add_column("OCR")
+    table.add_column("GPU")
     table.add_column("LLM")
     table.add_column("Licencja")
     table.add_column("Opis")
@@ -300,6 +337,7 @@ def _print_engine_table() -> None:
             status,
             str(item["scope"]),
             "tak" if item["ocr"] else "nie",
+            "wymagane" if item.get("gpu") else "nie",
             "tak" if item["llm"] else "nie",
             str(item["license"]),
             description,

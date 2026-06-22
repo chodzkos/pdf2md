@@ -87,29 +87,31 @@ Wersje testowe: docling 2.100.0, marker-pdf 1.10.2, surya-ocr 0.17.1. Zgodności
 | Silnik | Środowisko | Wymóg `transformers` | Wymogi runtime | Status v1.0 |
 |---|---|---|---|---|
 | **PyMuPDF4LLM** | wspólne | brak (nie używa) | brak | ✅ podstawowy, zawsze działa |
-| **Marker** (surya) | wspólne | **≥4.48** (symbol `ALL_ATTENTION_FUNCTIONS`) | Tesseract do skanów | ✅ |
+| **Marker** (surya 0.17.x) | wspólne | **≥4.56.1** (wymusza `surya-ocr 0.17.1`; sam Marker ≥4.48 przez `ALL_ATTENTION_FUNCTIONS`) | Tesseract do skanów | ✅ (marker-pdf **przypięty `>=1.10,<2`**) |
 | **Docling** | wspólne | **≥4.48** (zgodny z Markerem po aktualizacji Doclinga) | — | ✅ |
 | **MinerU `pipeline`** | izolowane (`uv tool`) | n/d (osobne env) | omija vLLM/flashinfer; działa na GPU przez torch | ✅ pewny domyślny |
 | **MinerU `vlm`** | izolowane (`uv tool`) | n/d (osobne env) | `build-essential` (gcc dla Tritona) + `VLLM_USE_FLASHINFER_SAMPLER=0` na nowym GPU | ✅ max jakość skanów |
 | **pdf-craft** (DeepSeek-OCR) | wspólne | **<4.48** (symbol `LlamaFlashAttention2`, usunięty w 4.48) | — | ❌ **WYKLUCZONY** |
 
 **Kluczowe wnioski:**
-- **Marker i Docling są pogodzone** na `transformers>=4.48,<5`. Pierwotnie Docling 2.100.0 trzymał transformers na 4.47.1 (za stary dla surya); aktualizacja Doclinga zdejmuje ten cap. **Pin przyjęty:** `transformers>=4.48,<5` w extra `engines-core` w pyproject, żeby `uv sync` odtwarzał zgodną wersję na każdej maszynie:
+- **Marker, Docling i surya 0.17.x pogodzone** na `transformers>=4.56,<5`. Realny dolny próg podnosi **`surya-ocr 0.17.1` (wymaga `transformers>=4.56.1`)**, którą ciągnie marker-pdf 1.10.x; Docling 2.97 współistnieje. **Krytyczne: `marker-pdf` MUSI być przypięty do `>=1.10,<2`** — bez pinu resolver po cichu cofa go do **0.3.10** (stare API, pin `surya 0.6.x`), co objawia się `ModuleNotFoundError: No module named 'marker.config'` przy konwersji. **Pin przyjęty** w extra `engines-core`:
 
 ```toml
 [project.optional-dependencies]
+marker = ["marker-pdf>=1.10,<2"]
 engines-core = [
-    "pymupdf4llm",
-    "marker-pdf",
-    "docling",
-    "transformers>=4.48,<5",   # wspólny mianownik dla Marker(surya) i Docling; <5 bo 5.x łamie API
+    "pymupdf4llm>=0.0.17",
+    "marker-pdf>=1.10,<2",     # PIN OBOWIĄZKOWY — bez niego resolver bierze 0.3.10 (inne API)
+    "docling>=2.0",
 ]
+# opencv NIE pinujemy — surya 0.17.x wymaga DOKŁADNIE opencv-python-headless==4.11.0.86 i sama je dostarcza
 ```
-> Górne ograniczenie `<5` jest świadome: linia `transformers 5.x` reorganizuje moduły (m.in. przeniesienie `ALL_ATTENTION_FUNCTIONS`) i potrafi zepsuć surya/Docling. Zdejmij je dopiero, gdy obie biblioteki ogłoszą wsparcie 5.x.
+> Górne ograniczenie `<5` jest świadome: linia `transformers 5.x` reorganizuje moduły (m.in. przeniesienie `ALL_ATTENTION_FUNCTIONS`) i potrafi zepsuć surya/Docling. Zdejmij je dopiero, gdy biblioteki ogłoszą wsparcie 5.x. Nie dodawaj własnego pinu `opencv-python-headless` — koliduje z dokładnym `==4.11.0.86` od surya 0.17.x.
 
 
-- **pdf-craft wzajemnie wyklucza się z Markerem.** pdf-craft (przez DeepSeek-OCR) wymaga `transformers<4.48` (`LlamaFlashAttention2`), a Marker `≥4.48` (`ALL_ATTENTION_FUNCTIONS`) — nie istnieje wspólna wersja. pdf-craft jest też redundantny (skany obsługują Marker i MinerU), więc **odpada z domyślnego zestawu**. Adapter może pozostać w kodzie jako opcja „do osobnego środowiska", ale nie jest instalowany ani zalecany w v1.0.
-  - **Gdyby pdf-craft był jednak potrzebny:** da się go zizolować jak MinerU (subprocess + własne środowisko z `transformers<4.48`), ale trudniej — pdf-craft to biblioteka bez CLI, więc trzeba dorobić cienki wrapper (`uv run --with pdf-craft --with "transformers<4.48" python runner.py ...` albo mały standalone tool przez `uv tool install`). Izolacja realnie znosi konflikt (osobny transformers per-środowisko). **Forka NIE rób** — feralny import siedzi w zdalnym kodzie modelu DeepSeek-OCR (`modeling_deepseekv2.py`, `trust_remote_code`), nie w pdf-craft; łatanie go wymaga przypięcia rewizji modelu i walki z re-downloadami. **Najpierw porównaj jakość pdf-craft vs MinerU/vlm na realnym skanie** — izoluj tylko, jeśli pdf-craft wyraźnie wygrywa.
+- **pdf-craft wzajemnie wyklucza się z Markerem — USUNIĘTY z projektu.** pdf-craft (przez DeepSeek-OCR → `doc-page-extractor`) wymaga `transformers<4.48` (`LlamaFlashAttention2`), a Marker 1.10.x ciągnie surya 0.17.1 z `transformers>=4.56.1` — przepaść jeszcze większa niż samo `≥4.48`. Nie istnieje wspólna wersja. pdf-craft jest też redundantny (skany obsługują Marker i MinerU). **Wyrzucony z pyproject całkowicie.**
+  - **Pułapka, która nas kosztowała kilka rund:** pdf-craft był zadeklarowany w **dwóch** extra naraz — w samodzielnej grupie `"pdf-craft"` **oraz** w `engines-optional = ["pdf-craft>=0.1"]`. uv rozwiązuje **wszystkie** extra do jednego spójnego locka, więc nawet niezainstalowany pdf-craft blokował resolucję marker-pdf 1.10.x. Usunięcie go z jednej grupy nie wystarczało — trzeba było wyczyścić **obie**. Wniosek: porzucając opcjonalny silnik, usuń jego deklarację ze **wszystkich** extra (i z `engines/__init__.py`), nie tylko z jednej.
+  - **Gdyby pdf-craft był jednak potrzebny:** da się go zizolować jak MinerU (subprocess + własne środowisko z `transformers<4.48`), ale trudniej — pdf-craft to biblioteka bez CLI, więc trzeba dorobić cienki wrapper. **Forka NIE rób** — feralny import siedzi w zdalnym kodzie modelu DeepSeek-OCR (`modeling_deepseekv2.py`, `trust_remote_code`), nie w pdf-craft. **Najpierw porównaj jakość pdf-craft vs MinerU/vlm na realnym skanie** — izoluj tylko, jeśli pdf-craft wyraźnie wygrywa.
 - **MinerU/vlm na premierowym GPU** (np. Blackwell sm_120): flashinfer nie ma gotowego cubina i JIT-kompiluje sampler przez nvcc; bez CUDA Toolkitu pada. Fix to `VLLM_USE_FLASHINFER_SAMPLER=0` (natywny sampler PyTorch) — **nie** cofanie flashinfera do 0.3.0 (na nowej architekturze JIT i tak wymuszony). Adapter ustawia tę zmienną sam dla backendu vlm (zob. PROMPT D7).
 
 
@@ -121,7 +123,7 @@ Te silniki wchodzą do gry dopiero w Fazie 2 (zob. ROADMAP, etapy 11–15). Są 
 |---|---|---|---|
 | **olmOCR** (olmOCR-2-7B) | VLM 7B | Czysty Markdown, równania, tabele, kolejność czytania | ✅ wymagany |
 | **PaddleOCR-VL** | VLM lekki (0.9B) | Wydajny parser dokumentów, wielojęzyczny | ✅ **potwierdzony na Blackwellu** (zob. niżej) |
-| **Surya** | OCR + layout | Layout, reading order, fallback kontrolny | ✅ zalecany |
+| **Surya** | OCR + layout | Layout, reading order, detekcja + OCR per-strona | ✅ **działa in-process** (surya 0.17.x, predyktory — patrz niżej) |
 
 > **PaddleOCR-VL — zweryfikowany na RTX 5090 (Blackwell sm_120), czerwiec 2026.** Działa jako
 > **trwały serwer HTTP** (OpenAI-compatible), nie podproces — startuje raz, model siedzi ciepły,
@@ -129,7 +131,9 @@ Te silniki wchodzą do gry dopiero w Fazie 2 (zob. ROADMAP, etapy 11–15). Są 
 > konwersji prostszy operacyjnie jest MinerU (podproces, bez serwera do pilnowania).
 > - **Środowisko:** osobny venv `~/.venvs/paddleocr`, izolowany od projektu (ma `transformers 5.x`
 >   z nightly — nie wolno mieszać z `engines-core`, które jest `<5`). Adapter `paddleocr_vl_engine.py`
->   to tylko klient HTTP na `http://localhost:8000/v1`.
+>   to tylko klient HTTP na `http://localhost:8000/v1`. **`is_available()` pinguje serwer**
+>   (`GET {paddleocr_vl_url}/models`), a NIE importuje `paddle` — bo dostępność silnika-usługi to
+>   osiągalność serwera, nie obecność pakietu (poprawka: PROMPT D9).
 > - **Przepis instalacji (Blackwell):** świeży venv → `uv pip install -U vllm --pre
 >   --torch-backend=auto --extra-index-url https://wheels.vllm.ai/nightly` (NIE wymuszać ręcznie
 >   `cu129` + `unsafe-best-match` — daje rozjazd cu12/cu13 i `libcudart.so.13`). Start:
@@ -142,6 +146,27 @@ Te silniki wchodzą do gry dopiero w Fazie 2 (zob. ROADMAP, etapy 11–15). Są 
 >   wierszy (sklejone słowa, pojedyncze literówki) — do dobicia modelem korekty w Etapie 13.
 > - **VRAM:** serwer bierze domyślnie ~92% (`--gpu-memory-utilization=0.92`, ~22 GB z 24). Obok nie
 >   zmieści się model korekty — stąd sekwencja „zabij serwer → załaduj qwen3" w Etapie 13.
+
+> **Surya — DZIAŁA in-process (czerwiec 2026, potwierdzone konwersją).** marker-pdf **1.10.x**
+> pinuje `surya-ocr 0.17.x` — nowe, **predyktorowe API** (`DetectionPredictor`, `FoundationPredictor`,
+> `RecognitionPredictor`), dokładnie to, pod które pisany jest adapter `surya_engine.py`. Surya
+> ładuje predyktory i konwertuje skan w głównym venv (torch, transformers ≥4.56.1 z surya 0.17.1).
+> NIE jest redundantna z Markerem: choć Marker używa surya wewnętrznie, to inna ścieżka wyniku —
+> Surya jako samodzielny silnik daje detekcję + OCR per-strona bez warstwy struktury Markera.
+>
+> > **KOREKTA wcześniejszego, błędnego wniosku.** Przez chwilę dokumentacja mówiła „Surya
+> > zablokowana na 0.6.x, redundantna, odłożona". To była **pomyłka diagnostyczna** spowodowana
+> > **cichym downgrade'em marker-pdf do 0.3.10**: nieprzypięty `marker-pdf>=0.2` pozwalał resolverowi
+> > cofnąć się do prastarej 0.3.10, która pinuje `surya-ocr 0.6.x` (funkcyjne API: `batch_text_detection`).
+> > Odczyt `marker.requires()` na 0.3.10 pokazywał `surya-ocr<0.7.0` — i stąd fałszywy wniosek. Po
+> > przypięciu `marker-pdf>=1.10,<2` wraca surya 0.17.x i adapter działa. **Reguła:** marker-pdf MUSI
+> > być przypięty do 1.x (bez pinu → 0.3.10 → `ModuleNotFoundError: No module named 'marker.config'`,
+> > bo 0.3.10 ma zupełnie inne API).
+>
+> Nowoczesna **Surya 2.0** (v0.20+, pojedynczy VLM ~650M serwowany przez vllm/llama.cpp) to **inny
+> byt** niż predyktorowa 0.17.x — silnik-usługa jak PaddleOCR-VL, i jako taki dubluje
+> PaddleOCR-VL/MinerU na NVIDIA. Tylko **ona** zostaje w FEATURES (F19) jako ewentualne przyszłe
+> wdrożenie izolowanego silnika — 0.17.x in-process już pokrywa potrzebę „Surya działa".
 
 ### Dostawcy LLM
 
@@ -194,8 +219,7 @@ pdf2md/
 │   │   ├── pymupdf4llm_engine.py   # Adapter PyMuPDF4LLM
 │   │   ├── marker_engine.py        # Adapter Marker
 │   │   ├── mineru_engine.py        # Adapter MinerU
-│   │   ├── docling_engine.py       # Adapter Docling
-│   │   └── pdf_craft_engine.py     # Adapter pdf-craft
+│   │   └── docling_engine.py       # Adapter Docling
 │   │
 │   ├── llm/                        # Dostawcy LLM do post-processingu
 │   │   ├── __init__.py

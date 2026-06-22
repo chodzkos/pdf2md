@@ -605,18 +605,22 @@ Cztery silniki OCR oparte na modelach wizyjno-językowych, jako adaptery `Conver
 - [ ] Po teście sprawdzasz `nvidia-smi` — czy `unload_model()` (kill procesu) faktycznie zwolnił VRAM
 - [ ] Pull Request → scal
 
-### Definicja ukończenia
-✅ Surya konwertuje skan strony do Markdown na GPU (in-process)  
-✅ `unload_model()` realnie zwalnia VRAM — dla izolowanych przez zamknięcie procesu (widoczne w nvidia-smi)  
-✅ `is_available()` zwraca False (bez błędu) gdy brak GPU lub silnika/środowiska  
-✅ Co najmniej jeden silnik VLM działa end-to-end (minimum Surya; olmOCR/PaddleOCR-VL jeśli środowiska gotowe)  
+### Definicja ukończenia — ✅ DOMKNIĘTE (czerwiec 2026)
+✅ Co najmniej jeden silnik VLM-OCR działa end-to-end: **MinerU/vlm** (zarejestrowany, zielony w `doctor`) + **PaddleOCR-VL** (potwierdzony na RTX 5090 — serwer + OCR dobrej jakości na realnym skanie)  
+✅ `is_available()` zwraca False bez błędu, gdy silnik/serwer niedostępny — dla PaddleOCR-VL **pinguje serwer** pod `paddleocr_vl_url` (PROMPT D9), nie importuje `paddle`  
+✅ VRAM dla izolowanych silników zwalnia się przez zatrzymanie procesu/serwera (`pkill -f "vllm serve"`, widoczne w `nvidia-smi`)  
+✅ **Surya — DZIAŁA in-process.** marker-pdf 1.10.x pinuje `surya-ocr 0.17.x` (predyktory: `DetectionPredictor`/`FoundationPredictor`/`RecognitionPredictor`), więc adapter `surya_engine.py` w głównym venv działa — **potwierdzone konwersją realnego skanu** (czerwiec 2026). NIE jest redundantna z Markerem (różne ścieżki: Surya = detekcja + OCR per-strona; Marker = layout + OCR + struktura).  
 
-> **Minimum etapu spełnia Surya** (in-process, bez serwera) — to ona formalnie domyka etap.
-> **PaddleOCR-VL: POTWIERDZONY jako działający na RTX 5090/Blackwellu** (czerwiec 2026, przepis
-> i notka o jakości w PROJEKT.md → macierz silników). Działa jako trwały serwer HTTP; dobry do
-> wsadu/książek, ale operacyjnie cięższy (cykl życia serwera, ~92% VRAM, stos vLLM nightly) — więc
-> **domyślnym** zrób coś prostszego (MinerU/vlm lub Surya), a Paddle trzymaj jako izolowaną opcję.
-> olmOCR (izolowany) — wciąż do zrobienia. Kolejność: **Surya → (Paddle gotowy) → olmOCR**.
+> **KOREKTA (czerwiec 2026): Surya NIE jest odłożona — działa.** Wcześniejszy wniosek „Surya
+> zablokowana na 0.6.x i redundantna z Markerem" był **błędny** — wynikał z **cichego downgrade'u
+> marker-pdf do 0.3.10** (resolver cofał nieprzypiętego markera; 0.3.10 to stare API + pin
+> `surya-ocr 0.6.x`). Po przypięciu `marker-pdf>=1.10,<2` instaluje się `surya-ocr 0.17.x`
+> (predyktorowe API — dokładnie to, pod które pisany był adapter) i Surya konwertuje. **Wniosek
+> operacyjny:** marker-pdf MUSI być przypięty do 1.x — bez pinu resolver wybiera 0.3.10 (objaw:
+> `ModuleNotFoundError: No module named 'marker.config'`). Etap 12 domknięty na MinerU/vlm +
+> PaddleOCR-VL + **Surya**. PaddleOCR-VL: przepis pod Blackwella w PROJEKT.md; `is_available()`
+> pinguje serwer (PROMPT D9). Następny etap: **13 — korekta LLM per-strona + sekwencja VRAM**
+> (kill serwera VLM → załaduj qwen3 → koryguj).
 
 ---
 

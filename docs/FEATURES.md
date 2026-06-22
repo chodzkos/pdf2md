@@ -288,6 +288,23 @@ ENTRYPOINT ["pdf2md"]
 **Czas:** ~1 dzień  
 **Publikacja:** GitHub Container Registry (ghcr.io)
 
+### F19 — Surya 2.0 jako izolowany silnik VLM-OCR
+**Opis:** Surya 2.0 (`datalab-to/surya`, v0.20+) to przebudowa w pojedynczy VLM ~650M (OCR + layout
++ tabele), serwowany przez vllm (GPU) lub llama.cpp (CPU / Apple Silicon), SOTA w klasie <3B
+(~83% olmOCR-bench). Wpięcie jako **silnik-usługa** (klient HTTP, jak PaddleOCR-VL — `is_available()`
+pinguje serwer) w **izolowanym venv**. To **inny byt** niż predyktorowa `surya-ocr 0.17.x`, która
+**już działa in-process** w głównym venv (ciągnie ją marker-pdf 1.10.x — silnik `surya` jest
+gotowy i przetestowany). F19 dotyczy **wyłącznie** wariantu serwowanego VLM 2.0.
+
+**Dlaczego odłożone:** potrzebę „Surya działa" pokrywa już silnik in-process (0.17.x). Surya 2.0 jako
+usługa na NVIDIA dubluje PaddleOCR-VL/MinerU, które też działają. Realna przewaga 2.0 to tryb
+**llama.cpp (CPU / Apple Silicon)** — jedyny VLM-OCR bez karty NVIDIA — oraz ewentualnie lepsza
+jakość tabel. Wdrożyć, gdy pojawi się potrzeba (np. wsparcie nie-NVIDIA).
+
+**Trudność:** ⭐⭐⭐ (izolacja + serwowanie vllm/llama.cpp + adapter HTTP)  
+**Czas:** ~2-3 dni  
+**Zależność:** wzorzec adaptera-usługi z PaddleOCR-VL (PROMPT D9)
+
 ---
 
 ## Matryca priorytetów
@@ -312,6 +329,7 @@ ENTRYPOINT ["pdf2md"]
 | F16 | Telemetria | ⭐⭐⭐ | 3d | Niska | 🟢 Niski |
 | F17 | Auto-update | ⭐⭐⭐ | 2d | Średnia | 🟢 Niski |
 | F18 | Docker | ⭐⭐ | 1d | Wysoka | 🔴 Wysoki |
+| F19 | Surya 2.0 (izolowany VLM) | ⭐⭐⭐ | 2-3d | Średnia | 🟢 Niski |
 
 ---
 

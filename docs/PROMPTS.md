@@ -1980,6 +1980,64 @@ ruff + mypy czyste. Pokaż diff i potwierdź wynikiem testu regresyjnego (sys.mo
 
 ---
 
+## PROMPT D14 — Domknięcie stosu zależności + usunięcie silnika pdf-craft (commit fixu)
+
+> Powód: wojna zależności rozwiązana ręcznie w pyproject (przypięcie `marker-pdf>=1.10,<2`,
+> wyrzucenie pdf-craft z extra, zdjęcie pinu opencv). Skutek: **marker 1.10.x + surya 0.17.x
+> działają in-process**, oba silniki konwertują (potwierdzone). Ten prompt: (a) utrwala docelowy
+> stan pyproject, (b) usuwa SILNIK pdf-craft z kodu, (c) weryfikuje, (d) commituje całość jako jeden
+> spójny fix-PR. **NIE dotyka Etapu 13** (osobny, zatwierdzony commit). **Najpierw wgraj do repo
+> poprawione `PROJEKT.md`/`ROADMAP.md`/`FEATURES.md`** — wejdą do tego samego PR.
+
+```
+GAŁĄŹ: fix/engine-stack-marker-pin-drop-pdfcraft  (osobny branch; BRAK auto-push; czekaj na zgodę przed PR)
+
+1. pyproject.toml — UPEWNIJ SIĘ, że jest dokładnie tak (jeśli już jest — nie zmieniaj):
+   [project.optional-dependencies]
+   - marker = ["marker-pdf>=1.10,<2"]
+   - engines-core zawiera "marker-pdf>=1.10,<2" (NIE ">=0.2")
+   - ZERO pdf-craft: brak grupy  "pdf-craft" = []  i brak  engines-optional = ["pdf-craft>=0.1"]
+   - [project.dependencies] NIE zawiera opencv-python-headless (surya 0.17.x dostarcza
+     ==4.11.0.86 sama; własny pin koliduje z jej dokładną wersją)
+   - z [[tool.mypy.overrides]] usuń "pdf_craft.*" z listy modułów (kosmetyka)
+   Po zmianach: `uv lock && uv sync --extra engines-core`; potwierdź marker 1.10.x, surya 0.17.x,
+   transformers 4.56.x oraz `import marker.config.parser` OK.
+
+2. Usuń SILNIK pdf-craft z kodu (porzucony — `transformers<4.48` nie do pogodzenia z surya 0.17.1):
+   - skasuj  src/pdf2md/engines/pdf_craft_engine.py
+   - usuń import + rejestrację PdfCraftEngine w  src/pdf2md/engines/__init__.py
+   - usuń wpis/hint pdf-craft z komendy `doctor` i z `list-engines` (cli), jeśli są
+   - usuń/zaktualizuj testy odwołujące się do pdf-craft (np. test_registry, test_engines, test doctora)
+   - kontrola: `grep -rIn "pdf_craft\|pdf-craft\|PdfCraft" src tests` → ZERO trafień w kodzie
+   (Adapter NIE wraca. Gdyby kiedyś był potrzebny → izolacja jak MinerU, patrz PROJEKT macierz zgodności.)
+
+3. Weryfikacja:
+   - `uv run pytest`  → wszystkie zielone (testy po usunięciu pdf-craft zaktualizowane, nie wyłączone)
+   - ruff + mypy czyste
+   - `uv run pdf2md doctor`  → pdf-craft NIE pojawia się już na liście; marker/surya/docling/pymupdf4llm widoczne
+   - smoke (oba mają utworzyć .md):
+       uv run --extra engines-core pdf2md convert tests/fixtures/test_scan.pdf       --engine surya  -o /tmp/s.md
+       uv run --extra engines-core pdf2md convert tests/fixtures/test_text_1page.pdf --engine marker -o /tmp/m.md
+
+4. Commit (Conventional Commits) — JEDEN spójny PR:
+   - tytuł:  fix(deps): przypnij marker-pdf do 1.x, usuń pdf-craft, napraw resolucję silników
+   - obejmij:  pyproject.toml, uv.lock, skasowany pdf_craft_engine.py + zdjęta rejestracja/hint,
+               zaktualizowane testy, ORAZ wgrane poprawione docs (PROJEKT.md/ROADMAP.md/FEATURES.md)
+   - opis PR (krótko, root-cause): nieprzypięty marker → resolver cichcem cofał do 0.3.10 (stare API,
+     objaw `ModuleNotFoundError: No module named 'marker.config'`); pdf-craft wymaga `transformers<4.48`,
+     surya 0.17.1 `>=4.56.1` — nie do pogodzenia; pdf-craft siedział w DWÓCH extra, blokując cały lock.
+     Skutek: marker 1.10.x + surya 0.17.x in-process, Surya potwierdzona konwersją skanu.
+   - BRAK auto-push. Poczekaj na moją zgodę przed otwarciem PR.
+
+Rule #1: bez zmian publicznego interfejsu pozostałych silników (usunięcie pdf-craft jest celem, nie naruszeniem).
+```
+
+> Po tym PR stos `engines-core` jest spójny i utrwalony w `uv.lock` (marker 1.10.x + surya 0.17.x +
+> docling + pymupdf4llm + transformers 4.56.x). Etap 13 (D11) commituj osobno — przed albo po tym
+> PR, własny branch.
+
+---
+
 ## Wskazówki ogólne
 
 ### Dwie zasady do DOPISANIA na końcu każdego prompta etapowego

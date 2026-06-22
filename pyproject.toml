@@ -29,7 +29,6 @@ dependencies = [
     "rich>=13.7",
     "click>=8.1",
     "PySide6>=6.7",
-    "opencv-python-headless>=4.13.0.92",
 ]
 
 [project.optional-dependencies]
@@ -37,21 +36,15 @@ pymupdf = [
     "pymupdf4llm>=0.0.17",
 ]
 marker = [
-    "marker-pdf>=0.2",
+    "marker-pdf>=1.10,<2",
 ]
 docling = [
     "docling>=2.0",
 ]
-"pdf-craft" = [
-    "pdf-craft>=0.1",
-]
 engines-core = [
     "pymupdf4llm>=0.0.17",
-    "marker-pdf>=0.2",
+    "marker-pdf>=1.10,<2",
     "docling>=2.0",
-]
-engines-optional = [
-    "pdf-craft>=0.1",
 ]
 llm = [
     "anthropic>=0.29",

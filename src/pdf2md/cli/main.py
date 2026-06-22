@@ -551,6 +551,89 @@ def list_llm(ctx: click.Context) -> None:
     _print_llm_table(settings)
 
 
+@cli.command("list-profiles")
+def list_profiles_cmd() -> None:
+    """Wyświetla dostępne profile skanowania (wbudowane + użytkownika)."""
+    from pdf2md.scan.profiles import list_profiles, load_profile
+
+    table = Table(title="Profile skanowania")
+    table.add_column("Profil")
+    table.add_column("DPI")
+    table.add_column("OCR")
+    table.add_column("LLM cleanup")
+    table.add_column("EPUB")
+    for name in list_profiles():
+        try:
+            profile = load_profile(name)
+            ocr = profile.ocr.engine or profile.ocr.primary or "—"
+            llm = profile.llm_cleanup.model if profile.llm_cleanup.enabled else "—"
+            table.add_row(
+                name,
+                str(profile.dpi),
+                str(ocr),
+                str(llm),
+                "tak" if profile.output.epub else "nie",
+            )
+        except Exception as exc:
+            # pokaż błędny profil w tabeli zamiast wywalać całą listę
+            table.add_row(name, "—", "—", "—", f"błąd: {exc}")
+    console.print(table)
+
+
+@cli.command()
+@click.argument("pdf")
+@click.option("--profile", "-p", default="balanced", show_default=True, help="Profil skanowania.")
+@click.option(
+    "--output", "-o", "output_dir", default="output", show_default=True, help="Katalog wyjściowy."
+)
+@click.option("--keep-work", is_flag=True, help="Zachowaj katalog roboczy work/ (debug).")
+@click.option("--verbose", "-v", is_flag=True, help="Szczegółowy output.")
+def scan(pdf: str, profile: str, output_dir: str, keep_work: bool, verbose: bool) -> None:
+    """Składa skan książki do Markdown/EPUB wg profilu (preprocessing→OCR→korekta→eksport)."""
+    if verbose:
+        setup_logging(verbose=True)
+
+    from pdf2md.scan.profiles import ProfileError, load_profile
+
+    try:
+        prof = load_profile(profile)
+    except ProfileError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    pdf_path = Path(pdf)
+    if not pdf_path.exists():
+        raise click.ClickException(f"Plik nie istnieje: {pdf}")
+
+    engine = _find_engine("scan-pipeline")
+    if engine is None:
+        raise click.ClickException("Silnik Scan Pipeline nie jest zarejestrowany.")
+    if not engine.is_available():
+        raise click.ClickException(
+            "Silnik Scan Pipeline nie jest dostępny — wymaga GPU i silnika VLM-OCR "
+            "(zob. SILNIKI_INSTALACJA.md)."
+        )
+
+    start = time.monotonic()
+    result = engine.convert(
+        str(pdf_path),
+        output_dir=output_dir,
+        profile=prof.model_dump(),
+        keep_work=keep_work,
+    )
+    elapsed = time.monotonic() - start
+    console.print(
+        Panel(
+            f"Profil: {prof.name}\n"
+            f"Strony: {result.pages} · Rozdziały: {result.metadata.get('chapters')}\n"
+            f"Markdown: {result.metadata.get('book_md_path')}\n"
+            f"EPUB: {result.metadata.get('epub_path') or '—'}\n"
+            f"Raport: {result.metadata.get('report_path') or '—'}\n"
+            f"Czas: {elapsed:.1f}s",
+            title="Scan Pipeline",
+        )
+    )
+
+
 @cli.command()
 @click.pass_context
 def doctor(ctx: click.Context) -> None:

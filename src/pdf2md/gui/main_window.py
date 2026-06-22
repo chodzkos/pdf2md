@@ -32,6 +32,7 @@ from pdf2md.gui.widgets.engine_selector import EngineSelectorWidget
 from pdf2md.gui.widgets.file_list import FileListWidget
 from pdf2md.gui.widgets.llm_selector import LLMSelectorWidget
 from pdf2md.gui.widgets.log_panel import LogPanelWidget
+from pdf2md.gui.widgets.profile_selector import ProfileSelectorWidget
 from pdf2md.gui.workers import ConversionWorker
 from pdf2md.utils.open_path import open_in_file_manager
 
@@ -131,6 +132,14 @@ class MainWindow(QMainWindow):
         self._engine_selector.set_engine_name(get_settings().default_engine)
         root.addWidget(self._engine_selector)
 
+        # --- Profil skanowania (widoczny tylko dla silnika Scan Pipeline) ---
+        self._profile_selector = ProfileSelectorWidget()
+        self._profile_selector.setVisible(
+            self._is_scan_engine(self._engine_selector.get_engine_name())
+        )
+        self._engine_selector.engine_changed.connect(self._on_engine_changed)
+        root.addWidget(self._profile_selector)
+
         # --- Wybór LLM ---
         self._llm_selector = LLMSelectorWidget()
         root.addWidget(self._llm_selector)
@@ -198,6 +207,12 @@ class MainWindow(QMainWindow):
         if directory:
             self._output_edit.setText(directory)
 
+    def _is_scan_engine(self, engine_name: str) -> bool:
+        return "scan pipeline" in engine_name.lower()
+
+    def _on_engine_changed(self, engine_name: str) -> None:
+        self._profile_selector.setVisible(self._is_scan_engine(engine_name))
+
     def _open_settings(self) -> None:
         dialog = SettingsDialog(self)
         if dialog.exec():
@@ -227,6 +242,12 @@ class MainWindow(QMainWindow):
         output_dir = self._output_edit.text().strip()
         language = get_settings().default_language
 
+        # Scan Pipeline sam steruje korektą LLM przez profil — wyłącz generyczny post-processing
+        scan_profile = ""
+        if self._is_scan_engine(engine_name):
+            scan_profile = self._profile_selector.get_profile_name()
+            llm_name, llm_model = "none", ""
+
         if not output_dir and files:
             output_dir = str(Path(files[0]).parent)
 
@@ -247,6 +268,7 @@ class MainWindow(QMainWindow):
             llm_name=llm_name,
             llm_model=llm_model,
             language=language,
+            scan_profile=scan_profile,
         )
         self._worker.progress.connect(self._on_progress)
         self._worker.file_done.connect(self._on_file_done)

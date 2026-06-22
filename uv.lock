@@ -1753,6 +1753,7 @@ dependencies = [
     { name = "loguru" },
     { name = "pydantic-settings" },
     { name = "pyside6" },
+    { name = "pyyaml" },
     { name = "rich" },
 ]
 
@@ -1809,6 +1810,7 @@ requires-dist = [
     { name = "pymupdf4llm", marker = "extra == 'engines-core'", specifier = ">=0.0.17" },
     { name = "pymupdf4llm", marker = "extra == 'pymupdf'", specifier = ">=0.0.17" },
     { name = "pyside6", specifier = ">=6.7" },
+    { name = "pyyaml", specifier = ">=6.0" },
     { name = "rich", specifier = ">=13.7" },
 ]
 provides-extras = ["pymupdf", "marker", "docling", "engines-core", "llm", "scan"]

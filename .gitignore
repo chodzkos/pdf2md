@@ -46,9 +46,16 @@ work/
 
 # Artefakty ręcznych testów OCR (surowy output / wejście, nie fixture)
 tests/fixtures/test_scan.md
+test_scan.md
 # Stray PDF-y testowe w katalogu głównym repo (fixtures żyją w tests/fixtures/)
 /test_scan.pdf
 /test_text_1page.pdf
+# Wyjście pipeline'u skanowania uruchomionego w katalogu repo
+/book.md
+/book.epub
+/report.html
+/output/
+pdf2md_scanpipe_*/
 
 # Logi i pliki tymczasowe
 *.log

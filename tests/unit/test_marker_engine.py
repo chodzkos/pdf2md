@@ -254,6 +254,98 @@ def test_convert_falls_back_without_llm_when_service_unavailable(
     assert FakeConfigParser.instances == 2
 
 
+def _capture_marker_config(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Any,
+    *,
+    settings_max_pages: int,
+    convert_kwargs: dict[str, Any],
+) -> dict[str, Any]:
+    """Uruchamia convert() na atrapach i zwraca config przekazany do ConfigParser."""
+    pdf = tmp_path / "doc.pdf"
+    pdf.write_bytes(b"%PDF-1.7\n")
+    captured: dict[str, Any] = {}
+
+    class FakeConfigParser:
+        def __init__(self, config: dict[str, object]) -> None:
+            captured["config"] = config
+
+        def generate_config_dict(self) -> dict[str, object]:
+            return {}
+
+        def get_processors(self) -> list[object]:
+            return []
+
+        def get_renderer(self) -> str:
+            return "renderer"
+
+        def get_llm_service(self) -> None:
+            return None
+
+    class FakePdfConverter:
+        def __init__(self, **kwargs: object) -> None:
+            pass
+
+        def __call__(self, path: str) -> object:
+            return type("Rendered", (), {"metadata": {}})()
+
+    class FakeDoc:
+        def __len__(self) -> int:
+            return 3
+
+        def close(self) -> None:
+            return None
+
+    class FakePymupdf:
+        @staticmethod
+        def open(path: str) -> FakeDoc:
+            return FakeDoc()
+
+    engine = MarkerEngine()
+    monkeypatch.setattr(engine, "is_available", lambda: True)
+    monkeypatch.setattr(engine, "_configure_torch_device", lambda torch_device: None)
+    monkeypatch.setattr(engine, "_configure_worker_env", lambda workers: None)
+    monkeypatch.setattr(
+        "pdf2md.engines.marker_engine.get_settings",
+        lambda: SimpleNamespace(
+            marker_device="cpu",
+            marker_workers=1,
+            marker_max_pages=settings_max_pages,
+            marker_torch_device="",
+            marker_recognition_batch_size=0,
+            marker_detector_batch_size=0,
+            marker_layout_batch_size=0,
+            marker_table_rec_batch_size=0,
+        ),
+    )
+    monkeypatch.setattr(
+        engine,
+        "_load_marker_api",
+        lambda: (FakeConfigParser, FakePdfConverter, lambda: {}, lambda r: ("md", {}, {})),
+    )
+    monkeypatch.setattr(
+        "pdf2md.engines.marker_engine.importlib.import_module", lambda name: FakePymupdf
+    )
+    engine.convert(str(pdf), **convert_kwargs)
+    return captured["config"]
+
+
+def test_default_converts_whole_document_no_page_range(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+) -> None:
+    """Domyślnie (marker_max_pages=0) adapter NIE ustawia page_range → cały dokument."""
+    config = _capture_marker_config(monkeypatch, tmp_path, settings_max_pages=0, convert_kwargs={})
+    assert "page_range" not in config
+
+
+def test_explicit_max_pages_limits_page_range(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+) -> None:
+    """Jawny marker_max_pages>0 ogranicza zakres stron (page_range '0-(n-1)')."""
+    config = _capture_marker_config(monkeypatch, tmp_path, settings_max_pages=3, convert_kwargs={})
+    assert config["page_range"] == "0-2"
+
+
 def test_marker_helper_methods_parse_limits_and_metadata() -> None:
     engine = MarkerEngine()
 

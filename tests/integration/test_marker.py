@@ -54,3 +54,22 @@ def test_marker_converts_text_pdf() -> None:
     assert result.markdown
     assert len(result.markdown) > 20
     assert result.pages == 1
+
+
+@pytest.mark.skipif(not _has_package("marker-pdf"), reason="marker-pdf nie jest zainstalowany")
+def test_marker_converts_all_pages_of_multipage_pdf() -> None:
+    """Domyślnie Marker konwertuje WSZYSTKIE strony wielostronicowego PDF (nie tylko 1.)."""
+    fixture = Path("tests/fixtures/test_text_3pages.pdf")
+    if not fixture.exists():
+        pytest.skip("Brak tests/fixtures/test_text_3pages.pdf")
+
+    # Bez marker_max_pages/page_range → cały dokument (regresja: wcześniej kapowało do 1 strony)
+    result = MarkerEngine().convert(
+        str(fixture),
+        marker_device="cpu",
+        marker_workers=1,
+    )
+
+    assert result.markdown
+    assert result.pages == 3
+    assert len(result.markdown) > 200

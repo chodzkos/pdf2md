@@ -41,7 +41,8 @@ default_language = "pol+eng"
 [marker]
 marker_device = "cpu"
 marker_workers = 1
-marker_max_pages = 1
+# 0 = cały dokument (domyślnie); wartość dodatnia ogranicza liczbę stron (debug/test)
+marker_max_pages = 0
 # GPU batch tuning — 0 = auto (surya dobiera samodzielnie)
 # Dostrajaj empirycznie patrząc na `nvidia-smi -l 1`; podnoś aż VRAM/util sensownie rośnie.
 # Batche działają niezależnie od disable_multiprocessing (który dotyczy CPU-side, nie GPU).
@@ -144,7 +145,7 @@ class Settings(BaseSettings):
     default_language: str = "pol+eng"
     marker_device: str = "cpu"
     marker_workers: int = 1
-    marker_max_pages: int = 1
+    marker_max_pages: int = 0  # 0 = cały dokument; >0 ogranicza strony tylko na jawne żądanie
     marker_torch_device: str = ""  # "" = użyj marker_device / auto-detect
     marker_recognition_batch_size: int = 0  # 0 = auto (surya default)
     marker_detector_batch_size: int = 0

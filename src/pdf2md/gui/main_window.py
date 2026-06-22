@@ -174,6 +174,12 @@ class MainWindow(QMainWindow):
         self._btn_convert.clicked.connect(self._on_convert)
         root.addWidget(self._btn_convert)
 
+        # --- Przycisk ANULUJ (aktywny tylko w trakcie konwersji) ---
+        self._btn_cancel = QPushButton("Anuluj")
+        self._btn_cancel.setEnabled(False)
+        self._btn_cancel.clicked.connect(self._on_cancel)
+        root.addWidget(self._btn_cancel)
+
         root.addWidget(_separator())
 
         # --- Panel logów ---
@@ -252,6 +258,7 @@ class MainWindow(QMainWindow):
             output_dir = str(Path(files[0]).parent)
 
         self._btn_convert.setEnabled(False)
+        self._btn_cancel.setEnabled(True)
         self._progress.setValue(0)
         self._last_markdown_outputs = []
         self._last_output_dir = Path(output_dir) if output_dir else None
@@ -274,7 +281,27 @@ class MainWindow(QMainWindow):
         self._worker.file_done.connect(self._on_file_done)
         self._worker.file_error.connect(self._on_file_error)
         self._worker.all_done.connect(self._on_all_done)
+        self._worker.cancelled.connect(self._on_cancelled)
         self._worker.start()
+
+    def _on_cancel(self) -> None:
+        """Prosi worker o przerwanie i blokuje przycisk (zatrzyma się na granicy)."""
+        if self._worker is not None and self._worker.isRunning():
+            self._btn_cancel.setEnabled(False)
+            self._log_panel.log_warning(
+                "Anulowanie… zatrzymam na najbliższej granicy strony/pliku."
+            )
+            self._worker.cancel()
+
+    def _on_cancelled(self, success: int, errors: int, total: float) -> None:
+        """Konwersja anulowana — UI wraca do spoczynku, ukończone pliki zostają."""
+        self._btn_convert.setEnabled(True)
+        self._btn_cancel.setEnabled(False)
+        self._progress.setValue(0)
+        self._log_panel.log_warning(
+            f"Anulowano — ukończono {success} plik(ów), {errors} błąd(ów) w {total:.1f}s. "
+            "VRAM zwolniony."
+        )
 
     # ------------------------------------------------------------------
     # Sloty workera
@@ -299,6 +326,7 @@ class MainWindow(QMainWindow):
 
     def _on_all_done(self, success: int, errors: int, total: float) -> None:
         self._btn_convert.setEnabled(True)
+        self._btn_cancel.setEnabled(False)
         self._progress.setValue(100)
 
         if errors == 0:

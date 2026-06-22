@@ -6,6 +6,10 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
 
+class ConversionCancelled(Exception):  # noqa: N818 — sygnał control-flow (anulowanie), nie błąd
+    """Konwersja przerwana kooperatywnie (np. „Anuluj" w GUI) na granicy strony/pliku."""
+
+
 @dataclass
 class ConversionResult:
     """Wynik konwersji pojedynczego pliku PDF."""

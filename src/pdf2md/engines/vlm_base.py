@@ -17,13 +17,14 @@ import importlib.metadata
 import json
 import os
 import tempfile
+from collections.abc import Callable
 from contextlib import suppress
 from pathlib import Path
 from typing import Any, cast
 
 from loguru import logger
 
-from pdf2md.engines.base import ConversionEngine, ConversionResult
+from pdf2md.engines.base import ConversionCancelled, ConversionEngine, ConversionResult
 from pdf2md.scan.preprocessing import DPI_OLD_BOOKS, iter_page_batches
 
 
@@ -115,6 +116,8 @@ class VLMEngine(ConversionEngine):
 
         dpi = int(cast(Any, kwargs.pop("dpi", self.default_dpi)))
         batch_size = int(cast(Any, kwargs.pop("batch_size", 20)))
+        # Kooperatywne anulowanie: callable() → True przerywa na granicy strony.
+        should_cancel = cast("Callable[[], bool] | None", kwargs.pop("should_cancel", None))
         output_dir = kwargs.pop("output_dir", None)
         keep_output = output_dir is not None
         work_dir = (
@@ -136,6 +139,10 @@ class VLMEngine(ConversionEngine):
                 pdf_path, dpi=dpi, batch_size=batch_size, work_dir=str(png_dir)
             ):
                 for png in batch_paths:
+                    if should_cancel is not None and should_cancel():
+                        raise ConversionCancelled(
+                            f"{self.name}: anulowano na stronie {page_index + 1}"
+                        )
                     page_index += 1
                     markdown = self._ocr_page(png)
                     page_markdowns.append(markdown)

@@ -10,7 +10,8 @@ from PySide6.QtCore import QThread, Signal
 from pdf2md.core.config import get_settings
 from pdf2md.core.converter import ConversionError, Converter
 from pdf2md.core.registry import engine_registry, llm_registry
-from pdf2md.engines.base import ConversionEngine
+from pdf2md.engines.base import ConversionCancelled, ConversionEngine
+from pdf2md.engines.vlm_base import VLMEngine
 from pdf2md.llm.base import LLMProvider
 
 
@@ -35,6 +36,7 @@ class ConversionWorker(QThread):
     file_done = Signal(str, str, float)  # (plik_wejsciowy, plik_wyjsciowy, czas_s)
     file_error = Signal(str, str)  # (plik_wejsciowy, komunikat_błędu)
     all_done = Signal(int, int, float)  # (sukces, błędy, łączny_czas)
+    cancelled = Signal(int, int, float)  # (sukces, błędy, łączny_czas) — po anulowaniu
 
     def __init__(
         self,
@@ -59,6 +61,10 @@ class ConversionWorker(QThread):
         self._language = language
         self._scan_profile = scan_profile
         self._docling_device = docling_device or settings.docling_device
+
+    def cancel(self) -> None:
+        """Prosi o kooperatywne przerwanie — sprawdzane między stronami i plikami."""
+        self.requestInterruption()
 
     def run(self) -> None:
         """Iteruje po plikach, konwertuje każdy i emituje sygnały."""
@@ -102,8 +108,19 @@ class ConversionWorker(QThread):
         total_start = time.monotonic()
         success = 0
         errors = 0
+        was_cancelled = False
+
+        # Silniki wspierające anulowanie per-strona dostają callback should_cancel.
+        supports_page_cancel = (
+            isinstance(engine, VLMEngine) or "scan pipeline" in engine.name.lower()
+        )
 
         for i, pdf_path in enumerate(self._files):
+            # Granica MIĘDZY PLIKAMI — nie zaczynaj kolejnego pliku po anulowaniu.
+            if self.isInterruptionRequested():
+                was_cancelled = True
+                break
+
             filename = Path(pdf_path).name
             self.progress.emit(filename, 0)
             try:
@@ -113,6 +130,8 @@ class ConversionWorker(QThread):
                 engine_kwargs: dict[str, object] = {}
                 if engine.supports_ocr:
                     engine_kwargs["lang"] = self._language
+                if supports_page_cancel:
+                    engine_kwargs["should_cancel"] = self.isInterruptionRequested
                 engine_options: dict[str, object] = {}
                 if engine.name.lower() == "docling":
                     engine_options["device"] = self._docling_device
@@ -138,6 +157,10 @@ class ConversionWorker(QThread):
                 self.file_done.emit(pdf_path, out_path or "", elapsed)
                 success += 1
                 _ = result
+            except ConversionCancelled:
+                # Bieżący plik NIE jest kompletny — nie liczony jako sukces.
+                was_cancelled = True
+                break
             except (ConversionError, RuntimeError, OSError) as exc:
                 self.progress.emit(filename, 0)
                 self.file_error.emit(pdf_path, str(exc))
@@ -148,4 +171,21 @@ class ConversionWorker(QThread):
             self.progress.emit(filename, overall)
 
         total_elapsed = time.monotonic() - total_start
-        self.all_done.emit(success, errors, total_elapsed)
+        if was_cancelled:
+            self._release_after_cancel(engine, llm)
+            self.cancelled.emit(success, errors, total_elapsed)
+        else:
+            self.all_done.emit(success, errors, total_elapsed)
+
+    def _release_after_cancel(self, engine: ConversionEngine, llm: LLMProvider | None) -> None:
+        """Po anulowaniu zwalnia zasoby: VRAM silnika VLM + wyładowanie modelu Ollamy."""
+        unload = getattr(engine, "unload_model", None)
+        if callable(unload):
+            try:
+                unload()
+            except Exception as exc:  # pragma: no cover - defensywnie
+                _ = exc
+        if llm is not None:
+            from pdf2md.scan.correction import release_ollama_model
+
+            release_ollama_model(llm)

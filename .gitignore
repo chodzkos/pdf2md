@@ -44,8 +44,8 @@ Thumbs.db
 # Lokalny katalog roboczy skryptu preprocess_test.py
 work/
 
-# Artefakty ręcznych testów OCR (surowy output / wejście, nie fixture)
-tests/fixtures/test_scan.md
+# Artefakty ręcznych testów OCR (surowy output Markdown — nie ma śledzonych .md w fixtures)
+tests/fixtures/*.md
 test_scan.md
 # Stray PDF-y testowe w katalogu głównym repo (fixtures żyją w tests/fixtures/)
 /test_scan.pdf

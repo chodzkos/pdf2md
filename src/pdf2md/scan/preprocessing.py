@@ -7,7 +7,7 @@ import shutil
 import tempfile
 from collections.abc import Generator
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from loguru import logger
 
@@ -146,8 +146,11 @@ def deskew(image: np.ndarray) -> np.ndarray:
     h, w = image.shape[:2]
     center = (w // 2, h // 2)
     rot_mat = cv2.getRotationMatrix2D(center, angle, 1.0)
-    return cv2.warpAffine(
-        image, rot_mat, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE
+    return cast(
+        "np.ndarray",
+        cv2.warpAffine(
+            image, rot_mat, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE
+        ),
     )
 
 
@@ -156,10 +159,16 @@ def denoise(image: np.ndarray) -> np.ndarray:
     import cv2
 
     if image.ndim == 3:
-        return cv2.fastNlMeansDenoisingColored(
-            image, None, h=10, hColor=10, templateWindowSize=7, searchWindowSize=21
+        return cast(
+            "np.ndarray",
+            cv2.fastNlMeansDenoisingColored(
+                image, None, h=10, hColor=10, templateWindowSize=7, searchWindowSize=21
+            ),
         )
-    return cv2.fastNlMeansDenoising(image, None, h=10, templateWindowSize=7, searchWindowSize=21)
+    return cast(
+        "np.ndarray",
+        cv2.fastNlMeansDenoising(image, None, h=10, templateWindowSize=7, searchWindowSize=21),
+    )
 
 
 def dewarp(image: np.ndarray) -> np.ndarray:
@@ -205,7 +214,7 @@ def dewarp(image: np.ndarray) -> np.ndarray:
     h, w = image.shape[:2]
     pts_dst = np.array([[0, 0], [w - 1, 0], [w - 1, h - 1], [0, h - 1]], dtype=np.float32)
     persp_mat = cv2.getPerspectiveTransform(ordered, pts_dst)
-    return cv2.warpPerspective(image, persp_mat, (w, h))
+    return cast("np.ndarray", cv2.warpPerspective(image, persp_mat, (w, h)))
 
 
 def crop_margins(image: np.ndarray) -> np.ndarray:
@@ -243,8 +252,8 @@ def normalize_contrast(image: np.ndarray) -> np.ndarray:
         l_ch, a_ch, b_ch = cv2.split(lab)
         l_eq = clahe.apply(l_ch)
         lab_eq = cv2.merge([l_eq, a_ch, b_ch])
-        return cv2.cvtColor(lab_eq, cv2.COLOR_LAB2BGR)
-    return clahe.apply(image)
+        return cast("np.ndarray", cv2.cvtColor(lab_eq, cv2.COLOR_LAB2BGR))
+    return cast("np.ndarray", clahe.apply(image))
 
 
 def detect_double_page(image: np.ndarray) -> bool:

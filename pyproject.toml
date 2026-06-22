@@ -54,6 +54,7 @@ llm = [
 scan = [
     "opencv-python>=4.8",
     "numpy>=1.26",
+    "ebooklib>=0.18",
 ]
 
 [project.scripts]
@@ -122,6 +123,8 @@ module = [
     "paddleocr.*",
     "PIL",
     "PIL.*",
+    "ebooklib",
+    "ebooklib.*",
 ]
 ignore_missing_imports = true
 

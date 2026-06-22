@@ -121,6 +121,18 @@ ENGINE_CATALOG: tuple[dict[str, object], ...] = (
         "hint": "uv pip install surya-ocr",
         "description": "Layout + OCR + reading order, kontrola/fallback.",
     },
+    {
+        "key": "scan-pipeline",
+        "name": "Scan Pipeline (premium)",
+        "package": "surya-ocr",
+        "scope": "Opc.",
+        "ocr": True,
+        "llm": True,
+        "gpu": True,
+        "license": "różne (zależnie od silnika OCR)",
+        "hint": "uv pip install surya-ocr ebooklib (+ GPU); zob. SILNIKI_INSTALACJA.md",
+        "description": "Skan książki → VLM-OCR, korekta LLM, składanie, EPUB/Markdown.",
+    },
 )
 
 

@@ -47,7 +47,7 @@ def test_get_settings_creates_default_config(isolated_config: Path) -> None:
     assert settings.default_language == "pol+eng"
     assert settings.marker_device == "cpu"
     assert settings.marker_workers == 1
-    assert settings.marker_max_pages == 1
+    assert settings.marker_max_pages == 0  # 0 = cały dokument (domyślnie)
     assert settings.docling_device == "auto"
     assert settings.ollama_url == "http://localhost:11434"
     assert settings.llm_mode == "none"

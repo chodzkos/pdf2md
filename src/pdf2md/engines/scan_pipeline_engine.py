@@ -52,9 +52,7 @@ class ScanPipelineEngine(ConversionEngine):
         out_base.mkdir(parents=True, exist_ok=True)
         work_dir = Path(tempfile.mkdtemp(prefix="pdf2md_scanpipe_", dir=str(out_base)))
 
-        ocr_engine = cast(
-            ConversionEngine, kwargs.pop("ocr_engine", None) or self._default_ocr_engine()
-        )
+        ocr_engine = self._select_ocr_engine(kwargs.pop("ocr_engine", None), profile)
         llm_provider = self._resolve_llm_provider(kwargs.pop("llm_provider", None))
 
         # --- 1. OCR (VLM załadowany) → md_pages; VLMEngine.convert robi unload w finally ---
@@ -84,19 +82,29 @@ class ScanPipelineEngine(ConversionEngine):
         # --- 6. Eksport ---
         from pdf2md.scan.export import export_epub, export_markdown, export_quality_report
 
+        output_cfg = cast("dict[str, object]", profile.get("output") or {})
+        want_epub = bool(output_cfg.get("epub", True))
+        want_report = bool(output_cfg.get("quality_report") or output_cfg.get("html_report", True))
+
         metadata = self._book_metadata(pdf_path, chapters, kwargs)
         book_md = export_markdown(chapters, out_base / "book.md")
-        report = export_quality_report(validation_results, out_base / "report.html")
+        report = (
+            export_quality_report(validation_results, out_base / "report.html")
+            if want_report
+            else ""
+        )
         epub_ok = False
         epub_path = ""
-        try:
-            epub_path = export_epub(chapters, metadata, out_base / "book.epub")
-            epub_ok = True
-        except Exception as exc:
-            logger.error(f"ScanPipeline: budowa EPUB nie powiodła się: {exc}")
+        if want_epub:
+            try:
+                epub_path = export_epub(chapters, metadata, out_base / "book.epub")
+                epub_ok = True
+            except Exception as exc:
+                logger.error(f"ScanPipeline: budowa EPUB nie powiodła się: {exc}")
 
-        # --- 7. Sprzątanie work/ tylko po UDANYM EPUB (chyba że --keep-work) ---
-        if epub_ok and not keep_work:
+        # --- 7. Sprzątanie work/ po udanym buildzie (EPUB lub MD gdy EPUB wyłączony) ---
+        build_ok = epub_ok or not want_epub
+        if build_ok and not keep_work:
             cleanup_work_dir(str(work_dir))
         elif keep_work:
             logger.info(f"ScanPipeline: zachowuję katalog roboczy (--keep-work): {work_dir}")
@@ -126,6 +134,34 @@ class ScanPipelineEngine(ConversionEngine):
         from pdf2md.engines.surya_engine import SuryaEngine
 
         return SuryaEngine()
+
+    def _select_ocr_engine(self, explicit: object, profile: dict[str, object]) -> ConversionEngine:
+        """Silnik OCR: jawny override → silnik z profilu (jeśli dostępny) → fallback Surya."""
+        if explicit is not None:
+            return cast(ConversionEngine, explicit)
+        ocr_cfg = cast("dict[str, object]", profile.get("ocr") or {})
+        name = ocr_cfg.get("engine") or ocr_cfg.get("primary")
+        if name:
+            engine = self._find_engine_by_name(str(name))
+            if engine is not None and engine.is_available():
+                return engine
+            logger.warning(
+                f"ScanPipeline: silnik OCR '{name}' z profilu niedostępny — używam Surya (fallback)"
+            )
+        return self._default_ocr_engine()
+
+    def _find_engine_by_name(self, name: str) -> ConversionEngine | None:
+        import pdf2md.engines  # noqa: F401  — populuje engine_registry
+        from pdf2md.core.registry import engine_registry
+
+        def _norm(s: str) -> str:
+            return s.lower().replace(" ", "").replace("-", "").replace("_", "")
+
+        wanted = _norm(name)
+        for engine in engine_registry.get_all():
+            if _norm(engine.name) == wanted or _norm(engine.name).startswith(wanted):
+                return engine
+        return None
 
     def _resolve_llm_provider(self, provider: object) -> Any:
         """Zwraca przekazanego dostawcę LLM albo pierwszego dostępnego z rejestru (lub None)."""

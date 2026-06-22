@@ -46,6 +46,7 @@ class ConversionWorker(QThread):
         llm_mode: str = "whole_document",
         language: str = "pol+eng",
         docling_device: str | None = None,
+        scan_profile: str = "",
     ) -> None:
         super().__init__()
         settings = get_settings()
@@ -56,6 +57,7 @@ class ConversionWorker(QThread):
         self._llm_model = llm_model
         self._llm_mode = llm_mode
         self._language = language
+        self._scan_profile = scan_profile
         self._docling_device = docling_device or settings.docling_device
 
     def run(self) -> None:
@@ -114,6 +116,14 @@ class ConversionWorker(QThread):
                 engine_options: dict[str, object] = {}
                 if engine.name.lower() == "docling":
                     engine_options["device"] = self._docling_device
+                if self._scan_profile and "scan pipeline" in engine.name.lower():
+                    from pdf2md.scan.profiles import load_profile
+
+                    engine_kwargs["profile"] = load_profile(self._scan_profile).model_dump()
+                    # ScanPipeline pisze book.md/epub/report do output_dir samodzielnie;
+                    # konwerter nie forwarduje output_dir, więc podajemy go w engine_kwargs.
+                    engine_kwargs["output_dir"] = self._output_dir
+                    out_path = None
                 result = converter.convert(
                     pdf_path,
                     engine,

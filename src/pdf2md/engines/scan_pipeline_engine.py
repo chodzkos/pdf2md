@@ -16,9 +16,11 @@ from typing import TYPE_CHECKING, Any, cast
 
 from loguru import logger
 
-from pdf2md.engines.base import ConversionEngine, ConversionResult
+from pdf2md.engines.base import ConversionCancelled, ConversionEngine, ConversionResult
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from pdf2md.scan.assembly import Chapter
 
 
@@ -46,6 +48,7 @@ class ScanPipelineEngine(ConversionEngine):
         dpi = int(cast(Any, profile.get("dpi", DPI_OLD_BOOKS)))
         batch_size = int(cast(Any, profile.get("batch_size", 20)))
         keep_work = bool(kwargs.pop("keep_work", False))
+        should_cancel = cast("Callable[[], bool] | None", kwargs.pop("should_cancel", None))
 
         output_dir = kwargs.pop("output_dir", None)
         out_base = Path(str(output_dir)) if output_dir else Path.cwd()
@@ -58,16 +61,22 @@ class ScanPipelineEngine(ConversionEngine):
         # --- 1. OCR (VLM załadowany) → md_pages; VLMEngine.convert robi unload w finally ---
         logger.info(f"ScanPipeline: OCR silnikiem {getattr(ocr_engine, 'name', ocr_engine)}")
         ocr_result = ocr_engine.convert(
-            pdf_path, output_dir=str(work_dir), dpi=dpi, batch_size=batch_size
+            pdf_path,
+            output_dir=str(work_dir),
+            dpi=dpi,
+            batch_size=batch_size,
+            should_cancel=should_cancel,
         )
         md_pages_dir = work_dir / "md_pages"
         ocr_pages = self._read_pages(md_pages_dir)
         if not ocr_pages:
             ocr_pages = ocr_result.markdown.split("\n\n---\n\n")
 
-        # --- 2. Guard VRAM: model wizyjny musi być już zwolniony przed korektą ---
+        # --- 2. Guard VRAM + sprawdzenie anulowania przed kosztowną korektą LLM ---
         from pdf2md.scan.correction import log_free_vram
 
+        if should_cancel is not None and should_cancel():
+            raise ConversionCancelled("ScanPipeline: anulowano po fazie OCR (przed korektą LLM)")
         log_free_vram("ScanPipeline: po unload VLM, przed korektą")
 
         # --- 3. Korekta LLM (opcjonalna — gdy dostawca dostępny) ---

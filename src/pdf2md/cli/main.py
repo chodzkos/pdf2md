@@ -82,17 +82,6 @@ ENGINE_CATALOG: tuple[dict[str, object], ...] = (
         "description": "Dokumenty naukowe, layout, CJK.",
     },
     {
-        "key": "pdf-craft",
-        "name": "pdf-craft",
-        "package": "pdf-craft",
-        "scope": "Opc.",
-        "ocr": True,
-        "llm": False,
-        "license": "MIT",
-        "hint": "uv pip install pdf-craft",
-        "description": "Skanowane książki, Markdown i natywny EPUB.",
-    },
-    {
         "key": "olmocr",
         "name": "olmOCR",
         "package": "olmocr",

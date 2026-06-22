@@ -109,7 +109,6 @@ module = [
     "marker.*",
     "docling.*",
     "mineru.*",
-    "pdf_craft.*",
     "torch",
     "torch.*",
     "cv2",

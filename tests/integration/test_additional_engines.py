@@ -8,7 +8,6 @@ import pytest
 
 from pdf2md.engines.docling_engine import DoclingEngine
 from pdf2md.engines.mineru_engine import MinerUEngine
-from pdf2md.engines.pdf_craft_engine import PdfCraftEngine
 
 FIXTURE = Path("tests/fixtures/test_text_1page.pdf")
 
@@ -45,13 +44,3 @@ def test_mineru_converts_pdf(tmp_path: Path) -> None:
     assert result.markdown
     assert result.pages >= 1
     assert result.engine_used == "MinerU"
-
-
-@pytest.mark.skipif(not PdfCraftEngine().is_available(), reason="pdf-craft niezainstalowany")
-def test_pdf_craft_converts_pdf() -> None:
-    """pdf-craft konwertuje prosty PDF do Markdown."""
-    result = PdfCraftEngine().convert(_fixture_path(), ocr_size="tiny")
-
-    assert result.markdown
-    assert result.pages >= 1
-    assert result.engine_used == "pdf-craft"

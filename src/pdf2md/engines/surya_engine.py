@@ -28,16 +28,24 @@ class SuryaEngine(VLMEngine):
         self._foundation: Any = None
 
     def load_model(self) -> None:
-        """Tworzy predyktory Surya na GPU."""
+        """Tworzy predyktory Surya, JAWNIE wymuszając urządzenie wg wykrytej CUDA.
+
+        Domyślne `device` predyktorów surya to `settings.TORCH_DEVICE_MODEL` — wartość
+        domyślna parametru zamrożona przy imporcie modułu z env `TORCH_DEVICE` (które
+        marker_engine/conftest mogły ustawić na "cpu"). Przekazujemy device jawnie, więc
+        Surya używa GPU niezależnie od ambientowego env. dtype zostawiamy surya (per-model,
+        device-aware: cuda→fp16, cpu→fp32).
+        """
         from surya.detection import DetectionPredictor
         from surya.foundation import FoundationPredictor
         from surya.recognition import RecognitionPredictor
 
-        self._foundation = FoundationPredictor()
+        device = "cuda" if self.has_gpu() else "cpu"
+        self._foundation = FoundationPredictor(device=device)
         self._recognition = RecognitionPredictor(self._foundation)
-        self._detection = DetectionPredictor()
+        self._detection = DetectionPredictor(device=device)
         self._model = self._recognition
-        logger.info("Surya: predyktory załadowane (foundation + recognition + detection)")
+        logger.info(f"Surya: device={device} (foundation + recognition + detection)")
 
     def unload_model(self) -> None:
         """Czyści predyktory Surya, potem zwalnia VRAM przez bazę."""

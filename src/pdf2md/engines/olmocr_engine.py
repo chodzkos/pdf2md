@@ -1,51 +1,74 @@
-"""Adapter silnika olmOCR (VLM 7B do skanów).
+"""Adapter silnika olmOCR (VLM 7B do skanów) — izolowany venv + subprocess.
 
-olmOCR działa jako własny pipeline operujący na całym PDF: renderuje strony, uruchamia
-model przez serwer vLLM i zapisuje Markdown (flaga ``--markdown``). Pipeline sam zarządza
-VRAM (uruchamia i zamyka serwer vLLM w obrębie subprocesu), więc zwolnienie VRAM następuje
-przy zakończeniu procesu — stąd nadpisujemy convert() zamiast korzystać z paczkowej pętli
-bazy. Import/obecność olmocr sprawdzamy tylko przez metadata, bez importu modelu.
+olmOCR ma stos vLLM konfliktujący z projektem, więc żyje w osobnym venv (``~/.venvs/olmocr``,
+zob. SILNIKI_INSTALACJA.md 2.7). pdf2md woła go przez subprocess (wzór jak MinerU): pipeline
+renderuje strony, odpala wewnętrzny serwer vLLM i zapisuje Markdown (``--markdown``). Obecność
+środowiska sprawdzamy po ścieżce do pythona venv — NIGDY nie importujemy olmocr w procesie pdf2md.
 
-Model: allenai/olmOCR-2-7B-1025-FP8 (zweryfikuj najnowszą wersję na PyPI/HuggingFace).
+Komenda i domyślny model (``allenai/olmOCR-2-7B-1025-FP8``) zweryfikowane z
+``python -m olmocr.pipeline --help`` zainstalowanej wersji.
 """
 
 from __future__ import annotations
 
+import os
+import shutil
 import subprocess
-import sys
 import tempfile
 from pathlib import Path
 
 from loguru import logger
 
+from pdf2md.core.config import get_settings
 from pdf2md.engines.base import ConversionResult
 from pdf2md.engines.vlm_base import VLMEngine
 
-DEFAULT_MODEL = "allenai/olmOCR-2-7B-1025-FP8"
+#: Domyślna ścieżka izolowanego venv olmOCR (konwencja z SILNIKI_INSTALACJA.md 2.7).
+_DEFAULT_VENV_PYTHON = Path.home() / ".venvs" / "olmocr" / "bin" / "python"
 
 
 class OlmOCREngine(VLMEngine):
-    """Adapter olmOCR — czysty Markdown, równania, tabele, kolejność czytania."""
+    """Adapter olmOCR — izolowany venv (subprocess), czysty Markdown ze skanów."""
 
     name = "olmOCR"
     description = "VLM 7B do skanów: czysty Markdown, równania, tabele, kolejność czytania"
     package_name = "olmocr"
 
-    def __init__(self, model: str = DEFAULT_MODEL) -> None:
+    def __init__(self) -> None:
         super().__init__()
-        self.model = model
+        self._process: subprocess.Popen[str] | None = None
+
+    def _olmocr_python(self) -> str | None:
+        """Ścieżka do pythona venv olmOCR: z configu, inaczej domyślny ~/.venvs/olmocr."""
+        configured = get_settings().olmocr_python
+        if configured and Path(configured).exists():
+            return configured
+        if _DEFAULT_VENV_PYTHON.exists():
+            return str(_DEFAULT_VENV_PYTHON)
+        return None
+
+    def is_available(self) -> bool:
+        """Obecność izolowanego środowiska olmOCR + GPU. Bez importu olmocr, nigdy nie rzuca."""
+        if not self.has_gpu():
+            return False
+        return self._olmocr_python() is not None or shutil.which("olmocr") is not None
 
     def convert(self, pdf_path: str, **kwargs: object) -> ConversionResult:
-        """Uruchamia pipeline olmOCR z flagą --markdown na całym PDF.
-
-        Subprocess sam renderuje strony, odpala serwer vLLM i zwalnia VRAM przy wyjściu.
-        """
+        """Uruchamia pipeline olmOCR (venv izolowany) z ``--markdown`` na całym PDF."""
         if not self.is_available():
             raise RuntimeError(
-                "Silnik olmOCR nie jest dostępny: wymaga zainstalowanego pakietu 'olmocr' "
-                "oraz działającego GPU (CUDA)."
+                "Silnik olmOCR nie jest dostępny: wymaga izolowanego venv (~/.venvs/olmocr) "
+                "oraz GPU. Zob. SILNIKI_INSTALACJA.md 2.7."
+            )
+        python = self._olmocr_python()
+        if python is None:
+            raise RuntimeError(
+                "Nie znaleziono pythona venv olmOCR. Ustaw olmocr_python w config.toml "
+                "albo zainstaluj wg SILNIKI_INSTALACJA.md 2.7."
             )
 
+        settings = get_settings()
+        model = settings.olmocr_model
         output_dir = kwargs.pop("output_dir", None)
         keep_output = output_dir is not None
         workspace = (
@@ -56,30 +79,36 @@ class OlmOCREngine(VLMEngine):
         workspace.mkdir(parents=True, exist_ok=True)
 
         command = [
-            sys.executable,
+            python,
             "-m",
             "olmocr.pipeline",
             str(workspace),
             "--markdown",
             "--model",
-            self.model,
+            model,
             "--pdfs",
             str(pdf_path),
         ]
-        logger.info(f"olmOCR: {' '.join(command)}")
+        # Bez tego flashinfer JIT-uje sampler przez nvcc i pada na nowym GPU (jak MinerU/vlm).
+        env = {**os.environ, "VLLM_USE_FLASHINFER_SAMPLER": "0"}
+        logger.info(f"olmOCR (venv izolowany): {' '.join(command)}")
+
         try:
-            subprocess.run(command, check=True, capture_output=True, text=True)
-        except subprocess.CalledProcessError as e:
-            logger.error(
-                "olmOCR zakończył się błędem (kod %d).\nstdout: %s\nstderr: %s",
-                e.returncode,
-                (e.stdout or "")[:2000],
-                (e.stderr or "")[:2000],
+            self._process = subprocess.Popen(
+                command, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
             )
-            tail = (e.stderr or "")[-500:]
-            raise RuntimeError(f"olmOCR failed (code {e.returncode}): {tail}") from e
+            stdout, stderr = self._process.communicate()
+            returncode = self._process.returncode
+            if returncode != 0:
+                logger.error(
+                    "olmOCR zakończył się błędem (kod %d).\nstdout: %s\nstderr: %s",
+                    returncode,
+                    (stdout or "")[:2000],
+                    (stderr or "")[:2000],
+                )
+                tail = (stderr or "")[-500:]
+                raise RuntimeError(f"olmOCR failed (code {returncode}): {tail}")
         finally:
-            # serwer vLLM zamyka się wraz z subprocesem; dla pewności wymuś empty_cache
             self.unload_model()
 
         markdown, pages = self._collect_markdown(workspace)
@@ -89,10 +118,22 @@ class OlmOCREngine(VLMEngine):
             pages=pages,
             metadata={
                 "source": str(pdf_path),
-                "model": self.model,
+                "model": model,
                 "work_dir": str(workspace) if keep_output else "",
             },
         )
+
+    def unload_model(self) -> None:
+        """Zamyka proces pipeline'u (terminate + wait); VRAM zwalnia OS przy wyjściu serwera vLLM."""
+        proc = self._process
+        if proc is not None and proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+        self._process = None
+        logger.debug("olmOCR: proces zamknięty (VRAM zwalnia OS)")
 
     def _collect_markdown(self, workspace: Path) -> tuple[str, int]:
         """Zbiera wygenerowane pliki .md z workspace olmOCR, posortowane po nazwie."""

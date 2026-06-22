@@ -2038,6 +2038,90 @@ Rule #1: bez zmian publicznego interfejsu pozostałych silników (usunięcie pdf
 
 ---
 
+## PROMPT D15 — Marker: konwertuj WSZYSTKIE strony (nie tylko pierwszą)
+
+> Objaw: na 99-stronicowym `text_test.pdf` Marker zwraca jedną stronę i kończy. marker-pdf 1.10.x
+> domyślnie robi cały PDF, więc limit jest po naszej stronie.
+
+```
+GAŁĄŹ: fix/marker-all-pages  (osobny branch; bez auto-push; czekaj na zgodę przed PR)
+
+1. Diagnoza — przeczytaj engines/marker_engine.py: convert() + _load_marker_api(). Szukaj:
+   - czy do marker.config.parser.ConfigParser trafia page_range / max_pages ograniczające do 1 strony
+   - czy adapter sam nie pre-renderuje/nie wycina TYLKO 1 strony przed podaniem do Markera
+   - czy montaż wyniku (markdown) nie urywa się po pierwszej stronie
+   - marker 1.10.x: PdfConverter(...)(filepath) robi CAŁY dokument — limit jest u nas
+2. Fix: adapter konwertuje wszystkie strony wejścia. Jeśli istnieje opcjonalny page_range/max_pages,
+   ma być DOMYŚLNIE pusty (cały dokument) i ustawiany wyłącznie na jawne żądanie (CLI/parametr),
+   nigdy na sztywno.
+3. Test: konwersja wielostronicowego PDF (wytnij ~3-5 stron z text_test.pdf przez pymupdf) → wynik ma
+   >1 stronę, treść/sekcje odpowiadają wejściu. Dodaj mały wielostronicowy fixture + test do suite.
+
+ruff + mypy czyste. Pokaż diff i wynik konwersji wielostronicowej (liczba stron/sekcji wyniku).
+```
+
+---
+
+## PROMPT D16 — Surya: wymuś GPU (CUDA), nie CPU
+
+> Objaw: silnik Surya liczy na CPU mimo RTX 5090. surya 0.17.x wybiera urządzenie przez
+> `surya.settings` (autodetekcja cuda) lub kwarg `device` predyktorów — adapter najpewniej go nie ustawia.
+
+```
+GAŁĄŹ: fix/surya-gpu  (osobny branch; bez auto-push; czekaj na zgodę przed PR)
+
+1. Diagnoza:
+   - `uv run python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU')"`
+     → potwierdź, że w venv projektu torch widzi CUDA (RTX 5090). Jeśli NIE — problem jest w torchu, nie w adapterze (wtedy zgłoś).
+   - przeczytaj engines/surya_engine.py load_model(): jak tworzy FoundationPredictor / DetectionPredictor /
+     RecognitionPredictor — czy w ogóle przekazuje device / ustawia surya.settings.TORCH_DEVICE.
+   - sprawdź mechanizm device w surya 0.17.x: settings.TORCH_DEVICE vs kwarg `device`/`dtype` predyktora — użyj właściwego.
+2. Fix: w load_model PRZED utworzeniem predyktorów wykryj CUDA i wymuś GPU — przez ustawienie
+   surya (TORCH_DEVICE=cuda) ALBO przekazanie device='cuda' (+ dtype fp16, jeśli API przyjmuje).
+   Fallback na CPU tylko gdy brak CUDA. Zaloguj wykryte urządzenie: "Surya: device=cuda".
+3. Weryfikacja: w trakcie konwersji `nvidia-smi` pokazuje zajęty GPU + proces python; recognition
+   wyraźnie szybsze niż na CPU. (To samo dotyczy ewentualnie Markera, jeśli też szedł na CPU — sprawdź.)
+
+ruff + mypy czyste. Pokaż diff + log z "device=cuda" + potwierdzenie z nvidia-smi.
+```
+
+---
+
+## PROMPT D17 — GUI: skuteczne anulowanie konwersji + czyszczenie VRAM
+
+> Cel: przycisk, który REALNIE zatrzymuje trwającą konwersję i zwalnia VRAM. Anulowanie kooperatywne
+> (QThread) — marker/surya liczą w torch/C i nie da się ich przerwać w połowie strony; anulowanie
+> wchodzi na NAJBLIŻSZEJ granicy (między stronami / między plikami), potem czyści VRAM.
+
+```
+GAŁĄŹ: feat/gui-cancel-vram  (osobny branch; bez auto-push; czekaj na zgodę przed PR)
+
+1. ConversionWorker (gui/workers.py) — kooperatywne anulowanie:
+   - QThread.requestInterruption()/isInterruptionRequested() ALBO własna flaga thread-safe (threading.Event)
+   - sprawdzaj flagę MIĘDZY stronami i MIĘDZY plikami w pętli; po wykryciu — przerwij pętlę CZYSTO
+   - NIE używaj QThread.terminate() (korumpuje stan, cieknie VRAM/zasoby)
+   - już ukończone pliki zostają; bieżący (przerwany) plik nie jest traktowany jako kompletny
+2. Po anulowaniu — zwolnij VRAM przez engine.unload_model():
+   - in-process (Surya/Marker): ZWALIDUJ, że unload_model faktycznie zwalnia — usuń referencje do
+     modelu/predyktorów, gc.collect(), torch.cuda.empty_cache(); potwierdź spadek w nvidia-smi
+   - izolowane (PaddleOCR-VL/olmOCR): unload = kill procesu/serwera (wzorzec już jest)
+   - jeśli trwała korekta LLM (Ollama): release_ollama_model (keep_alive=0) — klocek z Etapu 13
+3. GUI: przycisk „Anuluj" aktywny tylko w trakcie konwersji → woła worker.cancel()/requestInterruption();
+   worker emituje sygnał „anulowano"; UI wraca do spoczynku (odblokowane kontrolki, reset paska postępu).
+4. Test: start konwersji wielostronicowej → Anuluj w trakcie → zatrzymanie na najbliższej granicy,
+   VRAM zwolniony (nvidia-smi), GUI odblokowane, brak wiszących wątków/procesów. (Sekcja testów GUI — marker `gui`.)
+
+ruff + mypy czyste. Pokaż diff; opisz, na jakiej granicy realnie zatrzymuje i jak potwierdziłeś zwolnienie VRAM.
+```
+
+> Uwaga do D17: anulowanie kooperatywne nie przerwie POJEDYNCZEJ długiej strony (np. 12 s w Markerze) —
+> czeka do jej końca. Jeśli chcesz **natychmiastowego** anulowania, silniki in-process musiałyby
+> działać w **osobnym procesie** (kill = natychmiast, VRAM zwalnia OS) jak izolowane — to większa
+> zmiana architektury. Wersja kooperatywna jest pragmatycznym pierwszym krokiem; subprocess-cancel
+> ewentualnie później jako osobny feature.
+
+---
+
 ## Wskazówki ogólne
 
 ### Dwie zasady do DOPISANIA na końcu każdego prompta etapowego

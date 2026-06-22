@@ -48,3 +48,42 @@ jobs:
         with:
           file: ./coverage.xml
           fail_ci_if_error: false
+
+  # Testuje, że deklaracja wsparcia 3.13 jest realna, a nie tylko deklarowana:
+  # instaluje engines-core (koła cp313), sprawdza importy i robi smoke konwersji.
+  engines-smoke-313:
+    name: Engines smoke (Python 3.13, engines-core)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Zainstaluj uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Skonfiguruj Python 3.13
+        run: uv python install 3.13
+
+      - name: Zainstaluj engines-core (weryfikacja kół cp313)
+        run: uv sync --extra engines-core --python 3.13
+
+      - name: Import smoke — marker/surya/docling/cv2 na 3.13
+        run: >
+          uv run --python 3.13 python -c "import marker.config.parser, surya.foundation,
+          surya.recognition, surya.detection, cv2, docling; print('imports OK')"
+
+      - name: Cache modeli OCR (surya/datalab)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/datalab
+          key: datalab-models-${{ runner.os }}
+
+      - name: Smoke konwersji — Marker (CPU)
+        run: |
+          uv run --python 3.13 pdf2md convert tests/fixtures/test_text_1page.pdf \
+            --engine marker -o "$RUNNER_TEMP/m.md"
+          test -s "$RUNNER_TEMP/m.md" && echo "Marker utworzył .md na 3.13"
+      # Surya wymaga GPU (requires_gpu) — niewykonalne na runnerach GH bez CUDA.
+      # Konwersję Surya na 3.13 weryfikuje się lokalnie na GPU; tu pokrywa ją import smoke.

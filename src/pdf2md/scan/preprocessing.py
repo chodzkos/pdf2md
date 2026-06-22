@@ -9,13 +9,14 @@ from collections.abc import Generator
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import cv2
-import numpy as np
-import pymupdf
 from loguru import logger
 
 if TYPE_CHECKING:
-    pass
+    # Tylko dla anotacji (from __future__ import annotations → stringi, brak importu w runtime).
+    import numpy as np
+
+# Ciężkie zależności (cv2, numpy, pymupdf) importowane są LENIWIE wewnątrz funkcji, które ich
+# używają — `import pdf2md.scan.preprocessing` ma działać bez zainstalowanego cv2/pymupdf.
 
 # ---------------------------------------------------------------------------
 # Stałe DPI
@@ -36,6 +37,8 @@ def pdf_to_images(pdf_path: str, dpi: int, output_dir: str) -> list[str]:
     Każda strona jest renderowana do pliku PNG w *output_dir*. Zwraca listę
     ścieżek do wygenerowanych plików w kolejności stron.
     """
+    import pymupdf
+
     os.makedirs(output_dir, exist_ok=True)
     mat = pymupdf.Matrix(dpi / 72, dpi / 72)
     doc = pymupdf.open(pdf_path)
@@ -73,6 +76,8 @@ def iter_page_batches(
             for p in batch_paths:
                 os.remove(p)  # zwolnij dysk przed następną paczką
     """
+    import pymupdf
+
     tmp_dir_obj: tempfile.TemporaryDirectory[str] | None = None
     if work_dir is None:
         tmp_dir_obj = tempfile.TemporaryDirectory(prefix="pdf2md_batch_")
@@ -119,6 +124,9 @@ def deskew(image: np.ndarray) -> np.ndarray:
     Wykrywa kąt pochylenia za pomocą ``cv2.minAreaRect`` na binaryzowanym obrazie.
     Dla dobrze zorientowanych stron (kąt < 0.5°) obraz jest zwracany bez zmian.
     """
+    import cv2
+    import numpy as np
+
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if image.ndim == 3 else image.copy()
     _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
 
@@ -145,6 +153,8 @@ def deskew(image: np.ndarray) -> np.ndarray:
 
 def denoise(image: np.ndarray) -> np.ndarray:
     """Redukuj szum przez filtrowanie nielokalne (Non-Local Means)."""
+    import cv2
+
     if image.ndim == 3:
         return cv2.fastNlMeansDenoisingColored(
             image, None, h=10, hColor=10, templateWindowSize=7, searchWindowSize=21
@@ -158,6 +168,9 @@ def dewarp(image: np.ndarray) -> np.ndarray:
     Jeśli cztery rogi strony nie dają się wiarygodnie wykryć, obraz jest zwracany
     bez zmian — nie rzucamy wyjątku.
     """
+    import cv2
+    import numpy as np
+
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if image.ndim == 3 else image.copy()
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
     edges = cv2.Canny(blurred, 50, 150)
@@ -197,6 +210,9 @@ def dewarp(image: np.ndarray) -> np.ndarray:
 
 def crop_margins(image: np.ndarray) -> np.ndarray:
     """Przytnij puste marginesy — zostaw tylko obszar z treścią z małym paddingiem."""
+    import cv2
+    import numpy as np
+
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if image.ndim == 3 else image.copy()
     _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
     coords = np.column_stack(np.where(thresh > 0))
@@ -219,6 +235,8 @@ def crop_margins(image: np.ndarray) -> np.ndarray:
 
 def normalize_contrast(image: np.ndarray) -> np.ndarray:
     """Popraw kontrast metodą CLAHE na kanale L (LAB) lub na szarym obrazie."""
+    import cv2
+
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
     if image.ndim == 3:
         lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
@@ -244,6 +262,9 @@ def split_double_page(image: np.ndarray) -> list[np.ndarray]:
     Próbuje znaleźć pionową linię podziału jako lokalne minimum gęstości treści
     w środkowym 20% szerokości. Jeśli nie znajdzie — tnie dokładnie w połowie.
     """
+    import cv2
+    import numpy as np
+
     _h, w = image.shape[:2]
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if image.ndim == 3 else image.copy()
     _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)

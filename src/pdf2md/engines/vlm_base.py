@@ -24,6 +24,7 @@ from typing import Any, cast
 from loguru import logger
 
 from pdf2md.engines.base import ConversionEngine, ConversionResult
+from pdf2md.scan.preprocessing import DPI_OLD_BOOKS, iter_page_batches
 
 
 class VLMEngine(ConversionEngine):
@@ -35,8 +36,8 @@ class VLMEngine(ConversionEngine):
 
     #: Nazwa dystrybucji do importlib.metadata.version() — ustaw w podklasie.
     package_name: str = ""
-    #: Domyślne DPI renderowania stron przed OCR (= preprocessing.DPI_OLD_BOOKS).
-    default_dpi: int = 400
+    #: Domyślne DPI renderowania stron przed OCR.
+    default_dpi: int = DPI_OLD_BOOKS
 
     def __init__(self) -> None:
         self._model: Any = None
@@ -111,10 +112,6 @@ class VLMEngine(ConversionEngine):
                 f"Silnik {self.name} nie jest dostępny: wymaga zainstalowanego pakietu "
                 f"'{self.package_name}' oraz działającego GPU (CUDA)."
             )
-
-        # Leniwy import: scan.preprocessing ciągnie pymupdf/opencv (extra 'scan'),
-        # więc nie ładujemy go przy imporcie modułu/silnika.
-        from pdf2md.scan.preprocessing import iter_page_batches
 
         dpi = int(cast(Any, kwargs.pop("dpi", self.default_dpi)))
         batch_size = int(cast(Any, kwargs.pop("batch_size", 20)))

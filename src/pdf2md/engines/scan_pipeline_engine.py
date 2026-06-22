@@ -131,6 +131,9 @@ class ScanPipelineEngine(ConversionEngine):
         """Zwraca przekazanego dostawcę LLM albo pierwszego dostępnego z rejestru (lub None)."""
         if provider is not None:
             return provider
+        # Import rejestru dostawców (populuje llm_registry) — gdy silnik użyty standalone,
+        # poza CLI/GUI, które robią to w _startup.
+        import pdf2md.llm  # noqa: F401
         from pdf2md.core.registry import llm_registry
 
         for candidate in llm_registry.get_available():

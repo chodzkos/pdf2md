@@ -8,6 +8,10 @@
 - Dyskretny przełącznik motywu (auto/jasny/ciemny) + „O programie" w lekkim górnym pasku okna głównego.
 - Panel logów koloruje statusy (info/ostrzeżenie/błąd) rolami palety i przemalowuje istniejące wpisy po zmianie motywu — bez zaszytych hexów.
 
+### Zmienione
+
+- File-dialogi (wybór plików PDF, folder wyjściowy, domyślny folder w ustawieniach) przeniesione na helpery `chodzkos-gui-kit` (`open_files`/`pick_dir`) z regułą rozjazdu natywny/fallback: natywny Explorer gdy motyw zgodny z systemem, skonfigurowany ciemny fallback przy rozjeździe. Dodano test strażniczy przeciw bezpośredniemu `QFileDialog` w GUI.
+
 ## v1.0.0
 
 ### Dodane

@@ -150,16 +150,32 @@ wymaga, by przy uruchomieniu było ustawione `VLLM_USE_FLASHINFER_SAMPLER=0` (ad
 
 ### Krok 2.7 — olmOCR (izolowany venv, Faza 2)
 
+> 🅿️ **ZAPARKOWANY (czytaj przed instalacją).** W trybie spawn-per-plik serwer-dziecko olmocr
+> **nie wstaje** pod nightly-vLLM / transformers 5.x na Blackwellu (stderr połykany; podejrzenie:
+> transformers 5.x w ścieżce processora/chat-template). Do tego: zajmuje ~całą kartę (nie
+> współistnieje z modelem korekty w pipelinie), start **90-150 s/wywołanie**, jest **anglocentryczny**.
+> Dla dokumentów PL używaj **PaddleOCR-VL** lub **Surya**. Jedyny realny tryb produkcyjny olmOCR to
+> **external-server** (`--server` / pole `olmocr_server_url` w config.toml), nie spawn per-plik.
+
 ```bash
 uv venv ~/.venvs/olmocr --python 3.12
 source ~/.venvs/olmocr/bin/activate
 uv pip install olmocr
+# UWAGA: samo `uv pip install olmocr` NIE ciągnie torch/vLLM — dołóż nightly-vLLM jak w 2.8a:
+uv self update
+uv pip install -U vllm --pre --torch-backend=auto \
+  --extra-index-url https://wheels.vllm.ai/nightly
 # test (model 7B pobierze się przy 1. uruchomieniu):
 VLLM_USE_FLASHINFER_SAMPLER=0 python -m olmocr.pipeline --help
 deactivate
 ```
-> `VLLM_USE_FLASHINFER_SAMPLER=0` omija problem „Could not find nvcc" na Blackwellu (flashinfer
-> JIT-uje sampler przez nvcc, którego nie masz). Dokładną komendę pipeline'u sprawdź w docs olmOCR.
+> `VLLM_USE_FLASHINFER_SAMPLER=0` omija „Could not find nvcc" na Blackwellu (flashinfer JIT-uje
+> sampler przez nvcc, którego nie masz). Na 24 GB uruchamiaj z `--max_model_len 16384
+> --gpu-memory-utilization 0.90` (przy OOM zejdź do `0.80`) — bez tego vLLM bierze 128k KV-cache i
+> pada „No available memory for cache blocks". Gołe `vllm serve` z tymi flagami jest POTWIERDZONE
+> jako działające; problem jest ze spawnem serwera-dziecka przez `olmocr.pipeline` (stąd parking).
+> Adapter pdf2md ustawia `VLLM_USE_FLASHINFER_SAMPLER=0`, `PATH`/`VIRTUAL_ENV` venv i powyższe flagi
+> sam; do trybu produkcyjnego ustaw `olmocr_server_url` na własny `vllm serve`.
 
 ### Krok 2.8 — PaddleOCR-VL (izolowany venv + usługa HTTP, Faza 2)
 

@@ -1,18 +1,24 @@
 """Adapter silnika olmOCR (VLM 7B do skanów) — izolowany venv + subprocess.
 
 olmOCR ma stos vLLM konfliktujący z projektem, więc żyje w osobnym venv (``~/.venvs/olmocr``,
-zob. SILNIKI_INSTALACJA.md 2.7). pdf2md woła go przez subprocess (wzór jak MinerU): pipeline
-renderuje strony, odpala wewnętrzny serwer vLLM i zapisuje Markdown (``--markdown``). Obecność
-środowiska sprawdzamy po ścieżce do pythona venv — NIGDY nie importujemy olmocr w procesie pdf2md.
+zob. SILNIKI_INSTALACJA.md 2.7). pdf2md woła go przez subprocess (wzór jak MinerU). Obecność
+środowiska sprawdzamy po binie ``vllm`` w venv — NIGDY nie importujemy olmocr w procesie pdf2md.
 
-Komenda i domyślny model (``allenai/olmOCR-2-7B-1025-FP8``) zweryfikowane z
-``python -m olmocr.pipeline --help`` zainstalowanej wersji.
+olmOCR shelluje CLI ``vllm`` po gołej nazwie, więc env subprocesu musi mieć ``PATH`` z binem
+izolowanego venv (inaczej ``FileNotFoundError: 'vllm'``). Na 24 GB konieczne są flagi vLLM
+``--max_model_len`` i ``--gpu-memory-utilization`` (domyślny 128k KV-cache → OOM).
+
+Komenda i flagi zweryfikowane z ``python -m olmocr.pipeline --help`` zainstalowanej wersji
+(uwaga: ``--gpu-memory-utilization`` przez myślniki, ``--max_model_len`` przez podkreślnik).
+
+> STATUS: ZAPARKOWANY w trybie spawn-per-plik (serwer-dziecko nie wstaje pod nightly-vLLM/
+> transformers 5.x; ~całe 24 GB; 90-150 s/wywołanie; EN-centryczny). Tryb produkcyjny to
+> external-server (``olmocr_server_url`` → ``--server``). Dla PL: PaddleOCR-VL/Surya.
 """
 
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -48,17 +54,27 @@ class OlmOCREngine(VLMEngine):
         return None
 
     def is_available(self) -> bool:
-        """Obecność izolowanego środowiska olmOCR + GPU. Bez importu olmocr, nigdy nie rzuca."""
+        """GPU + KOMPLETNY venv olmOCR (bin ``vllm`` obecny). Bez importu olmocr, nigdy nie rzuca.
+
+        Sprawdzamy ``vllm`` (nie sam python), bo półzłożony venv (olmocr bez vLLM/torch) nie
+        zadziała — ma dawać ❌, nie fałszywe ✅. Tryb external-server (olmocr_server_url) nie
+        potrzebuje lokalnego vLLM — wystarczy python venv.
+        """
         if not self.has_gpu():
             return False
-        return self._olmocr_python() is not None or shutil.which("olmocr") is not None
+        python = self._olmocr_python()
+        if python is None:
+            return False
+        if get_settings().olmocr_server_url:
+            return True
+        return (Path(python).parent / "vllm").exists()
 
     def convert(self, pdf_path: str, **kwargs: object) -> ConversionResult:
         """Uruchamia pipeline olmOCR (venv izolowany) z ``--markdown`` na całym PDF."""
         if not self.is_available():
             raise RuntimeError(
-                "Silnik olmOCR nie jest dostępny: wymaga izolowanego venv (~/.venvs/olmocr) "
-                "oraz GPU. Zob. SILNIKI_INSTALACJA.md 2.7."
+                "Silnik olmOCR nie jest dostępny: wymaga kompletnego izolowanego venv "
+                "(~/.venvs/olmocr z vLLM) oraz GPU. Zob. SILNIKI_INSTALACJA.md 2.7."
             )
         python = self._olmocr_python()
         if python is None:
@@ -88,11 +104,24 @@ class OlmOCREngine(VLMEngine):
             model,
             "--pdfs",
             str(pdf_path),
+            # Flagi vLLM (nazwy zweryfikowane z --help): bez nich vLLM bierze 128k KV-cache → OOM.
+            "--max_model_len",
+            str(settings.olmocr_max_model_len),
+            "--gpu-memory-utilization",
+            str(settings.olmocr_gpu_memory_utilization),
         ]
-        # Bez tego flashinfer JIT-uje sampler przez nvcc i pada na nowym GPU (jak MinerU/vlm).
-        env = {**os.environ, "VLLM_USE_FLASHINFER_SAMPLER": "0"}
-        logger.info(f"olmOCR (venv izolowany): {' '.join(command)}")
+        if settings.olmocr_server_url:
+            # Tryb produkcyjny: olmocr nie spawnuje lokalnego vLLM, gada z gotowym serwerem.
+            command += ["--server", settings.olmocr_server_url]
 
+        # olmocr shelluje CLI `vllm` po gołej nazwie → PATH musi zawierać bin izolowanego venv.
+        venv_bin = Path(python).parent
+        env = os.environ.copy()
+        env["PATH"] = f"{venv_bin}{os.pathsep}" + env.get("PATH", "")
+        env["VIRTUAL_ENV"] = str(venv_bin.parent)
+        env["VLLM_USE_FLASHINFER_SAMPLER"] = "0"  # fix Blackwell (jak MinerU/vlm, Paddle)
+
+        logger.info(f"olmOCR (venv izolowany): {' '.join(command)}")
         try:
             self._process = subprocess.Popen(
                 command, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
@@ -100,11 +129,11 @@ class OlmOCREngine(VLMEngine):
             stdout, stderr = self._process.communicate()
             returncode = self._process.returncode
             if returncode != 0:
+                # loguru formatuje przez {}, NIE %-args — używamy f-stringa, żeby treść TRAFIŁA do logu.
                 logger.error(
-                    "olmOCR zakończył się błędem (kod %d).\nstdout: %s\nstderr: %s",
-                    returncode,
-                    (stdout or "")[:2000],
-                    (stderr or "")[:2000],
+                    f"olmOCR zakończył się błędem (kod {returncode}).\n"
+                    f"stdout: {(stdout or '')[:2000]}\n"
+                    f"stderr: {(stderr or '')[:2000]}"
                 )
                 tail = (stderr or "")[-500:]
                 raise RuntimeError(f"olmOCR failed (code {returncode}): {tail}")

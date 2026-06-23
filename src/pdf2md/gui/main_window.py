@@ -31,6 +31,7 @@ from pdf2md.core.config import get_settings
 from pdf2md.detection.dependencies import check_pandoc
 from pdf2md.exporters.pandoc_epub_exporter import PandocEpubExporter
 from pdf2md.gui.settings_dialog import SettingsDialog
+from pdf2md.gui.theming import attach_dark_titlebar, themed_message_box
 from pdf2md.gui.widgets.engine_selector import EngineSelectorWidget
 from pdf2md.gui.widgets.file_list import FileListWidget
 from pdf2md.gui.widgets.llm_selector import LLMSelectorWidget
@@ -291,11 +292,13 @@ class MainWindow(QMainWindow):
                 self._output_edit.setText(settings.default_output_dir)
 
     def _show_about(self) -> None:
-        QMessageBox.about(
+        # Zwykły tekst — themed_message_box wystarcza (belka za motywem aplikacji).
+        themed_message_box(
             self,
+            QMessageBox.Icon.Information,
             "O programie",
             "pdf2md\n\nKonwerter PDF do Markdown z wieloma silnikami i opcjonalnym LLM.",
-        )
+        ).exec()
 
     def _open_project_page(self) -> None:
         QDesktopServices.openUrl(QUrl("https://github.com/chodzkos/pdf2md"))
@@ -303,7 +306,9 @@ class MainWindow(QMainWindow):
     def _on_convert(self) -> None:
         files = self._file_list.get_files()
         if not files:
-            QMessageBox.warning(self, "Brak plików", "Dodaj co najmniej jeden plik PDF.")
+            themed_message_box(
+                self, QMessageBox.Icon.Warning, "Brak plików", "Dodaj co najmniej jeden plik PDF."
+            ).exec()
             return
 
         engine_name = self._engine_selector.get_engine_name()
@@ -404,6 +409,8 @@ class MainWindow(QMainWindow):
 
     def _show_done_message(self, success: int, errors: int, total: float) -> None:
         message = QMessageBox(self)
+        # Własne przyciski (EPUB/Zamknij) → instancja zostaje; dokładamy belkę.
+        attach_dark_titlebar(message)
         message.setWindowTitle("Konwersja zakończona")
         message.setIcon(QMessageBox.Icon.Information)
         message.setText(
@@ -452,9 +459,19 @@ class MainWindow(QMainWindow):
                 exporter.export(markdown, markdown_path.with_suffix(".epub"))
                 exported += 1
             except Exception as exc:
-                QMessageBox.warning(self, "Eksport EPUB", f"Nie udało się eksportować EPUB:\n{exc}")
+                themed_message_box(
+                    self,
+                    QMessageBox.Icon.Warning,
+                    "Eksport EPUB",
+                    f"Nie udało się eksportować EPUB:\n{exc}",
+                ).exec()
                 return
-        QMessageBox.information(self, "Eksport EPUB", f"Wyeksportowano {exported} plik(ów) EPUB.")
+        themed_message_box(
+            self,
+            QMessageBox.Icon.Information,
+            "Eksport EPUB",
+            f"Wyeksportowano {exported} plik(ów) EPUB.",
+        ).exec()
 
 
 def _icon_path() -> Path:

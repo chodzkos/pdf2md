@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from pdf2md.gui.theming import follow_app_titlebar
+from pdf2md.gui.theming import follow_app_titlebar, themed_message_box
 
 
 class ProfileSelectorWidget(QWidget):
@@ -108,8 +108,12 @@ class ProfileEditDialog(QDialog):
         try:
             path = save_custom_profile(profile, name)
         except Exception as exc:  # pragma: no cover - błąd zapisu pokazujemy użytkownikowi
-            QMessageBox.warning(self, "Profil", f"Nie udało się zapisać profilu:\n{exc}")
+            themed_message_box(
+                self, QMessageBox.Icon.Warning, "Profil", f"Nie udało się zapisać profilu:\n{exc}"
+            ).exec()
             return
         self.saved_name = name
-        QMessageBox.information(self, "Profil", f"Zapisano profil „{name}”:\n{path}")
+        themed_message_box(
+            self, QMessageBox.Icon.Information, "Profil", f"Zapisano profil „{name}”:\n{path}"
+        ).exec()
         self.accept()

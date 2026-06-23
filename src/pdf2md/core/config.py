@@ -58,6 +58,16 @@ docling_device = "auto"
 [mineru]
 mineru_backend = "pipeline"
 
+[olmocr]
+# Izolowany venv olmOCR (subprocess). "" = auto: ~/.venvs/olmocr/bin/python (zob. SILNIKI_INSTALACJA.md 2.7)
+olmocr_python = ""
+olmocr_model = "allenai/olmOCR-2-7B-1025-FP8"
+# Flagi vLLM na 24 GB: bez nich olmocr spawnuje vLLM z 128k KV-cache → OOM "no memory for cache blocks"
+olmocr_max_model_len = 16384
+olmocr_gpu_memory_utilization = 0.90
+# Tryb produkcyjny: własny serwer olmOCR (--server). "" = spawn lokalny per-plik (wolny, ~90-150 s)
+olmocr_server_url = ""
+
 [paddleocr_vl]
 # Silnik-usługa: serwer OpenAI-compatible (vLLM). pdf2md jest tylko klientem HTTP.
 paddleocr_vl_url = "http://localhost:8000/v1"
@@ -156,6 +166,13 @@ class Settings(BaseSettings):
     # MinerU
     mineru_backend: str = "pipeline"
 
+    # olmOCR (izolowany venv, subprocess) — "" = auto ~/.venvs/olmocr/bin/python
+    olmocr_python: str = ""
+    olmocr_model: str = "allenai/olmOCR-2-7B-1025-FP8"
+    olmocr_max_model_len: int = 16384
+    olmocr_gpu_memory_utilization: float = 0.90
+    olmocr_server_url: str = ""  # "" = spawn lokalny; URL = własny serwer (--server)
+
     # PaddleOCR-VL (silnik-usługa: serwer OpenAI-compatible)
     paddleocr_vl_url: str = "http://localhost:8000/v1"
     paddleocr_vl_model: str = "PaddlePaddle/PaddleOCR-VL-1.6"
@@ -246,6 +263,12 @@ def save_settings(settings: Settings) -> None:
         f'docling_device = "{settings.docling_device}"\n',
         "\n[mineru]\n",
         f'mineru_backend = "{settings.mineru_backend}"\n',
+        "\n[olmocr]\n",
+        f'olmocr_python = "{settings.olmocr_python}"\n',
+        f'olmocr_model = "{settings.olmocr_model}"\n',
+        f"olmocr_max_model_len = {settings.olmocr_max_model_len}\n",
+        f"olmocr_gpu_memory_utilization = {settings.olmocr_gpu_memory_utilization}\n",
+        f'olmocr_server_url = "{settings.olmocr_server_url}"\n',
         "\n[paddleocr_vl]\n",
         f'paddleocr_vl_url = "{settings.paddleocr_vl_url}"\n',
         f'paddleocr_vl_model = "{settings.paddleocr_vl_model}"\n',

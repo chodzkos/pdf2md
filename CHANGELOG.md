@@ -15,6 +15,7 @@
 ### Naprawione
 
 - Polskie etykiety standardowych elementów Qt: przyciski `OK/Anuluj/Zastosuj` w oknie ustawień oraz opisy/przyciski/tooltips nienatywnego `QFileDialog` (fallback przy rozjeździe motywu) — przez załadowanie tłumaczeń Qt (`QTranslator`: `qtbase_pl`, `qt_pl`) przy starcie GUI. Brak `.qm` w danej dystrybucji loguje ostrzeżenie zamiast cichego pominięcia.
+- Wszystkie okna komunikatów (`QMessageBox`: O programie, zapis ustawień, test klucza, brak plików, eksport EPUB, podsumowanie konwersji, zapis profilu) mają belkę tytułu podążającą za motywem **aplikacji** zamiast systemu — helper `themed_message_box`/`attach_dark_titlebar` (natywny uchwyt + `follow_app_titlebar` przed pokazaniem). Koniec jasnych belek przy stałym ciemnym motywie aplikacji na jasnym systemie.
 
 ## v1.0.0
 

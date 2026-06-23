@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (
 from pdf2md.core.config import Settings, get_settings, save_settings
 from pdf2md.core.registry import engine_registry
 from pdf2md.detection.dependencies import cuda_usable
-from pdf2md.gui.theming import follow_app_titlebar
+from pdf2md.gui.theming import follow_app_titlebar, themed_message_box
 
 
 class SettingsDialog(QDialog):
@@ -199,7 +199,9 @@ class SettingsDialog(QDialog):
     def _apply(self) -> None:
         self._settings = self._settings_from_fields()
         save_settings(self._settings)
-        QMessageBox.information(self, "Ustawienia", "Zapisano ustawienia.")
+        themed_message_box(
+            self, QMessageBox.Icon.Information, "Ustawienia", "Zapisano ustawienia."
+        ).exec()
 
     def _on_ok(self) -> None:
         self._settings = self._settings_from_fields()
@@ -217,7 +219,9 @@ class SettingsDialog(QDialog):
 
     def _test_api_key(self, provider: str, value: str) -> None:
         if not value:
-            QMessageBox.warning(self, "Test klucza", "Klucz API nie jest wpisany.")
+            themed_message_box(
+                self, QMessageBox.Icon.Warning, "Test klucza", "Klucz API nie jest wpisany."
+            ).exec()
             return
 
         package = {
@@ -228,14 +232,20 @@ class SettingsDialog(QDialog):
         try:
             importlib.metadata.version(package)
         except importlib.metadata.PackageNotFoundError:
-            QMessageBox.warning(
+            themed_message_box(
                 self,
+                QMessageBox.Icon.Warning,
                 "Test klucza",
                 f"Klucz jest wpisany, ale pakiet {package} nie jest zainstalowany.",
-            )
+            ).exec()
             return
 
-        QMessageBox.information(self, "Test klucza", "Klucz jest wpisany, a pakiet SDK dostępny.")
+        themed_message_box(
+            self,
+            QMessageBox.Icon.Information,
+            "Test klucza",
+            "Klucz jest wpisany, a pakiet SDK dostępny.",
+        ).exec()
 
     def _fetch_ollama_models(self) -> list[str]:
         """Pobiera listę modeli z /api/tags. Po cichu zwraca [] przy błędzie (do _load_settings)."""
@@ -268,10 +278,11 @@ class SettingsDialog(QDialog):
     def _detect_ollama_models(self) -> None:
         models = self._fetch_ollama_models()
         if not models:
-            QMessageBox.warning(
+            themed_message_box(
                 self,
+                QMessageBox.Icon.Warning,
                 "Ollama",
                 "Nie udało się pobrać modeli z Ollamy. Sprawdź URL i czy serwer działa.",
-            )
+            ).exec()
             return
         self._populate_ollama_models(models)

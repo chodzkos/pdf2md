@@ -6,12 +6,12 @@ import importlib.metadata
 import json
 import urllib.request
 
+from chodzkos_gui_kit.qt.dialogs import pick_dir
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
-    QFileDialog,
     QFormLayout,
     QHBoxLayout,
     QLabel,
@@ -207,7 +207,11 @@ class SettingsDialog(QDialog):
         self.accept()
 
     def _browse_default_output_dir(self) -> None:
-        directory = QFileDialog.getExistingDirectory(self, "Wybierz domyślny folder wynikowy")
+        directory = pick_dir(
+            parent=self,
+            title="Wybierz domyślny folder wynikowy",
+            start_dir=self._default_output_dir.text().strip(),
+        )
         if directory:
             self._default_output_dir.setText(directory)
 

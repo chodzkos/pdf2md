@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from chodzkos_gui_kit.qt.dialogs import open_files, pick_dir
 from chodzkos_gui_kit.qt.theme import ThemeManager, ThemeSetting
 from loguru import logger
 from PySide6.QtCore import QSize, QUrl
 from PySide6.QtGui import QAction, QDesktopServices, QIcon, QKeySequence
 from PySide6.QtWidgets import (
     QComboBox,
-    QFileDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -261,7 +261,7 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
 
     def _on_add_files(self) -> None:
-        paths, _ = QFileDialog.getOpenFileNames(self, "Wybierz pliki PDF", "", "PDF (*.pdf)")
+        paths = open_files(parent=self, title="Wybierz pliki PDF", name_filter="PDF (*.pdf)")
         if paths:
             self._file_list.add_files(paths)
 
@@ -269,7 +269,11 @@ class MainWindow(QMainWindow):
         self._file_list.clear()
 
     def _on_browse_output(self) -> None:
-        directory = QFileDialog.getExistingDirectory(self, "Wybierz folder wynikowy")
+        directory = pick_dir(
+            parent=self,
+            title="Wybierz folder wynikowy",
+            start_dir=self._output_edit.text().strip(),
+        )
         if directory:
             self._output_edit.setText(directory)
 

@@ -12,6 +12,10 @@
 
 - File-dialogi (wybór plików PDF, folder wyjściowy, domyślny folder w ustawieniach) przeniesione na helpery `chodzkos-gui-kit` (`open_files`/`pick_dir`) z regułą rozjazdu natywny/fallback: natywny Explorer gdy motyw zgodny z systemem, skonfigurowany ciemny fallback przy rozjeździe. Dodano test strażniczy przeciw bezpośredniemu `QFileDialog` w GUI.
 
+### Naprawione
+
+- Polskie etykiety standardowych elementów Qt: przyciski `OK/Anuluj/Zastosuj` w oknie ustawień oraz opisy/przyciski/tooltips nienatywnego `QFileDialog` (fallback przy rozjeździe motywu) — przez załadowanie tłumaczeń Qt (`QTranslator`: `qtbase_pl`, `qt_pl`) przy starcie GUI. Brak `.qm` w danej dystrybucji loguje ostrzeżenie zamiast cichego pominięcia.
+
 ## v1.0.0
 
 ### Dodane

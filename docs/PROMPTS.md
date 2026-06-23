@@ -2122,6 +2122,128 @@ ruff + mypy czyste. Pokaż diff; opisz, na jakiej granicy realnie zatrzymuje i j
 
 ---
 
+## PROMPT D18 — `marker_device`: domyślnie „auto" (GPU gdy dostępne) — follow-up do D16
+
+> Powód: Marker domyślnie idzie na CPU — to **świadomy default** `marker_device="cpu"` z Etapu 3
+> (stabilność WSL), nie bug. Na wielostronicowych dokumentach CPU boli, a karta (RTX 5090) jest. Ten PR
+> robi dla Markera to, co D16 dla Suryi — domyślne GPU — ale przez **zmianę domyślnej wartości configu**
+> (osobna decyzja, Rule #1). KLUCZOWE: **nie wolno po cichu nadpisać istniejących configów z jawnym
+> „cpu"** — bo nie odróżnisz „user świadomie wybrał cpu" od „stary default cpu".
+
+```
+GAŁĄŹ: feat/marker-device-auto  (osobny branch; bez auto-push; czekaj na zgodę przed PR)
+
+0. PRECONDITION (zrób i POKAŻ wynik): potwierdź, że powód „stabilność WSL" z Etapu 3 jest nieaktualny —
+   kilka WIELOSTRONICOWYCH konwersji Markera na GPU pod WSL bez OOM/zwiechy:
+     uv run --extra engines-core python -c "import torch; print('cuda', torch.cuda.is_available())"
+     # marker_device=cuda w config.toml (lub kwarg), potem:
+     uv run --extra engines-core pdf2md convert /tmp/text5.pdf --engine marker -o /tmp/m.md
+   (+ nvidia-smi w trakcie). Jeśli niestabilne — STOP, zgłoś; NIE zmieniaj defaultu.
+
+1. Wartość „auto": dorzuć „auto" do dozwolonych wartości marker_device (obok „cpu"/„cuda"). W adapterze
+   (load_model/_load_marker_api), gdy marker_device=="auto": wykryj torch.cuda.is_available() → „cuda",
+   inaczej „cpu"; przekaż ROZWIĄZANE urządzenie do Markera. Zaloguj: „Marker: device=auto→cuda".
+   (Wzorzec jak istniejące docling_device: auto/cpu/cuda.)
+
+2. Zmień DEFAULT dla NOWYCH configów: marker_device domyślnie „auto" (w core/config.py, model
+   pydantic-settings). Świeża instalacja bez configu → Marker bierze GPU, gdy jest.
+
+3. Istniejący userzy — BEZ cichego nadpisania: jeśli wczytany config ma marker_device=="cpu" ORAZ
+   torch.cuda.is_available() → zaloguj JEDNORAZOWĄ, nieinwazyjną podpowiedź („Marker na cpu, a wykryto
+   GPU — ustaw marker_device='auto'/'cuda', by przyspieszyć"). NIE zmieniaj wartości automatycznie.
+   (Pełna infrastruktura config_version + migracji to osobny, szerszy temat — tu wystarczy ostrzeżenie,
+   bo jawnego „cpu" i tak nie wolno nadpisywać.)
+
+4. Testy: „auto" rozwiązuje się na „cuda" gdy CUDA dostępne i „cpu" gdy nie (zamockuj
+   torch.cuda.is_available()); default nowego configu == „auto"; podpowiedź pojawia się dla cpu+CUDA,
+   a NIE pojawia się dla cpu-bez-CUDA ani dla jawnego cuda/auto; walidacja odrzuca śmieciowe wartości.
+
+5. Dokumentacja: zaktualizuj notkę o marker_device w PROJEKT (default teraz „auto"; „cpu" jako opcja
+   stabilnościowa) — spójnie z sekcją „Konfiguracja".
+
+ruff + mypy czyste. Pokaż diff + log „device=auto→cuda" + potwierdzenie GPU (nvidia-smi) na wielu stronach.
+```
+
+> To samodzielny PR (zmiana defaultu = świadoma decyzja, nie naprawa). Pełny `config_version` + migracja
+> ustawień (dla całej rodziny aplikacji z platformdirs) to osobny, większy temat — tutaj go nie ruszaj;
+> dla `marker_device` ostrzeżenie wystarcza, bo jawnej wartości usera i tak nie wolno nadpisać.
+
+---
+
+## PROMPT D19 — olmOCR: finalizacja adaptera + parking silnika + doc (domknięcie D10)
+
+> Stan po długim debugu: olmOCR-2-7B FP8 **działa technicznie** — gołe `vllm serve --max-model-len
+> 16384 --gpu-memory-utilization 0.90` wstaje na 24 GB, a `olmocr.pipeline` przepuszcza te flagi
+> (default `--max_model_len` to już 16384) i ma tryb `--server`. ALE: w trybie spawn-per-plik
+> serwer-dziecko olmocr nie wstaje pod nightly-vLLM/transformers 5.x (stderr połykany — health-poll
+> w nieskończoność); silnik zajmuje ~całą kartę (model 9.5 + KV 9.3 + grafy ≈ 24 GB) → **nie
+> współistnieje z modelem korekty w pipelinie**; start 90-150 s/wywołanie; anglocentryczny.
+> **DECYZJA: adapter zostaje (działający, zarejestrowany), silnik ZAPARKOWANY** — commitujemy
+> poprawny adapter + udokumentowaną receptę. NIE drążymy transformers-5.x (kolejny rabbit hole).
+
+```
+GAŁĄŹ: feat/olmocr-adapter-d10  (osobny branch; bez auto-push; czekaj na zgodę przed PR)
+
+1. engines/olmocr_engine.py — doprowadź adapter do stanu docelowego (zastosuj czego brak; idempotentnie):
+   a) ENV subprocessu — PATH z binem izolowanego venv (olmocr shelluje CLI `vllm` po gołej nazwie →
+      FileNotFoundError: 'vllm'):
+        venv_bin = Path(venv_python).parent
+        env = os.environ.copy()
+        env["PATH"] = f"{venv_bin}{os.pathsep}" + env.get("PATH", "")
+        env["VIRTUAL_ENV"] = str(venv_bin.parent)
+        env["VLLM_USE_FLASHINFER_SAMPLER"] = "0"      # fix Blackwell (jak MinerU/vlm, Paddle)
+      przekaż env= do Popen.
+   b) FLAGI vLLM — dołóż do komendy olmocr.pipeline: --max_model_len i --gpu_memory_utilization z pól
+      configu olmocr_max_model_len (default 16384) i olmocr_gpu_memory_utilization (default 0.90).
+      Bez nich olmocr spawnuje vLLM z domyślnym 128k KV-cache → "No available memory for cache blocks"
+      na 24 GB.
+   c) NAPRAW logowanie błędu w except — teraz leci literalnie "kod %d / stdout %s / stderr %s"
+      (argumenty NIE podstawione) → zamień na f-string albo poprawne argumenty logger.*, żeby
+      stderr/stdout dziecka REALNIE trafiał do logu i GUI. (To ukrywało prawdziwe błędy przez cały debug.)
+   d) is_available() — sprawdzaj obecność venv_bin/"vllm" (NIE sam python) + has_gpu(); półzłożony venv
+      (olmocr bez vllm) ma dawać ❌, nie fałszywe ✅. (Dokładnie ten przypadek nas ugryzł.)
+
+   OPCJONALNIE (zalecane jako jedyny sensowny tryb produkcyjny — możesz dołożyć teraz LUB jako osobny
+   follow-up, jeśli chcesz minimalny PR):
+   e) pole configu olmocr_server_url → gdy ustawione, przekaż `--server <url>` do olmocr.pipeline
+      (olmocr pomija spawn lokalnego vLLM). Wskazujesz własny, raz wystartowany serwer (wzorzec
+      "serwer user-managed" PaddleOCR-VL) — znosi 90-150 s startu/plik i pozwala zarządzać VRAM.
+      Puste → zachowanie jak dotąd (spawn lokalny).
+
+   Bez zmian publicznego interfejsu poza dodaniem powyższych pól configu. Silnik POZOSTAJE
+   zarejestrowany (to działający silnik opcjonalny, nie usuwamy go jak pdf-craft).
+
+2. Doc SILNIKI_INSTALACJA.md sek. 2.7 (olmOCR) — uzgodnij z rzeczywistością:
+   - środowisko: venv ~/.venvs/olmocr → `uv pip install olmocr` → DODATKOWO nightly-vLLM jak Paddle
+     (sek. 2.8): `uv pip install -U vllm --pre --torch-backend=auto --extra-index-url
+     https://wheels.vllm.ai/nightly`. (Samo `uv pip install olmocr` NIE ciągnie torch/vllm — to było źródłem błędu.)
+   - uruchomienie: VLLM_USE_FLASHINFER_SAMPLER=0 + --max_model_len 16384 --gpu_memory_utilization 0.90
+     (na 24 GB; przy OOM zejdź do 0.80). Gołe `vllm serve` z tymi flagami POTWIERDZONE jako działające.
+   - PARKING (jawnie): w trybie spawn-per-plik serwer-dziecko olmocr nie wstaje pod nightly-vLLM/
+     transformers 5.x (stderr połykany; podejrzenie: transformers 5.x w ścieżce processora/chat-template).
+     Silnik zajmuje ~całą kartę → NIE współistnieje z modelem korekty w pipelinie; start 90-150 s/
+     wywołanie; anglocentryczny. ZAPARKOWANY — dla dokumentów PL używać PaddleOCR-VL/Surya. Jedyny realny
+     tryb produkcyjny: external-server (`--server` / pole olmocr_server_url), nie spawn per-plik.
+
+3. Weryfikacja:
+   - uv run pytest (zielone), ruff + mypy czyste.
+   - uv run pdf2md doctor → olmOCR status zależny od venv (❌ na maszynie bez kompletnego venv — OK i zamierzone).
+   - NIE wymagaj zielonego e2e konwersji olmOCR (silnik zaparkowany; e2e blokuje środowisko, nie kod).
+
+4. Commit (Conventional Commits) — jeden PR:
+   - tytuł: feat(engines): adapter olmOCR (izolowany vLLM) + recepta VRAM; silnik zaparkowany
+   - opis: co działa (adapter, PATH, flagi, --server, gołe vllm serve), co blokuje (spawn pod
+     transformers 5.x, ekonomia VRAM 24 GB, koszt startu 90-150 s, EN-centryczny), dlaczego parking;
+     adapter gotowy do trybu external-server, gdyby zaszła potrzeba.
+   - BRAK auto-push; czekaj na zgodę.
+```
+
+> **Osobny follow-up (NIE w tym PR): widoczność postępu silników-usług.** Buforowany `Popen+communicate`
+> daje zamrożony spinner przez 90-150 s startu serwera (dotyczy też PaddleOCR-VL). Streamuj stderr albo
+> pokaż status „startuję serwer (~1-2 min)". Wyszło przy olmOCR, ale wartość ogólna — własny prompt.
+
+---
+
 ## Wskazówki ogólne
 
 ### Dwie zasady do DOPISANIA na końcu każdego prompta etapowego

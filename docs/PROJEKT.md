@@ -398,6 +398,13 @@ CLI i GUI czytają ten sam `config.toml` przez `core/config.py`. GUI zapisuje zm
 
 > **Zapis atomowy.** Skoro `config.toml` zapisuje i CLI (`config set`), i GUI, jednoczesny zapis mógłby uszkodzić plik (race condition). `save_settings()` pisze do pliku tymczasowego i robi `os.replace()` na docelowy — operacja atomowa na poziomie systemu plików, eliminuje uszkodzenie bez dodatkowych zależności. (Cięższy `filelock` nie jest konieczny dla narzędzia jednoosobowego.)
 
+> **Pułapka: zmiana domyślnej wartości w kodzie NIE aktualizuje wstecz już zapisanych configów.** Kosztowała realne polowanie na bug: Marker robił tylko pierwszą stronę 99-stronicowego PDF, bo utrwalony `config.toml` miał `marker_max_pages = 1` (stary default). Poprawka defaultu na `0` zadziałała tylko dla **nowych** configów — istniejący plik (platformdirs: `~/.config/pdf2md/config.toml`) trzymał starą „1", dopóki user ręcznie jej nie zmienił/nie skasował pliku. **To dotyczy KAŻDEGO defaultu** (np. planowanej zmiany `marker_device` na auto/cuda — patrz niżej): zmiana w kodzie pomoże tylko świeżym instalacjom, nie istniejącym userom. Rozwiązania na przyszłość (dotyczy też pozostałych aplikacji z platformdirs — IcoForge, EpubForge):
+> - **(a)** wersjonuj config: pole `config_version` w `config.toml` + migracja przy starcie (podbij wersję → przemapuj/usuń przestarzałe klucze, ustaw nowe defaulty), albo
+> - **(b)** loader ostrzega o nieznanych/przestarzałych kluczach przy wczytaniu (mniej inwazyjne, ale nie naprawia automatycznie).
+> Bez tego każda zmiana sensownego defaultu cicho omija istniejących userów.
+
+> **`marker_device` — CPU to świadomy default, nie bug.** W przeciwieństwie do Suryi (która nie ustawiała device w ogóle — to była usterka, fix w D16), Marker celowo ma `marker_device = "cpu"` (decyzja z Etapu 3 — stabilność pod WSL). Dlatego osobno: GPU dla Markera włączasz `marker_device = "cuda"` (lub `auto`) w `config.toml`. Ewentualna zmiana defaultu na `auto` (cuda gdy dostępna, fallback cpu) to **osobna decyzja** (Rule #1) i osobny PR — przed nią: (1) potwierdź, że powód „stabilność WSL" z Etapu 3 jest już nieaktualny (kilka wielostronicowych konwersji Markera na GPU pod WSL bez OOM/zwiechy), (2) celuj w `"auto"`, nie twarde `"cuda"` (Marker bywa dystrybuowany na maszyny bez karty), (3) pamiętaj o pułapce migracji powyżej — istniejące configy mają `"cpu"` zapisane, więc sama zmiana defaultu ich nie ruszy.
+
 
 ---
 

@@ -17,6 +17,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from pdf2md.gui.theming import follow_app_titlebar
+
 
 class ProfileSelectorWidget(QWidget):
     """Dropdown profilu skanowania + przycisk „Edytuj profil"."""
@@ -91,6 +93,8 @@ class ProfileEditDialog(QDialog):
         buttons.accepted.connect(self._on_save)
         buttons.rejected.connect(self.reject)
         layout.addRow(buttons)
+
+        self._titlebar = follow_app_titlebar(self)
 
     def _on_save(self) -> None:
         from pdf2md.scan.profiles import load_profile, save_custom_profile

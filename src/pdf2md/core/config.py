@@ -75,6 +75,10 @@ paddleocr_vl_model = "PaddlePaddle/PaddleOCR-VL-1.6"
 paddleocr_vl_prompt = "OCR:"
 paddleocr_vl_timeout = 120.0
 
+[ui]
+# Motyw GUI: auto (śledzi system), light, dark. Most do kitowego ThemeManager.
+theme = "auto"
+
 [api_keys]
 # Klucze API — bezpieczniej trzymać w .env, tu tylko fallback
 anthropic_api_key = ""
@@ -184,6 +188,9 @@ class Settings(BaseSettings):
     llm_provider: str = "none"
     llm_mode: str = "none"
 
+    # GUI — most do kitowego ThemeManager (klucz "theme": auto/light/dark)
+    theme: str = "auto"
+
     @field_validator("marker_device")
     @classmethod
     def validate_marker_device(cls, value: str) -> str:
@@ -216,6 +223,15 @@ class Settings(BaseSettings):
         normalized = value.lower().strip()
         if normalized not in {"auto", "cpu", "cuda"}:
             raise ValueError("docling_device musi mieć wartość: auto, cpu albo cuda")
+        return normalized
+
+    @field_validator("theme")
+    @classmethod
+    def validate_theme(cls, value: str) -> str:
+        """Motyw GUI zgodny z kitowym ThemeManager: auto, light albo dark."""
+        normalized = value.lower().strip()
+        if normalized not in {"auto", "light", "dark"}:
+            raise ValueError("theme musi mieć wartość: auto, light albo dark")
         return normalized
 
 
@@ -274,6 +290,8 @@ def save_settings(settings: Settings) -> None:
         f'paddleocr_vl_model = "{settings.paddleocr_vl_model}"\n',
         f'paddleocr_vl_prompt = "{settings.paddleocr_vl_prompt}"\n',
         f"paddleocr_vl_timeout = {settings.paddleocr_vl_timeout}\n",
+        "\n[ui]\n",
+        f'theme = "{settings.theme}"\n',
         "\n[api_keys]\n",
         f'anthropic_api_key = "{settings.anthropic_api_key}"\n',
         f'openai_api_key = "{settings.openai_api_key}"\n',

@@ -20,6 +20,7 @@ _ENV_VARS_TO_CLEAR = (
     "LLM_PROVIDER",
     "LLM_MODE",
     "MINERU_BACKEND",
+    "THEME",
 )
 
 
@@ -51,6 +52,25 @@ def test_get_settings_creates_default_config(isolated_config: Path) -> None:
     assert settings.docling_device == "auto"
     assert settings.ollama_url == "http://localhost:11434"
     assert settings.llm_mode == "none"
+    assert settings.theme == "auto"  # domyślny motyw GUI
+
+
+def test_theme_persists_through_save_and_reload(isolated_config: Path) -> None:
+    """theme zapisany przez save_settings trafia do config.toml i jest czytany po reloadzie."""
+    settings = get_settings()
+    settings.theme = "dark"
+    save_settings(settings)
+
+    assert 'theme = "dark"' in isolated_config.read_text(encoding="utf-8")
+
+    config._settings_cache = None  # wymuś reload z dysku
+    assert get_settings().theme == "dark"
+
+
+def test_invalid_theme_rejected() -> None:
+    """Walidator odrzuca motyw spoza auto/light/dark."""
+    with pytest.raises(ValueError, match="theme"):
+        Settings(theme="neon")
 
 
 def test_get_settings_loads_toml_values(isolated_config: Path) -> None:

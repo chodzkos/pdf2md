@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### Dodane
+
+- Motyw marki (jasny/ciemny/auto) i ciemny pasek tytułu przez `chodzkos-gui-kit` — pełny standard GUI (Fusion + QPalette + QSS akcentowy). Motyw stosowany przy starcie z `config.toml` (klucz `[ui].theme`, most `SettingsMapping`).
+- Dyskretny przełącznik motywu (auto/jasny/ciemny) + „O programie" w lekkim górnym pasku okna głównego.
+- Panel logów koloruje statusy (info/ostrzeżenie/błąd) rolami palety i przemalowuje istniejące wpisy po zmianie motywu — bez zaszytych hexów.
+
 ## v1.0.0
 
 ### Dodane

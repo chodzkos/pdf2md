@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
 from pdf2md.core.config import Settings, get_settings, save_settings
 from pdf2md.core.registry import engine_registry
 from pdf2md.detection.dependencies import cuda_usable
+from pdf2md.gui.theming import follow_app_titlebar
 
 
 class SettingsDialog(QDialog):
@@ -38,6 +39,7 @@ class SettingsDialog(QDialog):
         self._settings = get_settings()
         self._build_ui()
         self._load_settings()
+        self._titlebar = follow_app_titlebar(self)
 
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)

@@ -5,12 +5,14 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from chodzkos_gui_kit.qt.theme import ThemeManager
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
 import pdf2md.engines  # rejestruje silniki w engine_registry
 import pdf2md.llm  # noqa: F401  # rejestruje dostawców LLM w llm_registry
 from pdf2md.gui.main_window import MainWindow
+from pdf2md.gui.theme_bridge import SettingsMapping
 from pdf2md.utils.logging import setup_logging
 
 
@@ -32,6 +34,13 @@ def main() -> None:
     app.setApplicationVersion("1.0.0")
     icon_path = Path(__file__).resolve().parent / "assets" / "icon.svg"
     app.setWindowIcon(QIcon(str(icon_path)))
-    window = MainWindow(initial_files=initial_files)
+
+    # Motyw marki: ThemeManager czyta/pisze config.toml przez SettingsMapping.
+    # .setting to wczytany z configu tryb (auto/light/dark); apply() ustawia
+    # Fusion + paletę + QSS — NIE wołamy setStyle ręcznie.
+    theme_manager = ThemeManager(app, SettingsMapping())
+    theme_manager.apply(theme_manager.setting)
+
+    window = MainWindow(theme_manager, initial_files=initial_files)
     window.show()
     sys.exit(app.exec())

@@ -30,6 +30,7 @@ dependencies = [
     "click>=8.1",
     "PySide6>=6.7",
     "pyyaml>=6.0",
+    "chodzkos-gui-kit[qt]",
 ]
 
 [project.optional-dependencies]
@@ -160,3 +161,6 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "if __name__ == .__main__.:",
 ]
+
+[tool.uv.sources]
+chodzkos-gui-kit = { git = "https://github.com/chodzkos/gui-kit", rev = "v0.3.4" }

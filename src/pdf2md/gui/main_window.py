@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from chodzkos_gui_kit.qt.theme import ThemeManager, ThemeSetting
 from loguru import logger
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import QSize, QUrl
 from PySide6.QtGui import QAction, QDesktopServices, QIcon, QKeySequence
 from PySide6.QtWidgets import (
+    QComboBox,
     QFileDialog,
     QFrame,
     QHBoxLayout,
@@ -20,6 +22,7 @@ from PySide6.QtWidgets import (
     QSizePolicy,
     QTabWidget,
     QTextEdit,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -47,18 +50,24 @@ def _separator() -> QFrame:
 class MainWindow(QMainWindow):
     """Główne okno pdf2md."""
 
-    def __init__(self, initial_files: list[str] | None = None) -> None:
+    def __init__(self, theme_manager: ThemeManager, initial_files: list[str] | None = None) -> None:
         super().__init__()
         self.setWindowTitle("pdf2md")
         self.setMinimumSize(720, 640)
         self.setWindowIcon(QIcon(str(_icon_path())))
 
+        self._theme_manager = theme_manager
         self._worker: ConversionWorker | None = None
         self._last_output_dir: Path | None = None
         self._last_markdown_outputs: list[Path] = []
         self._initial_files = initial_files or []
         self._build_menu()
         self._build_ui()
+
+        # Ciemny pasek tytułu (DWM = motyw app); re-render logu po zmianie motywu.
+        self._theme_manager.attach_titlebar(self)
+        self._theme_manager.theme_changed.connect(self._on_theme_changed)
+
         if self._initial_files:
             self._file_list.add_files(self._initial_files)
 
@@ -108,6 +117,9 @@ class MainWindow(QMainWindow):
         root = QVBoxLayout(central)
         root.setSpacing(8)
         root.setContentsMargins(12, 12, 12, 12)
+
+        # --- Górny pasek (lekki): logo+nazwa | przełącznik motywu + O programie ---
+        root.addLayout(self._build_topbar())
 
         # --- Przyciski górne ---
         btn_row = QHBoxLayout()
@@ -195,6 +207,54 @@ class MainWindow(QMainWindow):
         self._tabs.addTab(self._log_panel, "Log")
         self._tabs.addTab(self._preview, "Podgląd")
         root.addWidget(self._tabs)
+
+    def _build_topbar(self) -> QHBoxLayout:
+        """Lekki górny pasek (GUI_STANDARD §6): logo+nazwa | motyw + O programie.
+
+        Przełącznik motywu i „O programie" to meta-funkcje — siedzą dyskretnie
+        w pasku, nie w zakładkach roboczych.
+        """
+        bar = QHBoxLayout()
+
+        logo = QLabel()
+        logo.setPixmap(QIcon(str(_icon_path())).pixmap(QSize(20, 20)))
+        bar.addWidget(logo)
+        name = QLabel("pdf2md")
+        name_font = name.font()
+        name_font.setBold(True)
+        name.setFont(name_font)
+        bar.addWidget(name)
+
+        bar.addStretch()
+
+        bar.addWidget(QLabel("Motyw:"))
+        self._theme_combo = QComboBox()
+        for label, value in (("Auto", "auto"), ("Jasny", "light"), ("Ciemny", "dark")):
+            self._theme_combo.addItem(label, value)
+        current = self._theme_combo.findData(self._theme_manager.setting)
+        if current >= 0:
+            self._theme_combo.setCurrentIndex(current)
+        # `activated` reaguje tylko na wybór użytkownika — programowe ustawienie
+        # indeksu powyżej nie wywoła apply() podczas budowy UI.
+        self._theme_combo.activated.connect(self._on_theme_selected)
+        bar.addWidget(self._theme_combo)
+
+        about_btn = QToolButton()
+        about_btn.setText("ⓘ")
+        about_btn.setToolTip("O programie")
+        about_btn.clicked.connect(self._show_about)
+        bar.addWidget(about_btn)
+
+        return bar
+
+    def _on_theme_selected(self, index: int) -> None:
+        """Użytkownik zmienił motyw — apply() zapisze go w config.toml przez most."""
+        setting: ThemeSetting = self._theme_combo.itemData(index)
+        self._theme_manager.apply(setting)
+
+    def _on_theme_changed(self, _palette: object) -> None:
+        """Po zmianie motywu przemaluj kolory logu wg nowej palety."""
+        self._log_panel.restyle()
 
     # ------------------------------------------------------------------
     # Sloty przycisków

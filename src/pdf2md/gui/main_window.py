@@ -6,7 +6,7 @@ from pathlib import Path
 
 from chodzkos_gui_kit.qt.dialogs import open_files
 from chodzkos_gui_kit.qt.theme import ThemeManager, ThemeSetting
-from chodzkos_gui_kit.qt.widgets import PathEntry, PathEntryTexts
+from chodzkos_gui_kit.qt.widgets import FileList, FileListTexts, PathEntry, PathEntryTexts
 from loguru import logger
 from PySide6.QtCore import QSize, QUrl
 from PySide6.QtGui import QAction, QDesktopServices, QIcon, QKeySequence
@@ -33,7 +33,6 @@ from pdf2md.exporters.pandoc_epub_exporter import PandocEpubExporter
 from pdf2md.gui.settings_dialog import SettingsDialog
 from pdf2md.gui.theming import attach_dark_titlebar, themed_message_box
 from pdf2md.gui.widgets.engine_selector import EngineSelectorWidget
-from pdf2md.gui.widgets.file_list import FileListWidget
 from pdf2md.gui.widgets.llm_selector import LLMSelectorWidget
 from pdf2md.gui.widgets.log_panel import LogPanelWidget
 from pdf2md.gui.widgets.profile_selector import ProfileSelectorWidget
@@ -46,6 +45,34 @@ def _separator() -> QFrame:
     line.setFrameShape(QFrame.Shape.HLine)
     line.setFrameShadow(QFrame.Shadow.Sunken)
     return line
+
+
+# Polskie etykiety toolbara kitowego FileList (pdf2md nie ma gettext).
+_FILE_LIST_TEXTS = FileListTexts(
+    files="Pliki",
+    folder="Folder",
+    remove="Usuń",
+    clear="Wyczyść",
+    tooltip_files="Dodaj pliki PDF przez okno wyboru",
+    tooltip_folder="Dodaj pliki PDF z wybranego folderu",
+    tooltip_remove="Usuń zaznaczone pozycje z listy",
+    tooltip_clear="Usuń wszystkie pozycje z listy",
+    list_tooltip="Lista plików — przeciągnij pliki PDF tutaj lub użyj przycisków powyżej",
+    dialog_add_files="Dodaj pliki PDF",
+    dialog_add_folder="Dodaj folder",
+    filter_supported="PDF ({pattern})",
+)
+
+
+def _files_count_label(count: int) -> str:
+    """Licznik plików z polskimi formami mnogimi (pdf2md nie ma gettext)."""
+    if count == 1:
+        form = "plik"
+    elif 2 <= count % 10 <= 4 and not 12 <= count % 100 <= 14:
+        form = "pliki"
+    else:
+        form = "plików"
+    return f"{count} {form}"
 
 
 class MainWindow(QMainWindow):
@@ -122,19 +149,13 @@ class MainWindow(QMainWindow):
         # --- Górny pasek (lekki): logo+nazwa | przełącznik motywu + O programie ---
         root.addLayout(self._build_topbar())
 
-        # --- Przyciski górne ---
-        btn_row = QHBoxLayout()
-        self._btn_add = QPushButton("Dodaj pliki…")
-        self._btn_add.clicked.connect(self._on_add_files)
-        self._btn_clear = QPushButton("Wyczyść listę")
-        self._btn_clear.clicked.connect(self._on_clear_list)
-        btn_row.addWidget(self._btn_add)
-        btn_row.addWidget(self._btn_clear)
-        btn_row.addStretch()
-        root.addLayout(btn_row)
-
-        # --- Lista plików ---
-        self._file_list = FileListWidget()
+        # --- Lista plików (kitowy FileList: własny toolbar +Pliki/+Folder/Usuń/Wyczyść,
+        #     licznik, D&D z rekursją folderów) ---
+        self._file_list = FileList(
+            extensions={".pdf"},
+            texts=_FILE_LIST_TEXTS,
+            count_label=_files_count_label,
+        )
         self._file_list.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         root.addWidget(self._file_list)
 
@@ -265,12 +286,10 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
 
     def _on_add_files(self) -> None:
+        # Wejście z menu Plik→Otwórz (Ctrl+O); toolbar widgetu ma własne „+Pliki".
         paths = open_files(parent=self, title="Wybierz pliki PDF", name_filter="PDF (*.pdf)")
         if paths:
             self._file_list.add_files(paths)
-
-    def _on_clear_list(self) -> None:
-        self._file_list.clear()
 
     def _is_scan_engine(self, engine_name: str) -> bool:
         return "scan pipeline" in engine_name.lower()
@@ -298,7 +317,8 @@ class MainWindow(QMainWindow):
         QDesktopServices.openUrl(QUrl("https://github.com/chodzkos/pdf2md"))
 
     def _on_convert(self) -> None:
-        files = self._file_list.get_files()
+        # kit FileList.files() zwraca list[Path]; worker oczekuje str.
+        files = [str(path) for path in self._file_list.files()]
         if not files:
             themed_message_box(
                 self, QMessageBox.Icon.Warning, "Brak plików", "Dodaj co najmniej jeden plik PDF."

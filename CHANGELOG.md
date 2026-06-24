@@ -11,6 +11,7 @@
 ### Zmienione
 
 - File-dialogi (wybór plików PDF, folder wyjściowy, domyślny folder w ustawieniach) przeniesione na helpery `chodzkos-gui-kit` (`open_files`/`pick_dir`) z regułą rozjazdu natywny/fallback: natywny Explorer gdy motyw zgodny z systemem, skonfigurowany ciemny fallback przy rozjeździe. Dodano test strażniczy przeciw bezpośredniemu `QFileDialog` w GUI.
+- Pole „Folder wynikowy" (dawniej `QLineEdit` + „Przeglądaj") to teraz wspólny `PathEntry` z `chodzkos-gui-kit` (pin `v0.4.0`, `mode="dir"`): pole + przycisk „…" z `pick_dir` w jednym widgecie, etykiety po polsku przez `PathEntryTexts`. Zachowanie bez zmian (placeholder, wartość startowa z `default_output_dir`, odczyt przy konwersji).
 
 ### Naprawione
 

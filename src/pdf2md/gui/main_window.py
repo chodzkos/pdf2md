@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from chodzkos_gui_kit.qt.dialogs import open_files, pick_dir
+from chodzkos_gui_kit.qt.dialogs import open_files
 from chodzkos_gui_kit.qt.theme import ThemeManager, ThemeSetting
+from chodzkos_gui_kit.qt.widgets import PathEntry, PathEntryTexts
 from loguru import logger
 from PySide6.QtCore import QSize, QUrl
 from PySide6.QtGui import QAction, QDesktopServices, QIcon, QKeySequence
@@ -14,7 +15,6 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QMainWindow,
     QMessageBox,
     QProgressBar,
@@ -157,16 +157,19 @@ class MainWindow(QMainWindow):
         self._llm_selector = LLMSelectorWidget()
         root.addWidget(self._llm_selector)
 
-        # --- Folder wyjściowy ---
+        # --- Folder wyjściowy (kitowy PathEntry: pole + „…" z pick_dir) ---
         out_row = QHBoxLayout()
         out_row.addWidget(QLabel("Folder wynikowy:"))
-        self._output_edit = QLineEdit()
-        self._output_edit.setPlaceholderText("(obok pliku źródłowego)")
-        self._output_edit.setText(get_settings().default_output_dir)
-        out_row.addWidget(self._output_edit)
-        btn_browse = QPushButton("Przeglądaj…")
-        btn_browse.clicked.connect(self._on_browse_output)
-        out_row.addWidget(btn_browse)
+        self._output_entry = PathEntry(
+            mode="dir",
+            placeholder="(obok pliku źródłowego)",
+            texts=PathEntryTexts(
+                tooltip_dir="Wybierz folder wynikowy",
+                title_dir="Wybierz folder wynikowy",
+            ),
+        )
+        self._output_entry.set(get_settings().default_output_dir)
+        out_row.addWidget(self._output_entry, stretch=1)
         root.addLayout(out_row)
 
         root.addWidget(_separator())
@@ -269,15 +272,6 @@ class MainWindow(QMainWindow):
     def _on_clear_list(self) -> None:
         self._file_list.clear()
 
-    def _on_browse_output(self) -> None:
-        directory = pick_dir(
-            parent=self,
-            title="Wybierz folder wynikowy",
-            start_dir=self._output_edit.text().strip(),
-        )
-        if directory:
-            self._output_edit.setText(directory)
-
     def _is_scan_engine(self, engine_name: str) -> bool:
         return "scan pipeline" in engine_name.lower()
 
@@ -289,7 +283,7 @@ class MainWindow(QMainWindow):
         if dialog.exec():
             settings = get_settings()
             if settings.default_output_dir:
-                self._output_edit.setText(settings.default_output_dir)
+                self._output_entry.set(settings.default_output_dir)
 
     def _show_about(self) -> None:
         # Zwykły tekst — themed_message_box wystarcza (belka za motywem aplikacji).
@@ -314,7 +308,7 @@ class MainWindow(QMainWindow):
         engine_name = self._engine_selector.get_engine_name()
         llm_name = self._llm_selector.get_llm_name()
         llm_model = self._llm_selector.get_model()
-        output_dir = self._output_edit.text().strip()
+        output_dir = self._output_entry.get()
         language = get_settings().default_language
 
         # Scan Pipeline sam steruje korektą LLM przez profil — wyłącz generyczny post-processing

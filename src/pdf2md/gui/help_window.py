@@ -7,12 +7,16 @@ ekstrakcję wspólnego okna pomocy do gui-kit.
 Kolory w HTML idą WYŁĄCZNIE przez funkcję ``palette(...)`` Qt — tła treści na
 ``palette(alternate-base)`` + tekst ``palette(text)`` (para trzymająca kontrast
 w obu motywach; ``mid``/``dark``/``shadow`` to role ramek/cieni, nie powierzchni).
-Qt podstawia kolor z palety ``QTextBrowser``, więc działa w obu motywach bez
-re-renderu. Zero zaszytych hexów.
+Zero zaszytych hexów.
+
+``QTextDocument`` rozwiązuje ``palette(...)`` do KONKRETNYCH kolorów przy
+``setHtml`` i nie aktualizuje ich przy zmianie motywu — dlatego
+:meth:`HelpWindow.changeEvent` re-renderuje zakładki na ``PaletteChange``.
 """
 
 from __future__ import annotations
 
+from PySide6.QtCore import QEvent
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -87,10 +91,14 @@ class HelpWindow(QDialog):
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(6)
 
+        # (browser, html) — źródło do przemalowania przy zmianie motywu: QTextDocument
+        # zamraża kolory palette(...) przy setHtml, więc po zmianie palety re-renderujemy.
+        self._browsers: list[tuple[QTextBrowser, str]] = []
         tabs = QTabWidget()
         for title, html in self._tabs():
             browser = QTextBrowser()
             browser.setHtml(html)
+            self._browsers.append((browser, html))
             tabs.addTab(_scroll(browser), title)
         layout.addWidget(tabs)
 
@@ -100,6 +108,18 @@ class HelpWindow(QDialog):
 
         # Ciemna belka tytułu podążająca za motywem aplikacji (jak settings_dialog).
         self._titlebar = follow_app_titlebar(self)
+
+    def changeEvent(self, event: QEvent) -> None:
+        """Przemalowuje treść zakładek po zmianie palety (motywu).
+
+        ``palette(...)`` w HTML jest rozwiązywane do konkretnych kolorów przy
+        ``setHtml`` i NIE aktualizuje się samo przy zmianie motywu — więc na
+        ``PaletteChange`` re-renderujemy każdą zakładkę z bieżącą paletą.
+        """
+        if event.type() == QEvent.Type.PaletteChange:
+            for browser, html in self._browsers:
+                browser.setHtml(html)
+        super().changeEvent(event)
 
     def _tabs(self) -> list[tuple[str, str]]:
         """Zakładki pomocy jako ``(tytuł, html)`` — składane helperami HTML."""

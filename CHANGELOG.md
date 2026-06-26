@@ -11,6 +11,7 @@
 - Motyw marki (jasny/ciemny/auto) i ciemny pasek tytułu przez `chodzkos-gui-kit` — pełny standard GUI (Fusion + QPalette + QSS akcentowy). Motyw stosowany przy starcie z `config.toml` (klucz `[ui].theme`, most `SettingsMapping`).
 - Dyskretny przełącznik motywu (auto/jasny/ciemny) + „O programie" w lekkim górnym pasku okna głównego.
 - Panel logów koloruje statusy (info/ostrzeżenie/błąd) rolami palety i przemalowuje istniejące wpisy po zmianie motywu — bez zaszytych hexów.
+- Okno pomocy offline z zakładkami per funkcja (silniki konwersji, instalacja silników, post-processing LLM, profile skanowania, CLI, modele AI); dostęp z okna „O programie". Treść składana z palety (czytelna w obu motywach, re-render przy zmianie motywu), zmienny stan środowiska delegowany do `pdf2md doctor`.
 
 ### Zmienione
 

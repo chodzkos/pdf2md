@@ -212,11 +212,12 @@ def _install_tab() -> str:
         "Silniki-usługi (zaawansowane)",
         _p(
             "MinerU, PaddleOCR-VL i olmOCR (zaparkowany) są izolowane w osobnych środowiskach i "
-            "działają <b>tylko w WSL</b> — vLLM nie wspiera natywnego Windows. Szczegóły w INSTALL.md."
+            "działają <b>tylko w WSL</b> — vLLM nie wspiera natywnego Windows. Szczegóły w "
+            "SILNIKI_INSTALACJA.md."
         ),
     )
     footer = _p(
-        "Pełna instrukcja krok po kroku: <b>INSTALL.md</b> w repozytorium (przycisk "
+        "Pełna instrukcja krok po kroku: <b>SILNIKI_INSTALACJA.md</b> w repozytorium (przycisk "
         "„Strona projektu” w oknie <b>O programie</b>)."
     )
     return _section("Instalacja silników", core + tools + gpu + services + footer)

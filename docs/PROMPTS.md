@@ -2244,28 +2244,44 @@ GAŁĄŹ: feat/olmocr-adapter-d10  (osobny branch; bez auto-push; czekaj na zgod
 
 ---
 
-## PROMPT D20 — torch CUDA: globalny bump do 2.12.1 + indeks cu130 (Windows +cpu→+cu130)
+## PROMPT D20 — torch CUDA: bump do 2.12.1 + indeks cu130 unconditional (Windows +cpu→+cu130)
 
-> **KOREKTA wcześniejszego założenia.** Pierwsza wersja tego promptu zakładała „win32-only bez zmiany
-> wersji, bo cu130 = 2.12.1 = wersja z locka". To było FAŁSZ wobec `main`: lock trzyma **torch 2.10.0**
-> (PyPI), a cu130 hostuje **2.12.1**. Samo dodanie źródła win32-cu130 = **no-op** (cu130 nie ma 2.10.0,
-> więc uv cicho zostawia Windows na PyPI +cpu → bug NIENAPRAWIONY). Ustalono też: **torcha NIKT nie
-> pinuje** (2.10.0 to „co weszło", nie decyzja), a WSL-owy `.venv` projektu **w ogóle nie ma torcha**
-> (instaluje się dopiero z `--extra engines-core`; stos cu130 z sesji Surya/olmOCR był w OSOBNYCH
-> venvach, nie tu). Wniosek: nie ma ani pinu do obrony, ani działającego stosu WSL w tym venv do
-> ochrony — więc „nie dotykać Linuksa" jest bezprzedmiotowe. Właściwe rozwiązanie: **globalny bump
-> torcha do 2.12.1 + źródło cu130 dla Windows**. Jedna wersja, jeden toolkit (cu130) na obu
-> platformach, ZERO kruchych per-platformowych pinów.
+> **DWIE KOREKTY względem wcześniejszych wersji tego promptu** (obie wyłapane testami na `main`):
+>
+> 1. **Źródło `[tool.uv.sources]` jest ignorowane dla pakietów NIEZADEKLAROWANYCH jako zależność.**
+>    torch jest u nas **transitive** (ciągną go marker-pdf/surya), więc samo dodanie źródła = **no-op**
+>    (`uv lock` nie tworzy 0 referencji cu130). FIX: trzeba **zadeklarować `torch` i `torchvision`
+>    jawnie w `engines-core`** — dopiero wtedy źródło działa (potwierdzone: 24 wpisy cu130 w locku,
+>    `source = download.pytorch.org/whl/cu130`).
+> 2. **Marker `sys_platform=='win32'` przeczył intencji — USUWAMY go (źródło unconditional).**
+>    Test pokazał: z markerem win32 Linux zostaje na **PyPI 2.12.1** (manylinux, BEZ local-tag
+>    `+cu130`), a tylko Windows dostaje cu130 → **rozjazd toolkitów**. Bez markera oba systemy biorą
+>    `2.12.1+cu130` z tego samego indeksu → spójność, którą proza obiecywała. (Marker był resztką po
+>    pierwszej, błędnej wersji „win32-only-bez-zmiany-wersji".)
+>
+> Reszta przesłanek bez zmian: torcha NIKT nie pinuje (2.10.0 było „co weszło"), WSL-owy `.venv`
+> projektu nie miał torcha (stos cu130 z sesji Surya/olmOCR był w osobnych venvach) — więc nie ma ani
+> pinu do obrony, ani działającego stosu WSL do zepsucia. Cel: **jedna wersja (2.12.1), jeden toolkit
+> (cu130), oba systemy**, zero per-platformowych pinów.
 
 ```
 GAŁĄŹ: build/torch-cuda-cu130  (osobny branch; bez auto-push; czekaj na zgodę przed PR)
 
-1. pyproject.toml — źródło CUDA-torcha dla Windows (Linux i tak weźmie 2.12.1+cu130 z tego źródła
-   przy domyślnej resolucji; marker win32 jest po to, by Windows dostał wariant +cu130 zamiast +cpu):
+1. pyproject.toml — (a) ZADEKLARUJ torch/torchvision w engines-core (inaczej źródło jest ignorowane,
+   bo torch jest transitive), (b) źródło cu130 UNCONDITIONAL (bez markera — oba systemy mają +cu130):
+
+   [project.optional-dependencies]
+   engines-core = [
+       "pymupdf4llm>=0.0.17",
+       "marker-pdf>=1.10,<2",
+       "docling>=2.0",
+       "torch>=2.12",            # ← DODAJ: konieczne, by [tool.uv.sources] złapało (torch jest transitive)
+       "torchvision>=0.27",      # ← DODAJ
+   ]
 
    [tool.uv.sources]
-   torch = [{ index = "pytorch-cu130", marker = "sys_platform == 'win32'" }]
-   torchvision = [{ index = "pytorch-cu130", marker = "sys_platform == 'win32'" }]
+   torch = [{ index = "pytorch-cu130" }]          # ← BEZ marker win32 (unconditional)
+   torchvision = [{ index = "pytorch-cu130" }]
 
    [[tool.uv.index]]
    name = "pytorch-cu130"
@@ -2274,51 +2290,54 @@ GAŁĄŹ: build/torch-cuda-cu130  (osobny branch; bez auto-push; czekaj na zgod�
 
    - explicit=true → indeks tylko dla pakietów jawnie go wskazujących (torch/torchvision).
    - nazwa w [tool.uv.sources] MUSI zgadzać się z [[tool.uv.index]].name.
-   (Jeśli wpis już jest po wcześniejszej próbie — zostaw, zweryfikuj poprawność.)
+   - jeśli po wcześniejszej próbie został wpis z marker="sys_platform=='win32'" → USUŃ marker.
 
-2. WYMUŚ upgrade torcha w locku — samo `uv lock` to NO-OP (cu130 nie ma 2.10.0, więc uv zostawia stare
-   2.10.0 z PyPI). Trzeba jawnie podbić:
+2. Lock — wymuś upgrade (samo `uv lock` może zostać no-opem, jeśli lock trzyma stare 2.10.0):
    uv lock --upgrade-package torch --upgrade-package torchvision
-   - sprawdź, że lock REALNIE wskazuje cu130:  grep -i "cu130\|download.pytorch.org" uv.lock | head
-     (powinny pojawić się wpisy; jeśli 0 trafień → źródło nie złapało, popraw nazwy/marker i powtórz)
-   - to podbije torch 2.10.0→2.12.1, torchvision 0.25→0.27 ORAZ na Linux/WSL nvidia-cu12→cu13,
-     triton 3.6→3.7. To ZAMIERZONE (synchronizacja z cu130, którego i tak używasz w innych venvach).
+   - POTWIERDŹ, że lock wskazuje cu130 i wersję:
+       grep -ic "cu130\|download.pytorch.org" uv.lock        # > 0
+       grep -iE "name = \"torch\"" -A3 uv.lock | head         # wersja 2.12.1, source cu130
+   - jeśli 0 trafień cu130 → torch NIEzadeklarowany albo nazwa indeksu się nie zgadza; popraw krok 1.
 
-3. Sync + TEST na Windowsie (sedno — uv sync ma dać +cu130, NIE +cpu):
+3. Sync + TEST na Windowsie (sedno):
    uv sync --extra engines-core
-   uv run python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
-   OCZEKIWANE (Windows): 2.12.1+cu130  True.
+   uv run python -c "import torch, torchvision; print(torch.__version__, torch.cuda.is_available())"
+   OCZEKIWANE (Windows): 2.12.1+cu130  True   (NIE +cpu).
 
-4. REGRESJA na WSL/Linux (bo bump rusza też Linuksa — trzeba potwierdzić, że nic nie pękło):
+4. REGRESJA na WSL/Linux (unconditional rusza też Linuksa: PyPI 2.12.1 → 2.12.1+cu130 + nvidia-cu1x,
+   triton — trzeba potwierdzić, że Surya/Marker działają na nowym stosie):
    # w WSL:
    uv sync --extra engines-core
-   uv run python -c "import torch; print(torch.__version__, torch.cuda.is_available())"   # oczek. 2.12.1+cu130 True
-   uv run --extra engines-core pdf2md convert tests/fixtures/test_scan.pdf --engine surya -o /tmp/s.md
+   uv run python -c "import torch; print(torch.__version__, torch.cuda.is_available())"   # 2.12.1+cu130 True
+   uv run --extra engines-core pdf2md convert tests/fixtures/test_scan.pdf       --engine surya  -o /tmp/s.md
    uv run --extra engines-core pdf2md convert tests/fixtures/test_text_1page.pdf --engine marker -o /tmp/m.md
-   - oba mają przejść (Surya/Marker na nowym torchu 2.12.1). Jeśli któryś pęknie na 2.12.1 → wklej błąd
-     (wtedy ewentualnie cofamy do split per-platform, ale to mniej prawdopodobne).
+   - oba mają przejść na GPU. Jeśli któryś pęknie na 2.12.1+cu130 → wklej błąd (plan B: split
+     per-platform z pinami, mniej preferowany).
+   - sprawdź, czy cu130 ma koła linux x86_64 dla 2.12.1 (ma) — gdyby resolver na Linuksie nie znalazł
+     koła, zgłosi to jawnie; wtedy wklej.
 
 5. Weryfikacja:
    - uv run pdf2md doctor (Windows) → GPU: CUDA ✅, smoke ✅, RTX 5090.
    - uv run pytest (oba systemy zielone), ruff/mypy bez zmian.
 
 6. Commit (Conventional Commits), jeden PR:
-   - tytuł: build(deps): bump torch→2.12.1 + indeks cu130 (naprawia Windows +cpu; ujednolica toolkit)
-   - opis: PyPI torch na Windowsie = +cpu → Surya/Marker na CPU. cu130 hostuje 2.12.1 (nie 2.10.0 z
-     locka), więc fix wymaga globalnego bumpu torcha + źródła cu130; torch NIE był pinowany.
-     Linux/WSL też idzie na 2.12.1+cu130 (jeden toolkit, bez kruchych per-platformowych pinów).
+   - tytuł: build(deps): torch 2.12.1+cu130 (deklaracja w engines-core + indeks cu130); naprawia Windows +cpu
+   - opis: PyPI torch na Windowsie = +cpu → Surya/Marker na CPU. Fix: (1) torch/torchvision zadeklarowane
+     w engines-core, bo [tool.uv.sources] ignoruje pakiety transitive; (2) źródło cu130 unconditional →
+     oba systemy na 2.12.1+cu130 (jeden toolkit, bez per-platformowych pinów). torch NIE był pinowany.
      Potwierdzona regresja Surya/Marker na WSL.
    - obejmij: pyproject.toml, uv.lock. BRAK auto-push; czekaj na zgodę.
 ```
 
-> Dlaczego globalny bump, a nie split (Linux 2.10 / Win 2.12.1): split wymaga per-platformowych pinów
-> torcha (transitive przez marker/surya) i utrwala rozjazd wersji Linux≠Windows — kruche przy każdym
-> przyszłym `uv lock`. Bump daje JEDNĄ wersję i JEDEN toolkit (cu130) wszędzie. Jest bezpieczny, bo
-> (a) torcha nikt nie pinował — 2.10.0 było przypadkowe, (b) WSL-owy `.venv` projektu i tak nie miał
-> torcha, więc nie ma działającego stosu do zepsucia. Jedyny realny test to regresja Surya/Marker na
-> 2.12.1 (krok 4) — stąd jest w prompcie obowiązkowo. Notkę do PROJEKT: „torch z PyPI na Windowsie =
-> +cpu; fix = bump do wersji z indeksu cuXXX + źródło z markerem win32; samo dodanie źródła bez
-> --upgrade-package torch to no-op, gdy lock ma starszą wersję niż indeks".
+> Dlaczego unconditional, a nie marker win32: z markerem Linux zostaje na PyPI 2.12.1 (manylinux+CUDA,
+> ale BEZ local-tag +cu130) → mieszanka źródeł i rozjazd toolkitów Linux≠Windows. Unconditional = to
+> samo koło z tego samego indeksu wszędzie → przewidywalność i zero kruchości przy przyszłych `uv lock`.
+> Dlaczego nie split: wymaga per-platformowych pinów torcha (transitive przez marker/surya), utrwala
+> rozjazd wersji — bierzemy go tylko jako plan B, gdyby Surya/Marker pękły na 2.12.1 (krok 4).
+> Notka do PROJEKT (sekcja środowiska): „torch z PyPI na Windowsie = +cpu; fix wymaga DWÓCH rzeczy —
+> (1) zadeklarować torch/torchvision jako jawną zależność (inaczej [tool.uv.sources] je ignoruje, bo są
+> transitive), (2) źródło indeksu cuXXX UNCONDITIONAL + `uv lock --upgrade-package torch`; marker
+> sys_platform zostawia drugą platformę na PyPI = rozjazd toolkitów".
 
 ---
 

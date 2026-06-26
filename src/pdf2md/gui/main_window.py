@@ -240,13 +240,6 @@ class MainWindow(QMainWindow):
         about_btn.clicked.connect(self._show_about)
         bar.addWidget(about_btn)
 
-        # TYMCZASOWE (prompt 3 podłączy pomoc do okna „O programie" i usunie ten przycisk).
-        help_btn = QToolButton()
-        help_btn.setText("❓")
-        help_btn.setToolTip("Pomoc")
-        help_btn.clicked.connect(self._open_help)
-        bar.addWidget(help_btn)
-
         return bar
 
     def _on_theme_selected(self, index: int) -> None:
@@ -275,23 +268,23 @@ class MainWindow(QMainWindow):
             if settings.default_output_dir:
                 self._output_entry.set(settings.default_output_dir)
 
-    def _open_help(self) -> None:
-        # TYMCZASOWE (prompt 3 podłączy pomoc do „O programie").
-        HelpWindow(self).exec()
-
     def _show_about(self) -> None:
-        # themed_message_box → ciemna belka za motywem aplikacji. Linki meta (Strona
-        # projektu, w przyszłości Pomoc offline) grupujemy tutaj, nie na pasku.
+        # themed_message_box → ciemna belka za motywem aplikacji. Meta-akcje (Pomoc,
+        # Strona projektu) grupujemy tutaj, nie jako osobne ikony na pasku.
         box = themed_message_box(
             self,
             QMessageBox.Icon.Information,
             "O programie",
             "pdf2md\n\nKonwerter PDF do Markdown z wieloma silnikami i opcjonalnym LLM.",
         )
+        help_btn = box.addButton("Pomoc", QMessageBox.ButtonRole.ActionRole)
         project_btn = box.addButton("Strona projektu", QMessageBox.ButtonRole.ActionRole)
         box.addButton("Zamknij", QMessageBox.ButtonRole.AcceptRole)
         box.exec()
-        if box.clickedButton() is project_btn:
+        clicked = box.clickedButton()
+        if clicked is help_btn:
+            HelpWindow(self).exec()
+        elif clicked is project_btn:
             self._open_project_page()
 
     def _open_project_page(self) -> None:

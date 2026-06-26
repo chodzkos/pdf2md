@@ -1,0 +1,352 @@
+"""Okno pomocy offline pdf2md — szkielet (treść w kolejnym kroku).
+
+Zakładki są **wstrzykiwane w pętli** z :meth:`HelpWindow._tabs` (lista
+``(tytuł, html)``), nie sztywnymi metodami ``_make_X_tab`` — pod przyszłą
+ekstrakcję wspólnego okna pomocy do gui-kit.
+
+Kolory w HTML idą WYŁĄCZNIE przez funkcję ``palette(...)`` Qt — tła treści na
+``palette(alternate-base)`` + tekst ``palette(text)`` (para trzymająca kontrast
+w obu motywach; ``mid``/``dark``/``shadow`` to role ramek/cieni, nie powierzchni).
+Zero zaszytych hexów.
+
+``QTextDocument`` rozwiązuje ``palette(...)`` do KONKRETNYCH kolorów przy
+``setHtml`` i nie aktualizuje ich przy zmianie motywu — dlatego
+:meth:`HelpWindow.changeEvent` re-renderuje zakładki na ``PaletteChange``.
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import QEvent
+from PySide6.QtWidgets import (
+    QDialog,
+    QDialogButtonBox,
+    QScrollArea,
+    QTabWidget,
+    QTextBrowser,
+    QVBoxLayout,
+    QWidget,
+)
+
+from pdf2md.gui.theming import follow_app_titlebar
+
+
+def _scroll(widget: QWidget) -> QScrollArea:
+    area = QScrollArea()
+    area.setWidgetResizable(True)
+    area.setWidget(widget)
+    return area
+
+
+def _section(title: str, body: str) -> str:
+    return f"<h3>{title}</h3>{body}"
+
+
+def _p(text: str) -> str:
+    return f"<p>{text}</p>"
+
+
+def _ul(*items: str) -> str:
+    rows = "".join(f"<li>{i}</li>" for i in items)
+    return f"<ul>{rows}</ul>"
+
+
+def _table(headers: list[str], rows: list[list[str]]) -> str:
+    th = "".join(f"<th style='padding:4px 8px;text-align:left'>{h}</th>" for h in headers)
+    trs = ""
+    for row in rows:
+        tds = "".join(f"<td style='padding:4px 8px'>{c}</td>" for c in row)
+        trs += f"<tr>{tds}</tr>"
+    return (
+        "<table border='1' cellspacing='0' cellpadding='0' "
+        "style='border-collapse:collapse;margin:4px 0'>"
+        f"<tr style='background:palette(alternate-base);color:palette(text)'>{th}</tr>{trs}</table>"
+    )
+
+
+def _code(text: str) -> str:
+    return (
+        "<code style='background:palette(alternate-base);color:palette(text);"
+        f"padding:1px 4px;border-radius:2px'>{text}</code>"
+    )
+
+
+def _pre(text: str) -> str:
+    return (
+        f"<pre style='background:palette(alternate-base);color:palette(text);"
+        f"padding:8px;border-radius:4px;white-space:pre-wrap'>{text}</pre>"
+    )
+
+
+class HelpWindow(QDialog):
+    """Okno pomocy z zakładkami (szkielet — jedna placeholder-zakładka)."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Pomoc — pdf2md")
+        # Tylko rozmiar startowy — geometrii NIE persystujemy (żadne okno pdf2md
+        # tego nie robi; dodatkowe pole w typowanym Settings = narzut bez wartości).
+        self.resize(720, 560)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(6)
+
+        # (browser, html) — źródło do przemalowania przy zmianie motywu: QTextDocument
+        # zamraża kolory palette(...) przy setHtml, więc po zmianie palety re-renderujemy.
+        self._browsers: list[tuple[QTextBrowser, str]] = []
+        tabs = QTabWidget()
+        for title, html in self._tabs():
+            browser = QTextBrowser()
+            browser.setHtml(html)
+            self._browsers.append((browser, html))
+            tabs.addTab(_scroll(browser), title)
+        layout.addWidget(tabs)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+        # Ciemna belka tytułu podążająca za motywem aplikacji (jak settings_dialog).
+        self._titlebar = follow_app_titlebar(self)
+
+    def changeEvent(self, event: QEvent) -> None:
+        """Przemalowuje treść zakładek po zmianie palety (motywu).
+
+        ``palette(...)`` w HTML jest rozwiązywane do konkretnych kolorów przy
+        ``setHtml`` i NIE aktualizuje się samo przy zmianie motywu — więc na
+        ``PaletteChange`` re-renderujemy każdą zakładkę z bieżącą paletą.
+        """
+        if event.type() == QEvent.Type.PaletteChange:
+            for browser, html in self._browsers:
+                browser.setHtml(html)
+        super().changeEvent(event)
+
+    def _tabs(self) -> list[tuple[str, str]]:
+        """Zakładki pomocy jako ``(tytuł, html)`` — składane helperami HTML."""
+        return [
+            ("Silniki konwersji", _engines_tab()),
+            ("Instalacja silników", _install_tab()),
+            ("Post-processing LLM", _llm_tab()),
+            ("Profile skanowania", _profiles_tab()),
+            ("CLI", _cli_tab()),
+            ("Model AI / Ollama", _models_tab()),
+        ]
+
+
+# ── Treść zakładek (po polsku; opis realnego stanu z kodu) ─────────────────────
+
+
+def _engines_tab() -> str:
+    table = _table(
+        ["Silnik", "Typ dokumentu", "OCR", "Grupa"],
+        [
+            [
+                "PyMuPDF4LLM",
+                "Natywne PDF z warstwą tekstową (raporty, instrukcje) — najszybszy",
+                "Nie",
+                "główne",
+            ],
+            [
+                "Marker",
+                "Skany, dokumenty mieszane, trudniejszy layout; opcjonalny LLM",
+                "Tak (CPU)",
+                "główne",
+            ],
+            ["Docling", "Tabele, dokumenty biznesowe, struktura, RAG", "Tak", "główne"],
+            [
+                "Surya",
+                "Layout + OCR + reading order, GPU, in-process",
+                "Tak",
+                "GPU (też Windows)",
+            ],
+            [
+                "MinerU",
+                "Artykuły naukowe, CJK, wielokolumnowe układy",
+                "Tak",
+                "izolowany — Linux/WSL",
+            ],
+            ["PaddleOCR-VL", "Wielojęzyczny VLM-OCR (serwer vLLM)", "Tak", "izolowany — Linux/WSL"],
+            [
+                "olmOCR",
+                "VLM 7B do skanów (zaparkowany, anglocentryczny)",
+                "Tak",
+                "izolowany — Linux/WSL",
+            ],
+        ],
+    )
+    groups = _p(
+        "Silniki dzielą się na trzy grupy: <b>główne</b> (PyMuPDF4LLM / Marker / Docling — działają "
+        "wszędzie), <b>Surya</b> (GPU, ale dzieli środowisko projektu — działa też pod Windows) oraz "
+        "<b>izolowane usługi VLM-OCR</b> (MinerU / PaddleOCR-VL / olmOCR). Te ostatnie opierają się "
+        "na vLLM i <b>działają tylko pod Linux/WSL</b> (pod natywnym Windows nie ruszą) — uruchamiasz "
+        "je przez CLI. <b>olmOCR</b> jest dodatkowo <b>zaparkowany</b> (anglocentryczny, zajmuje "
+        "~całą kartę); dla skanów po polsku użyj PaddleOCR-VL lub Surya."
+    )
+    doctor = _p(
+        "Co jest zainstalowane i dostępne w <b>Twoim</b> środowisku — wraz ze statusem GPU/CUDA, "
+        "Ollamy, narzędzi i kluczy API — sprawdzisz komendą " + _code("pdf2md doctor") + "."
+    )
+    when = _p(
+        "<b>Kiedy który:</b> natywny tekst → PyMuPDF4LLM; skan / mieszane → Marker; "
+        "tabele / biznes → Docling; kontrola layoutu → Surya; nauka / CJK / wielokolumnowe → MinerU; "
+        "wielojęzyczny VLM → PaddleOCR-VL."
+    )
+    return _section("Silniki konwersji", table + groups + doctor + when)
+
+
+def _install_tab() -> str:
+    core = _section(
+        "Silniki rdzeniowe",
+        _pre("uv sync --extra engines-core")
+        + _p(
+            "Instaluje PyMuPDF4LLM, Marker, Docling i Surya. torch z CUDA "
+            f"({_code('cu130')}) wchodzi automatycznie."
+        ),
+    )
+    tools = _section(
+        "Narzędzia systemowe",
+        _ul(
+            "<b>Tesseract</b> (+ język <b>pol</b>) — OCR skanów w Marker/Docling",
+            f"<b>Poppler</b> ({_code('pdftoppm')}) — PDF → obraz",
+        )
+        + _p("Oba muszą być w PATH.")
+        + _p(
+            "<b>Windows:</b> Tesseract — instalator UB Mannheim (zaznacz Polish); Poppler — "
+            "rozpakuj ZIP i dodaj " + _code("C:\\poppler\\Library\\bin") + " do PATH."
+        )
+        + _pre("# WSL / Ubuntu:\nsudo apt install tesseract-ocr tesseract-ocr-pol poppler-utils"),
+    )
+    gpu = _section(
+        "GPU / CUDA",
+        _p(
+            f"torch instaluje się jako {_code('+cu130')} przy {_code('uv sync')} (Windows i WSL). "
+            f"Sprawdź sekcję GPU w {_code('pdf2md doctor')}."
+        )
+        + _p(f"Jeśli CUDA jest niedostępna albo torch wszedł jako {_code('+cpu')}:")
+        + _pre(
+            "uv lock --upgrade-package torch --upgrade-package torchvision\n"
+            "uv sync --extra engines-core"
+        ),
+    )
+    services = _section(
+        "Silniki-usługi (zaawansowane)",
+        _p(
+            "MinerU, PaddleOCR-VL i olmOCR (zaparkowany) są izolowane w osobnych środowiskach i "
+            "działają <b>tylko w WSL</b> — vLLM nie wspiera natywnego Windows. Szczegóły w "
+            "SILNIKI_INSTALACJA.md."
+        ),
+    )
+    footer = _p(
+        "Pełna instrukcja krok po kroku: <b>SILNIKI_INSTALACJA.md</b> w repozytorium (przycisk "
+        "„Strona projektu” w oknie <b>O programie</b>)."
+    )
+    return _section("Instalacja silników", core + tools + gpu + services + footer)
+
+
+def _llm_tab() -> str:
+    intro = _p(
+        "Po konwersji opcjonalny model LLM poprawia i porządkuje wygenerowany Markdown "
+        "(operacja tekst→tekst — obraz strony NIE jest podawany do modelu)."
+    )
+    modes = _section(
+        "Tryby chunkowania",
+        _ul(
+            f"{_code('whole_document')} — cały dokument naraz",
+            f"{_code('by_page')} — strona po stronie",
+            f"{_code('by_chunk')} — fragmenty tekstu",
+            f"{_code('by_heading')} — sekcje wg nagłówków",
+        ),
+    )
+    providers = _section(
+        "Dostawcy",
+        _ul(
+            "Ollama — lokalny, domyślny (bez kluczy, bez wysyłania danych)",
+            "Claude (Anthropic), OpenAI, Gemini — chmurowe (wymagają klucza API)",
+        ),
+    )
+    keys = _p(
+        "Klucze API ustawisz w oknie <b>Ustawienia</b> albo w pliku "
+        f"{_code('~/.config/pdf2md/config.toml')}."
+    )
+    return _section("Post-processing LLM", intro) + modes + providers + keys
+
+
+def _profiles_tab() -> str:
+    table = _table(
+        ["Profil", "Co robi / kiedy"],
+        [
+            ["fast", "Niższy DPI, lekki tryb — szybki podgląd, gdy jakość mniej istotna"],
+            ["balanced", "Kompromis jakość/czas — domyślny, dobry do większości skanów"],
+            [
+                "premium",
+                "Najwyższy DPI + pełny tryb (VLM-OCR, korekta LLM, raport) — książki, materiał docelowy",
+            ],
+        ],
+    )
+    intro = _p(
+        "Profile sterują skanowaniem książek (silnik <b>Scan Pipeline</b>): DPI, korekta LLM, "
+        "wyjścia. Wbudowane: <b>fast</b> / <b>balanced</b> / <b>premium</b> (domyślny "
+        "<b>balanced</b>)."
+    )
+    editor = _p(
+        "Własny profil zapiszesz przez <b>Edytuj profil</b> (DPI, wyjścia EPUB / raport jakości); "
+        f"trafia do {_code('~/.config/pdf2md/profiles/')}."
+    )
+    return _section("Profile skanowania", intro + table + editor)
+
+
+def _cli_tab() -> str:
+    commands = _pre(
+        "pdf2md convert dokument.pdf --engine pymupdf4llm\n"
+        'pdf2md convert "pdfy/*.pdf" --engine docling --output-dir ./markdown\n'
+        "pdf2md convert dokument.pdf --engine marker --llm ollama --llm-mode by_heading\n"
+        "pdf2md convert dokument.pdf --dry-run        # plan bez konwersji\n"
+        "pdf2md scan skan.pdf --profile premium       # pipeline skanu książki\n"
+        "\n"
+        "pdf2md list-engines          # silniki + wymóg GPU\n"
+        "pdf2md list-llm              # dostawcy LLM\n"
+        "pdf2md list-profiles         # profile skanowania\n"
+        "pdf2md doctor                # diagnostyka środowiska\n"
+        "\n"
+        "pdf2md config show                  # pokaż konfigurację\n"
+        "pdf2md config set KLUCZ WARTOŚĆ     # ustaw wartość\n"
+        "pdf2md config edit                  # otwórz config.toml w edytorze"
+    )
+    intro = _p("Te same konwersje co w GUI wykonasz z linii poleceń:")
+    return _section("CLI", intro + commands)
+
+
+def _models_tab() -> str:
+    intro = _p(
+        "Post-processing LLM działa lokalnie przez <b>Ollama</b> — bez kluczy i bez wysyłania "
+        "danych. Rekomendowany model korekty: " + _code("qwen3:14b") + "."
+    )
+    vram = _p(
+        "<b>VRAM:</b> model 14B mieści się swobodnie na 24 GB. Większe modele (np. 27B/30B) dają "
+        "lepszą jakość korekty, jeśli starcza pamięci."
+    )
+    howto = _p(
+        "Model korekty wskażesz w <b>Ustawieniach</b> albo komendą "
+        + _code("pdf2md config set ollama_model qwen3:14b")
+        + "."
+    )
+    vision = _p(
+        "<b>Wskazówka:</b> do obróbki tekstu lepszy jest <b>zwykły</b> "
+        + _code("qwen3:14b")
+        + f" niż wariant vision ({_code('qwen3-vl')}) — na etapie korekty (tekst→tekst) zdolności "
+        "wizyjne nie są używane, a VL oddaje część parametrów na vision. VL ma sens osobno "
+        "(np. opis wyciąganych obrazów), nie jako model korekty."
+    )
+    installed = _p(
+        "<b>Modele dostępne w Twoim środowisku</b> (i status serwera Ollama) zobaczysz w "
+        + _code("pdf2md doctor")
+        + " — listy modeli nie wpisujemy tu na sztywno, bo zmienia się z instalacją."
+    )
+    keys = _p(
+        "Klucze API dostawców chmurowych (Anthropic / OpenAI / Gemini) sprawdzisz w "
+        + _code("pdf2md doctor")
+        + " (sekcja Klucze API), a ustawisz w <b>Ustawieniach</b> lub przez "
+        + _code("pdf2md config set")
+        + "."
+    )
+    return _section("Model AI / Ollama", intro + vram + howto + vision + installed + keys)

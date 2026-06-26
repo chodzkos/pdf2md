@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
 from pdf2md.core.config import get_settings
 from pdf2md.detection.dependencies import check_pandoc
 from pdf2md.exporters.pandoc_epub_exporter import PandocEpubExporter
+from pdf2md.gui.help_window import HelpWindow
 from pdf2md.gui.settings_dialog import SettingsDialog
 from pdf2md.gui.theming import attach_dark_titlebar, themed_message_box
 from pdf2md.gui.widgets.engine_selector import EngineSelectorWidget
@@ -268,18 +269,22 @@ class MainWindow(QMainWindow):
                 self._output_entry.set(settings.default_output_dir)
 
     def _show_about(self) -> None:
-        # themed_message_box → ciemna belka za motywem aplikacji. Linki meta (Strona
-        # projektu, w przyszłości Pomoc offline) grupujemy tutaj, nie na pasku.
+        # themed_message_box → ciemna belka za motywem aplikacji. Meta-akcje (Pomoc,
+        # Strona projektu) grupujemy tutaj, nie jako osobne ikony na pasku.
         box = themed_message_box(
             self,
             QMessageBox.Icon.Information,
             "O programie",
             "pdf2md\n\nKonwerter PDF do Markdown z wieloma silnikami i opcjonalnym LLM.",
         )
+        help_btn = box.addButton("Pomoc", QMessageBox.ButtonRole.ActionRole)
         project_btn = box.addButton("Strona projektu", QMessageBox.ButtonRole.ActionRole)
         box.addButton("Zamknij", QMessageBox.ButtonRole.AcceptRole)
         box.exec()
-        if box.clickedButton() is project_btn:
+        clicked = box.clickedButton()
+        if clicked is help_btn:
+            HelpWindow(self).exec()
+        elif clicked is project_btn:
             self._open_project_page()
 
     def _open_project_page(self) -> None:

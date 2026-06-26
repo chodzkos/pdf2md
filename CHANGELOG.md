@@ -25,6 +25,7 @@
 
 ### Naprawione
 
+- **`doctor` nie pokazuje mylącego hintu instalacji pod Windows** dla silników vLLM (MinerU / olmOCR / PaddleOCR-VL) — oznaczone jako wymagające Linux/WSL (status „❌ Niedostępny (wymaga Linux/WSL)" + uwaga, bez komendy instalacji, która i tak by nie zadziałała). Na Linux/WSL bez zmian (status „Niezainstalowany" + hint). Surya/Marker (GPU pod Windows) nietknięte.
 - **Marker konwertował tylko 1. stronę** przy nieświeżym `~/.config/pdf2md/config.toml` (utrwalony `marker_max_pages=1` z czasów starego defaultu) — zmiana wartości domyślnej w kodzie nie nadpisuje istniejącego configu platformdirs.
 - **torch na Windows wchodził jako `+cpu`** (Surya/Marker liczyły na CPU mimo karty) — wymuszone `+cu130` przez zadeklarowanie `torch`/`torchvision` jako jawnej zależności (inaczej `[tool.uv.sources]` ignoruje pakiet tranzytywny) + źródło indeksu cu130 + `uv lock --upgrade-package torch torchvision`.
 - Polskie etykiety standardowych elementów Qt: przyciski `OK/Anuluj/Zastosuj` w oknie ustawień oraz opisy/przyciski/tooltips nienatywnego `QFileDialog` (fallback przy rozjeździe motywu) — przez załadowanie tłumaczeń Qt (`QTranslator`: `qtbase_pl`, `qt_pl`) przy starcie GUI. Brak `.qm` w danej dystrybucji loguje ostrzeżenie zamiast cichego pominięcia.

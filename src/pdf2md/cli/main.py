@@ -77,6 +77,7 @@ ENGINE_CATALOG: tuple[dict[str, object], ...] = (
         "scope": "Opc.",
         "ocr": True,
         "llm": False,
+        "linux_only": True,  # vLLM — tylko Linux/WSL
         "license": "AGPL",
         "hint": "uv tool install mineru --with mineru[all]",
         "description": "Dokumenty naukowe, layout, CJK.",
@@ -89,6 +90,7 @@ ENGINE_CATALOG: tuple[dict[str, object], ...] = (
         "ocr": True,
         "llm": False,
         "gpu": True,
+        "linux_only": True,  # vLLM — tylko Linux/WSL
         "license": "Apache-2.0",
         "hint": "pip install olmocr (osobne środowisko + CUDA)",
         "description": "VLM 7B do skanów: czysty Markdown, równania, tabele.",
@@ -101,6 +103,7 @@ ENGINE_CATALOG: tuple[dict[str, object], ...] = (
         "ocr": True,
         "llm": False,
         "gpu": True,
+        "linux_only": True,  # vLLM — tylko Linux/WSL
         "license": "Apache-2.0",
         "hint": (
             "Uruchom serwer: VLLM_USE_FLASHINFER_SAMPLER=0 vllm serve "
@@ -333,9 +336,18 @@ def _print_engine_table() -> None:
 
     for item in ENGINE_CATALOG:
         available = _engine_available(item)
-        status = "✅ Dostępny" if available else "❌ Niezainstalowany"
         description = str(item["description"])
-        if not available:
+        if available:
+            status = "✅ Dostępny"
+        elif item.get("linux_only") and platform.system() != "Linux":
+            # Silnik na vLLM — pod natywnym Windows nie ruszy; hint instalacji mylił.
+            status = "❌ Niedostępny (wymaga Linux/WSL)"
+            description = (
+                f"{description}\nUWAGA: silnik opiera się na vLLM — działa tylko pod "
+                "Linux/WSL, nie pod natywnym Windows."
+            )
+        else:
+            status = "❌ Niezainstalowany"
             description = f"{description}\nHint: {item['hint']}"
         table.add_row(
             str(item["name"]),

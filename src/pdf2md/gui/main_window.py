@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
 from pdf2md.core.config import get_settings
 from pdf2md.detection.dependencies import check_pandoc
 from pdf2md.exporters.pandoc_epub_exporter import PandocEpubExporter
+from pdf2md.gui.help_window import HelpWindow
 from pdf2md.gui.settings_dialog import SettingsDialog
 from pdf2md.gui.theming import attach_dark_titlebar, themed_message_box
 from pdf2md.gui.widgets.engine_selector import EngineSelectorWidget
@@ -239,6 +240,13 @@ class MainWindow(QMainWindow):
         about_btn.clicked.connect(self._show_about)
         bar.addWidget(about_btn)
 
+        # TYMCZASOWE (prompt 3 podłączy pomoc do okna „O programie" i usunie ten przycisk).
+        help_btn = QToolButton()
+        help_btn.setText("❓")
+        help_btn.setToolTip("Pomoc")
+        help_btn.clicked.connect(self._open_help)
+        bar.addWidget(help_btn)
+
         return bar
 
     def _on_theme_selected(self, index: int) -> None:
@@ -266,6 +274,10 @@ class MainWindow(QMainWindow):
             settings = get_settings()
             if settings.default_output_dir:
                 self._output_entry.set(settings.default_output_dir)
+
+    def _open_help(self) -> None:
+        # TYMCZASOWE (prompt 3 podłączy pomoc do „O programie").
+        HelpWindow(self).exec()
 
     def _show_about(self) -> None:
         # themed_message_box → ciemna belka za motywem aplikacji. Linki meta (Strona

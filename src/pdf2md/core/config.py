@@ -30,7 +30,7 @@ mode = "none"
 anthropic_model = ""
 openai_model = ""
 gemini_model = ""
-ollama_model = "qwen2.5:14b"
+ollama_model = "qwen3:14b"
 ollama_url = "http://localhost:11434"
 
 [conversion]
@@ -150,7 +150,7 @@ class Settings(BaseSettings):
     anthropic_model: str = ""
     openai_model: str = ""
     gemini_model: str = ""
-    ollama_model: str = "qwen2.5:14b"
+    ollama_model: str = "qwen3:14b"
     ollama_url: str = "http://localhost:11434"
 
     # Konwersja

@@ -19,7 +19,7 @@ class OllamaProvider(PostprocessMixin, LLMProvider):
     name = "Ollama (lokalny)"
     description = "Lokalny serwer Ollama — modele działają offline, bez klucza API."
     requires_api_key = False
-    default_model = "qwen2.5:14b"
+    default_model = "qwen3:14b"
 
     def is_available(self) -> bool:
         """Zwraca True jeśli serwer Ollama odpowiada na /api/tags."""

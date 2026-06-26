@@ -118,30 +118,60 @@ class HelpWindow(QDialog):
 
 def _engines_tab() -> str:
     table = _table(
-        ["Silnik", "Typ dokumentu", "OCR"],
+        ["Silnik", "Typ dokumentu", "OCR", "Grupa"],
         [
             [
                 "PyMuPDF4LLM",
                 "Natywne PDF z warstwą tekstową (raporty, instrukcje) — najszybszy",
                 "Nie",
+                "główne",
             ],
-            ["Marker", "Skany, dokumenty mieszane, trudniejszy layout; opcjonalny LLM", "Tak"],
-            ["Docling", "Tabele, dokumenty biznesowe, struktura, RAG", "Tak"],
-            ["MinerU", "Artykuły naukowe, CJK, wielokolumnowe układy (izolowany)", "Tak"],
-            ["Surya", "Layout + OCR + reading order, GPU, in-process", "Tak"],
-            ["PaddleOCR-VL", "Wielojęzyczny VLM-OCR (serwer vLLM, izolowany)", "Tak"],
+            [
+                "Marker",
+                "Skany, dokumenty mieszane, trudniejszy layout; opcjonalny LLM",
+                "Tak (CPU)",
+                "główne",
+            ],
+            ["Docling", "Tabele, dokumenty biznesowe, struktura, RAG", "Tak", "główne"],
+            [
+                "Surya",
+                "Layout + OCR + reading order, GPU, in-process",
+                "Tak",
+                "GPU (też Windows)",
+            ],
+            [
+                "MinerU",
+                "Artykuły naukowe, CJK, wielokolumnowe układy",
+                "Tak",
+                "izolowany — Linux/WSL",
+            ],
+            ["PaddleOCR-VL", "Wielojęzyczny VLM-OCR (serwer vLLM)", "Tak", "izolowany — Linux/WSL"],
+            [
+                "olmOCR",
+                "VLM 7B do skanów (zaparkowany, anglocentryczny)",
+                "Tak",
+                "izolowany — Linux/WSL",
+            ],
         ],
+    )
+    groups = _p(
+        "Silniki dzielą się na trzy grupy: <b>główne</b> (PyMuPDF4LLM / Marker / Docling — działają "
+        "wszędzie), <b>Surya</b> (GPU, ale dzieli środowisko projektu — działa też pod Windows) oraz "
+        "<b>izolowane usługi VLM-OCR</b> (MinerU / PaddleOCR-VL / olmOCR). Te ostatnie opierają się "
+        "na vLLM i <b>działają tylko pod Linux/WSL</b> (pod natywnym Windows nie ruszą) — uruchamiasz "
+        "je przez CLI. <b>olmOCR</b> jest dodatkowo <b>zaparkowany</b> (anglocentryczny, zajmuje "
+        "~całą kartę); dla skanów po polsku użyj PaddleOCR-VL lub Surya."
+    )
+    doctor = _p(
+        "Co jest zainstalowane i dostępne w <b>Twoim</b> środowisku — wraz ze statusem GPU/CUDA, "
+        "Ollamy, narzędzi i kluczy API — sprawdzisz komendą " + _code("pdf2md doctor") + "."
     )
     when = _p(
         "<b>Kiedy który:</b> natywny tekst → PyMuPDF4LLM; skan / mieszane → Marker; "
-        "tabele / biznes → Docling; nauka / wielokolumnowe → MinerU; kontrola layoutu → Surya; "
+        "tabele / biznes → Docling; kontrola layoutu → Surya; nauka / CJK / wielokolumnowe → MinerU; "
         "wielojęzyczny VLM → PaddleOCR-VL."
     )
-    parked = _p(
-        "<b>olmOCR</b> (VLM 7B do skanów) jest <b>zaparkowany</b> — zajmuje ~całą kartę i jest "
-        "anglocentryczny. Dla skanów po polsku użyj <b>PaddleOCR-VL</b> lub <b>Surya</b>."
-    )
-    return _section("Silniki konwersji", table + when + parked)
+    return _section("Silniki konwersji", table + groups + doctor + when)
 
 
 def _install_tab() -> str:
@@ -286,4 +316,16 @@ def _models_tab() -> str:
         "wizyjne nie są używane, a VL oddaje część parametrów na vision. VL ma sens osobno "
         "(np. opis wyciąganych obrazów), nie jako model korekty."
     )
-    return _section("Model AI / Ollama", intro + vram + howto + vision)
+    installed = _p(
+        "<b>Modele dostępne w Twoim środowisku</b> (i status serwera Ollama) zobaczysz w "
+        + _code("pdf2md doctor")
+        + " — listy modeli nie wpisujemy tu na sztywno, bo zmienia się z instalacją."
+    )
+    keys = _p(
+        "Klucze API dostawców chmurowych (Anthropic / OpenAI / Gemini) sprawdzisz w "
+        + _code("pdf2md doctor")
+        + " (sekcja Klucze API), a ustawisz w <b>Ustawieniach</b> lub przez "
+        + _code("pdf2md config set")
+        + "."
+    )
+    return _section("Model AI / Ollama", intro + vram + howto + vision + installed + keys)

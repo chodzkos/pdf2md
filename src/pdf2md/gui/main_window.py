@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from chodzkos_gui_kit.qt.dialogs import open_files
-from chodzkos_gui_kit.qt.theme import ThemeManager, ThemeSetting
-from chodzkos_gui_kit.qt.widgets import FileList, FileListTexts, PathEntry, PathEntryTexts
+from chodzkos_gui_kit.qt.theme import ThemeManager, ThemeSetting, current_palette
+from chodzkos_gui_kit.qt.widgets import FileList, FileListTexts, LogView, PathEntry, PathEntryTexts
 from loguru import logger
 from PySide6.QtCore import QSize, QUrl
 from PySide6.QtGui import QAction, QDesktopServices, QIcon, QKeySequence
@@ -34,7 +34,6 @@ from pdf2md.gui.settings_dialog import SettingsDialog
 from pdf2md.gui.theming import attach_dark_titlebar, themed_message_box
 from pdf2md.gui.widgets.engine_selector import EngineSelectorWidget
 from pdf2md.gui.widgets.llm_selector import LLMSelectorWidget
-from pdf2md.gui.widgets.log_panel import LogPanelWidget
 from pdf2md.gui.widgets.profile_selector import ProfileSelectorWidget
 from pdf2md.gui.workers import ConversionWorker
 from pdf2md.utils.open_path import open_in_file_manager
@@ -221,7 +220,9 @@ class MainWindow(QMainWindow):
 
         # --- Panel logów ---
         self._tabs = QTabWidget()
-        self._log_panel = LogPanelWidget()
+        # kitowy LogView: log_info→"ok" (zielony accent), warning→amber, error→red;
+        # re-render historii i timestampy [HH:MM:SS] robi sam widget.
+        self._log_panel = LogView(timestamps=True)
         self._log_panel.setMinimumHeight(120)
         self._preview = QTextEdit()
         self._preview.setReadOnly(True)
@@ -278,8 +279,8 @@ class MainWindow(QMainWindow):
         self._theme_manager.apply(setting)
 
     def _on_theme_changed(self, _palette: object) -> None:
-        """Po zmianie motywu przemaluj kolory logu wg nowej palety."""
-        self._log_panel.restyle()
+        """Po zmianie motywu przemaluj log wg nowej palety (re-render robi kit LogView)."""
+        self._log_panel.set_theme(current_palette())
 
     # ------------------------------------------------------------------
     # Sloty przycisków

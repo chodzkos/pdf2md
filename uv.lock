@@ -258,8 +258,8 @@ wheels = [
 
 [[package]]
 name = "chodzkos-gui-kit"
-version = "0.4.1"
-source = { git = "https://github.com/chodzkos/gui-kit?rev=v0.4.1#69f00610d9d2a02a8639e69069edabf907770684" }
+version = "0.4.3"
+source = { git = "https://github.com/chodzkos/gui-kit?rev=v0.4.3#ceea54f031def87925f29ee0d41f8ef82b2f6f57" }
 dependencies = [
     { name = "platformdirs" },
 ]
@@ -1809,7 +1809,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "anthropic", marker = "extra == 'llm'", specifier = ">=0.29" },
-    { name = "chodzkos-gui-kit", extras = ["qt"], git = "https://github.com/chodzkos/gui-kit?rev=v0.4.1" },
+    { name = "chodzkos-gui-kit", extras = ["qt"], git = "https://github.com/chodzkos/gui-kit?rev=v0.4.3" },
     { name = "click", specifier = ">=8.1" },
     { name = "docling", marker = "extra == 'docling'", specifier = ">=2.0" },
     { name = "docling", marker = "extra == 'engines-core'", specifier = ">=2.0" },

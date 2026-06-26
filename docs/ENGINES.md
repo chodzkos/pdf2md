@@ -110,15 +110,81 @@ Stara komenda `magic-pdf` dotyczy wersji 1.x i nie jest uzywana przez adapter.
 Na Windows lokalizacja binarki musi przechodzic przez `shutil.which()`, bo nazwa moze miec
 rozszerzenie `.exe`, `.cmd` albo podobne.
 
-## pdf-craft — WYKLUCZONY z v1.0
+## Surya
 
-pdf-craft zostal wykluczony z v1.0 ze wzgledu na nieusuwalny konflikt zaleznosci:
-wymaga `transformers<4.48`, a Marker i Docling wymagaja `transformers>=4.48` (symbol
-`ALL_ATTENTION_FUNCTIONS` dodany w 4.48). Oba nie moga wspolistniec w jednym srodowisku.
-Dodatkowo jego scenariusz uzycia (skanowane ksiazki) jest pokryty przez MinerU (backend `vlm`).
+**Opis i mocne strony:** layout + OCR + reading order (predyktorowy `surya-ocr 0.17.x`), dziala
+**in-process** na GPU. Ciagnie go marker-pdf 1.10.x, wiec w srodowisku z Markerem jest od razu
+dostepny.
 
-Silnik moze zostac przywrocony w Fazie 2 jako izolowane narzedzie CLI (analogicznie do MinerU),
-jesli okaże sie potrzebny.
+**Kiedy uzywac:** skany i dokumenty, gdzie wazna jest kontrola ukladu i kolejnosci czytania;
+kontrola jakosci / fallback obok Markera.
 
-Nie instaluj `pdf-craft` w srodowisku z `marker-pdf` lub `docling` — spowoduje downgrade
+**Instalacja:**
+
+```bash
+uv pip install surya-ocr
+# albo w ramach repo:
+uv sync --extra engines-core
+```
+
+Wymaga GPU (CUDA). Na Windows torch musi byc wariantem `+cu130` (zob. INSTALL.md, sekcja Windows).
+
+**Znane ograniczenia:** to predyktorowy `surya-ocr 0.17.x`, **nie** serwowany VLM „Surya 2.0"
+(ten jest osobnym, odlozonym pomyslem — zob. FEATURES F19). Wymaga `transformers>=4.56.1`.
+
+## PaddleOCR-VL
+
+**Opis i mocne strony:** wielojezyczny parser dokumentow jako **serwer VLM** (OpenAI-compatible),
+serwowany przez vLLM. Dobre wyniki na dokumentach wielojezycznych, w tym polskich.
+
+**Kiedy uzywac:** skany i dokumenty wielojezyczne, gdy zalezy ci na wysokiej jakosci VLM-OCR
+i mozesz postawic lokalny serwer.
+
+**Instalacja i uruchomienie:** silnik-usluga — `is_available()` pinguje serwer. Serwer stawiasz
+w izolowanym srodowisku (vLLM), `pdf2md` jest jego klientem HTTP:
+
+```bash
+VLLM_USE_FLASHINFER_SAMPLER=0 vllm serve PaddlePaddle/PaddleOCR-VL \
+  --trust-remote-code --no-enable-prefix-caching
+```
+
+Szczegoly (izolowany venv, nightly-vLLM na Blackwell) w INSTALL.md.
+
+**Znane ograniczenia:** wymaga dzialajacego serwera vLLM (GPU); na natywnym Windows nie ruszy
+(vLLM tylko Linux/WSL).
+
+## olmOCR — ZAPARKOWANY (adapter gotowy)
+
+**Opis:** olmOCR-2-7B FP8 (`allenai/olmOCR-2-7B-1025-FP8`) — VLM 7B do skanow (czysty Markdown,
+rownania, tabele), serwowany przez vLLM.
+
+**Status:** adapter jest **gotowy i poprawny** (uruchamia wlasciwa komende, przekazuje
+`--max_model_len 16384 --gpu_memory_utilization 0.90`, obsluguje tryb `--server`), a model
+**serwuje** na 24 GB. Mimo to silnik jest **zaparkowany**:
+
+- zajmuje **~cala karte** (model ~9.5 GB + KV ~9.3 GB + grafy ≈ 24 GB) → **nie wspolistnieje
+  z modelem korekty LLM** w pipelinie;
+- **start serwera 90–150 s** na wywolanie (ladowanie + kompilacja + capture grafow CUDA);
+- jest **anglocentryczny** — dla dokumentow PL Paddle/Surya daja lepsze wyniki i juz dzialaja;
+- w trybie spawn-per-plik serwer-dziecko olmocr nie wstaje pod nightly-vLLM/transformers 5.x.
+
+**Kiedy rozwazyc:** wylacznie tryb **external-server** (`--server` / pole `olmocr_server_url`) —
+wlasny, raz wystartowany serwer, gdybys potrzebowal olmOCR „na zadanie". Dla typowego uzycia:
+Surya lub PaddleOCR-VL.
+
+**Instalacja (gdy naprawde potrzebny):** izolowany venv + nightly-vLLM — zob. INSTALL.md.
+
+## pdf-craft — WYKLUCZONY (trwale)
+
+pdf-craft jest **trwale wykluczony** z powodu nieusuwalnego konfliktu zaleznosci: wymaga
+`transformers<4.48` (symbol `LlamaFlashAttention2`, usuniety w 4.48), a Marker 1.10.x ciagnie
+`surya-ocr 0.17.1` wymagajaca `transformers>=4.56.1` — wspolnej wersji nie ma (przepasc wieksza
+niz samo `>=4.48`). Feralny import siedzi w zdalnym kodzie modelu DeepSeek-OCR (`trust_remote_code`),
+nie w samym pdf-craft, wiec forka sie nie oplaca.
+
+Faza 2 **nie** przywrocila pdf-craft — jego scenariusz (skanowane ksiazki) pokrywaja Marker,
+MinerU (backend `vlm`), PaddleOCR-VL i Surya. Gdyby kiedys byl konieczny, jedyna droga to izolacja
+jak MinerU (subprocess + wlasne srodowisko z `transformers<4.48`).
+
+Nie instaluj `pdf-craft` w srodowisku z `marker-pdf` lub `docling` — wymusi downgrade
 `transformers` i crash tych silnikow.

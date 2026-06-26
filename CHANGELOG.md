@@ -4,12 +4,19 @@
 
 ### Dodane
 
+- **Faza 2 — premium scan pipeline** (Etapy 11–15): preprocessing skanów, silniki VLM-OCR, korekta LLM z walidacją, składanie książki i eksport EPUB/Markdown, profile skanowania.
+- Silnik **Surya** (in-process, GPU) oraz **PaddleOCR-VL** (serwer OpenAI-compatible przez vLLM, izolowany venv) jako silniki VLM-OCR Fazy 2.
+- Silnik **olmOCR-2-7B FP8** — adapter gotowy, **silnik zaparkowany**: serwuje na 24 GB z `--max_model_len 16384 --gpu_memory_utilization 0.90`, ale zajmuje ~całą kartę (nie współistnieje z modelem korekty LLM), start serwera 90–150 s na wywołanie i jest anglocentryczny. Dla dokumentów PL używać PaddleOCR-VL/Surya; jedyny sensowny tryb produkcyjny to external-server.
+- **Wsparcie GPU (CUDA) na natywnym Windows** dla Surya/Marker: źródło torch `cu130` w `pyproject.toml` (`torch 2.12.1+cu130`) — liczenie na GPU także poza WSL.
 - Motyw marki (jasny/ciemny/auto) i ciemny pasek tytułu przez `chodzkos-gui-kit` — pełny standard GUI (Fusion + QPalette + QSS akcentowy). Motyw stosowany przy starcie z `config.toml` (klucz `[ui].theme`, most `SettingsMapping`).
 - Dyskretny przełącznik motywu (auto/jasny/ciemny) + „O programie" w lekkim górnym pasku okna głównego.
 - Panel logów koloruje statusy (info/ostrzeżenie/błąd) rolami palety i przemalowuje istniejące wpisy po zmianie motywu — bez zaszytych hexów.
 
 ### Zmienione
 
+- **Anulowanie konwersji w GUI**: kooperacyjne przerwanie między stronami i plikami oraz zwalnianie VRAM (unload modelu po anulowaniu).
+- `marker_max_pages` domyślnie `0` (wszystkie strony); Surya wymuszona na GPU (CUDA) zamiast CPU.
+- **Stos zależności domknięty**: `marker-pdf` przypięty `>=1.10,<2` (bez pinu resolver cofał do 0.3.10 → `ModuleNotFoundError: marker.config`), `transformers` ograniczone `>=4.56,<5` (wymóg surya 0.17.1), `pdf-craft` usunięty ze **wszystkich** extra.
 - File-dialogi (wybór plików PDF, folder wyjściowy, domyślny folder w ustawieniach) przeniesione na helpery `chodzkos-gui-kit` (`open_files`/`pick_dir`) z regułą rozjazdu natywny/fallback: natywny Explorer gdy motyw zgodny z systemem, skonfigurowany ciemny fallback przy rozjeździe. Dodano test strażniczy przeciw bezpośredniemu `QFileDialog` w GUI.
 - Pole „Folder wynikowy" (dawniej `QLineEdit` + „Przeglądaj") to teraz wspólny `PathEntry` z `chodzkos-gui-kit` (pin `v0.4.0`, `mode="dir"`): pole + przycisk „…" z `pick_dir` w jednym widgecie, etykiety po polsku przez `PathEntryTexts`. Zachowanie bez zmian (placeholder, wartość startowa z `default_output_dir`, odczyt przy konwersji).
 - Lista plików to teraz wspólny `FileList` z `chodzkos-gui-kit` (pin `v0.4.1`); usunięty lokalny `FileListWidget`. **Nowości z widgetu**: własny toolbar (+Pliki / +Folder / Usuń / Wyczyść), licznik z polskimi formami mnogimi, **dodawanie całego folderu z rekursją podkatalogów** oraz sygnały `files_changed`/`selection_changed`. Duplikujące przyciski „Dodaj pliki…"/„Wyczyść listę" usunięte z okna głównego (menu Plik→Otwórz zostaje). Worker konwersji (cancel + zwalnianie VRAM) bez zmian — dostaje listę ścieżek jak dotąd.
@@ -18,6 +25,8 @@
 
 ### Naprawione
 
+- **Marker konwertował tylko 1. stronę** przy nieświeżym `~/.config/pdf2md/config.toml` (utrwalony `marker_max_pages=1` z czasów starego defaultu) — zmiana wartości domyślnej w kodzie nie nadpisuje istniejącego configu platformdirs.
+- **torch na Windows wchodził jako `+cpu`** (Surya/Marker liczyły na CPU mimo karty) — wymuszone `+cu130` przez zadeklarowanie `torch`/`torchvision` jako jawnej zależności (inaczej `[tool.uv.sources]` ignoruje pakiet tranzytywny) + źródło indeksu cu130 + `uv lock --upgrade-package torch torchvision`.
 - Polskie etykiety standardowych elementów Qt: przyciski `OK/Anuluj/Zastosuj` w oknie ustawień oraz opisy/przyciski/tooltips nienatywnego `QFileDialog` (fallback przy rozjeździe motywu) — przez załadowanie tłumaczeń Qt (`QTranslator`: `qtbase_pl`, `qt_pl`) przy starcie GUI. Brak `.qm` w danej dystrybucji loguje ostrzeżenie zamiast cichego pominięcia.
 - Wszystkie okna komunikatów (`QMessageBox`: O programie, zapis ustawień, test klucza, brak plików, eksport EPUB, podsumowanie konwersji, zapis profilu) mają belkę tytułu podążającą za motywem **aplikacji** zamiast systemu — helper `themed_message_box`/`attach_dark_titlebar` (natywny uchwyt + `follow_app_titlebar` przed pokazaniem). Koniec jasnych belek przy stałym ciemnym motywie aplikacji na jasnym systemie.
 

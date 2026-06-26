@@ -7,30 +7,34 @@
 ## Szybki przegląd
 
 ```
-FAZA 1 — v1.0 (orkiestrator gotowych silników)
-Etap 0  Init projektu          ░░░░░  ~2h
-Etap 1  Rdzeń i abstrakcje     ░░░░░  ~3h
-Etap 2  PyMuPDF4LLM engine     ░░░░░  ~2h
-Etap 3  Marker engine          ░░░░░  ~3h
-Etap 4  Dostawcy LLM           ░░░░░  ~3h
-Etap 5  CLI + doctor + dry-run ░░░░░  ~4h
-Etap 6  GUI — szkielet         ░░░░░  ~4h
-Etap 7  GUI — polish           ░░░░░  ~4h
-Etap 8  Docling (core) + opc. MinerU, pdf-craft  ░░░░░  ~4h
-Etap 9  Testy + dokumentacja   ░░░░░  ~3h
-Etap 10 Dystrybucja (pakiet pip/uv)  ░░░░░  ~3h
+STATUS (czerwiec 2026): Faza 1 (v1.0) i Faza 2 — UKOŃCZONE.
+Działa: Marker (wszystkie strony, GPU), Surya (GPU), PaddleOCR-VL, pipeline skanów,
+korekta LLM, anulowanie + zwalnianie VRAM, natywny Windows z CUDA (torch cu130).
+olmOCR-2-7B FP8 — adapter gotowy, silnik ZAPARKOWANY (ekonomia VRAM 24 GB; szczegóły w Etapie 12).
+
+FAZA 1 — v1.0 (orkiestrator gotowych silników)            [UKOŃCZONA]
+Etap 0  Init projektu          █████  ~2h
+Etap 1  Rdzeń i abstrakcje     █████  ~3h
+Etap 2  PyMuPDF4LLM engine     █████  ~2h
+Etap 3  Marker engine          █████  ~3h
+Etap 4  Dostawcy LLM           █████  ~3h
+Etap 5  CLI + doctor + dry-run █████  ~4h
+Etap 6  GUI — szkielet         █████  ~4h
+Etap 7  GUI — polish           █████  ~4h
+Etap 8  Docling (core) + opc. MinerU       █████  ~4h
+Etap 9  Testy + dokumentacja   █████  ~3h
+Etap 10 Dystrybucja (pakiet pip/uv)  █████  ~3h
 ────────────────────────────────────────────
 Faza 1 łącznie                       ~35h + packaging
 
-FAZA 2 — premium scan pipeline (lokalny VLM-OCR, wymaga GPU)
-Etap 11 Preprocessing obrazu   ░░░░░  ~4h
-Etap 12 Silniki VLM-OCR        ░░░░░  ~6h
-Etap 13 Korekta LLM + walidacja ░░░░  ~6h
-Etap 14 Składanie książki + EPUB ░░░░ ~5h
-Etap 15 Profile skanowania     ░░░░░  ~3h
+FAZA 2 — premium scan pipeline (lokalny VLM-OCR, wymaga GPU)  [UKOŃCZONA]
+Etap 11 Preprocessing obrazu   █████  ~4h
+Etap 12 Silniki VLM-OCR        █████  ~6h   (Surya, PaddleOCR-VL; olmOCR zaparkowany)
+Etap 13 Korekta LLM + walidacja █████  ~6h
+Etap 14 Składanie książki + EPUB █████  ~5h
+Etap 15 Profile skanowania     █████  ~3h
 ────────────────────────────────────────────
 Faza 2 łącznie                       ~24h robocze
-                          (w swoim tempie, nie naraz)
 ```
 
 ---

@@ -10,7 +10,7 @@ pdf2md konwertuje pliki PDF do Markdown przez kilka wymiennych silnikow: szybkie
 
 - Konwersja pojedynczych PDF-ow i batchy do Markdown.
 - GUI w PySide6 oraz CLI oparte o Click.
-- Silniki wykrywane opcjonalnie: PyMuPDF4LLM, Marker, Docling, MinerU.
+- Silniki: PyMuPDF4LLM, Marker, Docling (rdzeniowe) oraz MinerU, Surya, PaddleOCR-VL (opcjonalne, w tym VLM-OCR dla skanów).
 - OCR dla skanow, dokumentow wielokolumnowych, tabel i materialow naukowych.
 - Opcjonalne LLM: Ollama, Anthropic Claude, OpenAI i Google Gemini.
 - Eksport do Markdown i EPUB przez Pandoc.
@@ -25,6 +25,9 @@ pdf2md konwertuje pliki PDF do Markdown przez kilka wymiennych silnikow: szybkie
 | Marker | Skanowane i mieszane PDF-y, OCR, layout | Tak | `uv pip install marker-pdf` |
 | Docling | Tabele, dokumenty biznesowe, RAG | Tak | `uv pip install docling` |
 | MinerU | Artykuly naukowe, CJK, wielokolumnowe uklady | Tak | `uv tool install mineru --with mineru[all]` |
+| Surya | Layout + OCR + reading order (GPU, in-process) | Tak | `uv pip install surya-ocr` |
+| PaddleOCR-VL | Wielojęzyczny VLM-OCR (serwer vLLM, izolowany) | Tak | serwer vLLM — zob. [INSTALL.md](INSTALL.md) |
+| olmOCR | VLM 7B do skanów — **zaparkowany** (anglocentryczny) | Tak | external-server — zob. [ENGINES.md](ENGINES.md) |
 
 Pakiet `pdf2md` jest orkiestratorem MIT. Silniki, zwlaszcza copyleft albo bardzo ciezkie, instaluje u siebie uzytkownik; `pdf2md doctor` pokazuje, czego brakuje.
 
@@ -121,7 +124,8 @@ PyMuPDF4LLM  Dostępny/Niezainstalowany  Core
 Marker       Dostępny/Niezainstalowany  Core
 Docling      Dostępny/Niezainstalowany  Core
 MinerU       Dostępny/Niezainstalowany  Opc.
-pdf-craft    Dostępny/Niezainstalowany  Opc.
+Surya        Dostępny/Niezainstalowany  Opc.
+PaddleOCR-VL Dostępny/Niezainstalowany  Opc.
 ```
 
 Konwersja pojedynczego pliku:
@@ -180,7 +184,7 @@ Najwazniejsze ustawienia:
 
 | Klucz | Znaczenie |
 |---|---|
-| `conversion.default_engine` | Domyslny silnik: `pymupdf4llm`, `marker`, `docling`, `mineru`, `pdf-craft` |
+| `conversion.default_engine` | Domyslny silnik: `pymupdf4llm`, `marker`, `docling`, `mineru`, `surya` |
 | `conversion.default_output_dir` | Domyslny katalog wynikowy |
 | `conversion.default_language` | Jezyk OCR, np. `pol+eng` |
 | `marker.marker_device` | `auto`, `cpu` albo `cuda` |
@@ -198,7 +202,7 @@ Zmienne i klucze LLM:
 - `ANTHROPIC_MODEL`, `OPENAI_MODEL`, `GEMINI_MODEL`, `OLLAMA_MODEL`
 - `OLLAMA_URL`
 
-Domyslny lokalny model Ollama to `qwen2.5:14b`.
+Domyslny lokalny model Ollama to `qwen3:14b`.
 
 ## 🤝 Współtworzenie
 

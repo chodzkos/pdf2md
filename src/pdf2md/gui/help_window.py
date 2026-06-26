@@ -97,5 +97,139 @@ class HelpWindow(QDialog):
         self._titlebar = follow_app_titlebar(self)
 
     def _tabs(self) -> list[tuple[str, str]]:
-        """Zakładki pomocy jako ``(tytuł, html)``. Na razie placeholder."""
-        return [("Placeholder", _section("Wkrótce", _p("Treść pomocy w toku.")))]
+        """Zakładki pomocy jako ``(tytuł, html)`` — składane helperami HTML."""
+        return [
+            ("Silniki konwersji", _engines_tab()),
+            ("Post-processing LLM", _llm_tab()),
+            ("Profile skanowania", _profiles_tab()),
+            ("CLI", _cli_tab()),
+            ("Model AI / Ollama", _models_tab()),
+        ]
+
+
+# ── Treść zakładek (po polsku; opis realnego stanu z kodu) ─────────────────────
+
+
+def _engines_tab() -> str:
+    table = _table(
+        ["Silnik", "Typ dokumentu", "OCR"],
+        [
+            [
+                "PyMuPDF4LLM",
+                "Natywne PDF z warstwą tekstową (raporty, instrukcje) — najszybszy",
+                "Nie",
+            ],
+            ["Marker", "Skany, dokumenty mieszane, trudniejszy layout; opcjonalny LLM", "Tak"],
+            ["Docling", "Tabele, dokumenty biznesowe, struktura, RAG", "Tak"],
+            ["MinerU", "Artykuły naukowe, CJK, wielokolumnowe układy (izolowany)", "Tak"],
+            ["Surya", "Layout + OCR + reading order, GPU, in-process", "Tak"],
+            ["PaddleOCR-VL", "Wielojęzyczny VLM-OCR (serwer vLLM, izolowany)", "Tak"],
+        ],
+    )
+    when = _p(
+        "<b>Kiedy który:</b> natywny tekst → PyMuPDF4LLM; skan / mieszane → Marker; "
+        "tabele / biznes → Docling; nauka / wielokolumnowe → MinerU; kontrola layoutu → Surya; "
+        "wielojęzyczny VLM → PaddleOCR-VL."
+    )
+    parked = _p(
+        "<b>olmOCR</b> (VLM 7B do skanów) jest <b>zaparkowany</b> — zajmuje ~całą kartę i jest "
+        "anglocentryczny. Dla skanów po polsku użyj <b>PaddleOCR-VL</b> lub <b>Surya</b>."
+    )
+    return _section("Silniki konwersji", table + when + parked)
+
+
+def _llm_tab() -> str:
+    intro = _p(
+        "Po konwersji opcjonalny model LLM poprawia i porządkuje wygenerowany Markdown "
+        "(operacja tekst→tekst — obraz strony NIE jest podawany do modelu)."
+    )
+    modes = _section(
+        "Tryby chunkowania",
+        _ul(
+            f"{_code('whole_document')} — cały dokument naraz",
+            f"{_code('by_page')} — strona po stronie",
+            f"{_code('by_chunk')} — fragmenty tekstu",
+            f"{_code('by_heading')} — sekcje wg nagłówków",
+        ),
+    )
+    providers = _section(
+        "Dostawcy",
+        _ul(
+            "Ollama — lokalny, domyślny (bez kluczy, bez wysyłania danych)",
+            "Claude (Anthropic), OpenAI, Gemini — chmurowe (wymagają klucza API)",
+        ),
+    )
+    keys = _p(
+        "Klucze API ustawisz w oknie <b>Ustawienia</b> albo w pliku "
+        f"{_code('~/.config/pdf2md/config.toml')}."
+    )
+    return _section("Post-processing LLM", intro) + modes + providers + keys
+
+
+def _profiles_tab() -> str:
+    table = _table(
+        ["Profil", "Co robi / kiedy"],
+        [
+            ["fast", "Niższy DPI, lekki tryb — szybki podgląd, gdy jakość mniej istotna"],
+            ["balanced", "Kompromis jakość/czas — domyślny, dobry do większości skanów"],
+            [
+                "premium",
+                "Najwyższy DPI + pełny tryb (VLM-OCR, korekta LLM, raport) — książki, materiał docelowy",
+            ],
+        ],
+    )
+    intro = _p(
+        "Profile sterują skanowaniem książek (silnik <b>Scan Pipeline</b>): DPI, korekta LLM, "
+        "wyjścia. Wbudowane: <b>fast</b> / <b>balanced</b> / <b>premium</b> (domyślny "
+        "<b>balanced</b>)."
+    )
+    editor = _p(
+        "Własny profil zapiszesz przez <b>Edytuj profil</b> (DPI, wyjścia EPUB / raport jakości); "
+        f"trafia do {_code('~/.config/pdf2md/profiles/')}."
+    )
+    return _section("Profile skanowania", intro + table + editor)
+
+
+def _cli_tab() -> str:
+    commands = _pre(
+        "pdf2md convert dokument.pdf --engine pymupdf4llm\n"
+        'pdf2md convert "pdfy/*.pdf" --engine docling --output-dir ./markdown\n'
+        "pdf2md convert dokument.pdf --engine marker --llm ollama --llm-mode by_heading\n"
+        "pdf2md convert dokument.pdf --dry-run        # plan bez konwersji\n"
+        "pdf2md scan skan.pdf --profile premium       # pipeline skanu książki\n"
+        "\n"
+        "pdf2md list-engines          # silniki + wymóg GPU\n"
+        "pdf2md list-llm              # dostawcy LLM\n"
+        "pdf2md list-profiles         # profile skanowania\n"
+        "pdf2md doctor                # diagnostyka środowiska\n"
+        "\n"
+        "pdf2md config show                  # pokaż konfigurację\n"
+        "pdf2md config set KLUCZ WARTOŚĆ     # ustaw wartość\n"
+        "pdf2md config edit                  # otwórz config.toml w edytorze"
+    )
+    intro = _p("Te same konwersje co w GUI wykonasz z linii poleceń:")
+    return _section("CLI", intro + commands)
+
+
+def _models_tab() -> str:
+    intro = _p(
+        "Post-processing LLM działa lokalnie przez <b>Ollama</b> — bez kluczy i bez wysyłania "
+        "danych. Rekomendowany model korekty: " + _code("qwen3:14b") + "."
+    )
+    vram = _p(
+        "<b>VRAM:</b> model 14B mieści się swobodnie na 24 GB. Większe modele (np. 27B/30B) dają "
+        "lepszą jakość korekty, jeśli starcza pamięci."
+    )
+    howto = _p(
+        "Model korekty wskażesz w <b>Ustawieniach</b> albo komendą "
+        + _code("pdf2md config set ollama_model qwen3:14b")
+        + "."
+    )
+    vision = _p(
+        "<b>Wskazówka:</b> do obróbki tekstu lepszy jest <b>zwykły</b> "
+        + _code("qwen3:14b")
+        + f" niż wariant vision ({_code('qwen3-vl')}) — na etapie korekty (tekst→tekst) zdolności "
+        "wizyjne nie są używane, a VL oddaje część parametrów na vision. VL ma sens osobno "
+        "(np. opis wyciąganych obrazów), nie jako model korekty."
+    )
+    return _section("Model AI / Ollama", intro + vram + howto + vision)

@@ -4,12 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from chodzkos_gui_kit.qt.dialogs import open_files
 from chodzkos_gui_kit.qt.theme import ThemeManager, ThemeSetting, current_palette
 from chodzkos_gui_kit.qt.widgets import FileList, FileListTexts, LogView, PathEntry, PathEntryTexts
 from loguru import logger
 from PySide6.QtCore import QSize, QUrl
-from PySide6.QtGui import QAction, QDesktopServices, QIcon, QKeySequence
+from PySide6.QtGui import QDesktopServices, QIcon
 from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
@@ -88,7 +87,6 @@ class MainWindow(QMainWindow):
         self._last_output_dir: Path | None = None
         self._last_markdown_outputs: list[Path] = []
         self._initial_files = initial_files or []
-        self._build_menu()
         self._build_ui()
 
         # Ciemny pasek tytułu (DWM = motyw app); re-render logu po zmianie motywu.
@@ -97,42 +95,6 @@ class MainWindow(QMainWindow):
 
         if self._initial_files:
             self._file_list.add_files(self._initial_files)
-
-    # ------------------------------------------------------------------
-    # Menu
-    # ------------------------------------------------------------------
-
-    def _build_menu(self) -> None:
-        file_menu = self.menuBar().addMenu("Plik")
-
-        open_action = QAction("Otwórz pliki...", self)
-        open_action.setShortcut(QKeySequence.StandardKey.Open)
-        open_action.triggered.connect(self._on_add_files)
-        file_menu.addAction(open_action)
-
-        file_menu.addSeparator()
-
-        settings_action = QAction("Ustawienia", self)
-        settings_action.setShortcut(QKeySequence("Ctrl+,"))
-        settings_action.triggered.connect(self._open_settings)
-        file_menu.addAction(settings_action)
-
-        file_menu.addSeparator()
-
-        quit_action = QAction("Zakończ", self)
-        quit_action.setShortcut(QKeySequence.StandardKey.Quit)
-        quit_action.triggered.connect(self.close)
-        file_menu.addAction(quit_action)
-
-        help_menu = self.menuBar().addMenu("Pomoc")
-
-        about_action = QAction("O programie", self)
-        about_action.triggered.connect(self._show_about)
-        help_menu.addAction(about_action)
-
-        project_action = QAction("Strona projektu", self)
-        project_action.triggered.connect(self._open_project_page)
-        help_menu.addAction(project_action)
 
     # ------------------------------------------------------------------
     # Budowa interfejsu
@@ -145,7 +107,7 @@ class MainWindow(QMainWindow):
         root.setSpacing(8)
         root.setContentsMargins(12, 12, 12, 12)
 
-        # --- Górny pasek (lekki): logo+nazwa | przełącznik motywu + O programie ---
+        # --- Górny pasek (lekki §6): logo+nazwa | motyw + ⚙ Ustawienia + ⓘ O programie ---
         root.addLayout(self._build_topbar())
 
         # --- Lista plików (kitowy FileList: własny toolbar +Pliki/+Folder/Usuń/Wyczyść,
@@ -235,10 +197,10 @@ class MainWindow(QMainWindow):
         root.addWidget(self._tabs)
 
     def _build_topbar(self) -> QHBoxLayout:
-        """Lekki górny pasek (GUI_STANDARD §6): logo+nazwa | motyw + O programie.
+        """Lekki górny pasek (GUI_STANDARD §6): logo+nazwa | motyw + ⚙ Ustawienia + ⓘ.
 
-        Przełącznik motywu i „O programie" to meta-funkcje — siedzą dyskretnie
-        w pasku, nie w zakładkach roboczych.
+        Meta-funkcje (motyw, ustawienia, o programie) siedzą dyskretnie w pasku —
+        zastępują dawny menubar, nie w zakładkach roboczych.
         """
         bar = QHBoxLayout()
 
@@ -265,6 +227,12 @@ class MainWindow(QMainWindow):
         self._theme_combo.activated.connect(self._on_theme_selected)
         bar.addWidget(self._theme_combo)
 
+        settings_btn = QToolButton()
+        settings_btn.setText("⚙")
+        settings_btn.setToolTip("Ustawienia")
+        settings_btn.clicked.connect(self._open_settings)
+        bar.addWidget(settings_btn)
+
         about_btn = QToolButton()
         about_btn.setText("ⓘ")
         about_btn.setToolTip("O programie")
@@ -286,12 +254,6 @@ class MainWindow(QMainWindow):
     # Sloty przycisków
     # ------------------------------------------------------------------
 
-    def _on_add_files(self) -> None:
-        # Wejście z menu Plik→Otwórz (Ctrl+O); toolbar widgetu ma własne „+Pliki".
-        paths = open_files(parent=self, title="Wybierz pliki PDF", name_filter="PDF (*.pdf)")
-        if paths:
-            self._file_list.add_files(paths)
-
     def _is_scan_engine(self, engine_name: str) -> bool:
         return "scan pipeline" in engine_name.lower()
 
@@ -306,13 +268,19 @@ class MainWindow(QMainWindow):
                 self._output_entry.set(settings.default_output_dir)
 
     def _show_about(self) -> None:
-        # Zwykły tekst — themed_message_box wystarcza (belka za motywem aplikacji).
-        themed_message_box(
+        # themed_message_box → ciemna belka za motywem aplikacji. Linki meta (Strona
+        # projektu, w przyszłości Pomoc offline) grupujemy tutaj, nie na pasku.
+        box = themed_message_box(
             self,
             QMessageBox.Icon.Information,
             "O programie",
             "pdf2md\n\nKonwerter PDF do Markdown z wieloma silnikami i opcjonalnym LLM.",
-        ).exec()
+        )
+        project_btn = box.addButton("Strona projektu", QMessageBox.ButtonRole.ActionRole)
+        box.addButton("Zamknij", QMessageBox.ButtonRole.AcceptRole)
+        box.exec()
+        if box.clickedButton() is project_btn:
+            self._open_project_page()
 
     def _open_project_page(self) -> None:
         QDesktopServices.openUrl(QUrl("https://github.com/chodzkos/pdf2md"))

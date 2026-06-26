@@ -15,6 +15,7 @@
 
 ### Zmienione
 
+- **Domyślny model korekty Ollama: `qwen2.5:14b` → `qwen3:14b`** (spójność z dokumentacją i oknem pomocy). Zmiana dotyczy tylko wartości domyślnej dla nowych instalacji — istniejący `~/.config/pdf2md/config.toml` nie jest nadpisywany (świadomie, jak przy `marker_max_pages`).
 - **Anulowanie konwersji w GUI**: kooperacyjne przerwanie między stronami i plikami oraz zwalnianie VRAM (unload modelu po anulowaniu).
 - `marker_max_pages` domyślnie `0` (wszystkie strony); Surya wymuszona na GPU (CUDA) zamiast CPU.
 - **Stos zależności domknięty**: `marker-pdf` przypięty `>=1.10,<2` (bez pinu resolver cofał do 0.3.10 → `ModuleNotFoundError: marker.config`), `transformers` ograniczone `>=4.56,<5` (wymóg surya 0.17.1), `pdf-craft` usunięty ze **wszystkich** extra.

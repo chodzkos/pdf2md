@@ -64,15 +64,15 @@ def test_dropdown_lists_models_and_preselects_current(
     qapp: QApplication, isolated_config: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Dropdown wypełnia się modelami z /api/tags i preselekcjonuje bieżący config.ollama_model."""
-    _mock_ollama_tags(monkeypatch, ["modelA", "qwen2.5:14b", "modelB"])
+    _mock_ollama_tags(monkeypatch, ["modelA", "qwen3:14b", "modelB"])
 
     dialog = SettingsDialog()
     try:
         items = [dialog._ollama_model.itemText(i) for i in range(dialog._ollama_model.count())]
         assert "modelA" in items
         assert "modelB" in items
-        # domyślny model z configu (qwen2.5:14b) jest preselektowany
-        assert dialog._ollama_model.currentText() == "qwen2.5:14b"
+        # domyślny model z configu (qwen3:14b) jest preselektowany
+        assert dialog._ollama_model.currentText() == "qwen3:14b"
     finally:
         dialog.deleteLater()
 

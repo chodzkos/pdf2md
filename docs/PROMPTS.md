@@ -2244,6 +2244,71 @@ GAŁĄŹ: feat/olmocr-adapter-d10  (osobny branch; bez auto-push; czekaj na zgod
 
 ---
 
+## PROMPT D20 — torch CUDA na Windowsie: wymuś indeks cu130 w pyproject (sys_platform=='win32')
+
+> Powód: na natywnym Windowsie `uv sync` instaluje torcha z PyPI = wariant **CPU-only** (`+cpu`),
+> więc Surya i Marker liczą na CPU mimo RTX 5090 (`doctor` → CUDA ❌). Ręczny `uv pip install
+> --reinstall` z indeksu cu130 daje `2.12.1+cu130 True`, ale jest NIETRWAŁY — następny `uv sync`
+> cofa torcha na `+cpu` (lock o nim nie wie). Trwałe rozwiązanie: źródło CUDA-torcha w pyproject,
+> **warunkowane `sys_platform=='win32'`**, żeby NIE ruszać działającego stosu Linux/WSL.
+> **Tag `cu130` wybrany świadomie:** daje torcha **2.12.1** — DOKŁADNIE tę wersję, którą trzyma lock
+> projektu (cu128 wymuszałby downgrade do 2.11.0). Czyli żadnego cofania wersji i żadnego konfliktu
+> z pinem — a dodatkowo TEN SAM toolkit co WSL (cu130), więc spójność po obu stronach. To realny błąd
+> projektu na Windowsie (dotyczy każdego użytkownika), nie tylko jednej maszyny.
+
+```
+GAŁĄŹ: build/torch-cuda-windows  (osobny branch; bez auto-push; czekaj na zgodę przed PR)
+
+1. Dodaj do pyproject.toml źródło CUDA-torcha tylko dla Windowsa:
+
+   [tool.uv.sources]
+   torch = [{ index = "pytorch-cu130", marker = "sys_platform == 'win32'" }]
+   torchvision = [{ index = "pytorch-cu130", marker = "sys_platform == 'win32'" }]
+
+   [[tool.uv.index]]
+   name = "pytorch-cu130"
+   url = "https://download.pytorch.org/whl/cu130"
+   explicit = true
+
+   - explicit=true → indeks używany WYŁĄCZNIE dla pakietów, które go jawnie wskażą (torch/torchvision),
+     nie dla reszty zależności.
+   - marker sys_platform=='win32' → CUDA-torch tylko na Windowsie; Linux/WSL bierze swój stos — NIE dotykać.
+   - nazwa w [tool.uv.sources] MUSI zgadzać się z [[tool.uv.index]].name (pytorch-cu130).
+   - cu130 ma torch 2.12.1 = wersja z locka, więc NIE trzeba ruszać żadnych pinów (inaczej niż cu128).
+
+2. Przelicz lock i zsynchronizuj, potem TEST TRWAŁOŚCI (to jest sedno — uv sync ma ZOSTAWIĆ CUDA):
+   uv lock
+   uv sync
+   uv run python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+   OCZEKIWANE na Windowsie: 2.12.1+cu130  True  (a NIE +cpu).
+
+   - jeśli wróci +cpu → literówka w marker/nazwie indeksu (nazwa w sources ≠ index.name); popraw, powtórz.
+   - konfliktu wersji NIE powinno być (cu130 = 2.12.1 = lock). Gdyby jednak resolver marudził → wklej błąd.
+
+3. Weryfikacja końcowa:
+   - uv run pdf2md doctor → sekcja GPU: CUDA ✅, smoke test ✅, urządzenie = RTX 5090.
+   - (opcjonalnie) krótka konwersja Surya/Marker → nvidia-smi pokazuje zajęty GPU.
+   - uv run pytest (zielone — sam wpis źródła nie powinien nic zepsuć), ruff/mypy bez zmian.
+
+4. Commit (Conventional Commits), jeden PR:
+   - tytuł: build(deps): wymuś torch CUDA (cu130) na Windowsie przez uv index (sys_platform=='win32')
+   - opis: PyPI torch na Windowsie = +cpu → Surya/Marker na CPU; źródło cu130 (torch 2.12.1, zgodne z
+     lockiem i z toolkitem WSL) z markerem win32 naprawia to dla wszystkich userów Windows, nie ruszając
+     stosu Linux/WSL.
+   - obejmij: pyproject.toml, uv.lock. BRAK auto-push; czekaj na zgodę.
+
+UWAGA: to zmiana zależności krytyczna dla działania na Windowsie. NIE zmieniaj nic w konfiguracji
+Linux/WSL (marker sys_platform=='win32' to gwarantuje).
+```
+
+> Po tym PR `doctor` na Windowsie pokaże CUDA ✅, a Surya/Marker pójdą na GPU także natywnie (nie tylko
+> w WSL). Tag `cu130` dobrany świadomie: torch **2.12.1** = wersja z locka (zero downgrade'u, zero
+> konfliktu pinu) i ten sam toolkit co WSL. Notkę o tej pułapce („PyPI torch=+cpu na Windowsie; wymusić
+> uv index cuXXX z markerem win32; cu130→2.12.1 zgodne z lockiem") warto dopisać do PROJEKT, sekcja
+> środowiska — spójnie z lekcjami o pinach.
+
+---
+
 ## Wskazówki ogólne
 
 ### Dwie zasady do DOPISANIA na końcu każdego prompta etapowego

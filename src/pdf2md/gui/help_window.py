@@ -4,9 +4,11 @@ Zakładki są **wstrzykiwane w pętli** z :meth:`HelpWindow._tabs` (lista
 ``(tytuł, html)``), nie sztywnymi metodami ``_make_X_tab`` — pod przyszłą
 ekstrakcję wspólnego okna pomocy do gui-kit.
 
-Kolory w HTML idą WYŁĄCZNIE przez funkcję ``palette(...)`` Qt (np.
-``palette(mid)``) — Qt podstawia kolor z palety ``QTextBrowser``, więc działają
-w obu motywach bez re-renderu. Zero zaszytych hexów.
+Kolory w HTML idą WYŁĄCZNIE przez funkcję ``palette(...)`` Qt — tła treści na
+``palette(alternate-base)`` + tekst ``palette(text)`` (para trzymająca kontrast
+w obu motywach; ``mid``/``dark``/``shadow`` to role ramek/cieni, nie powierzchni).
+Qt podstawia kolor z palety ``QTextBrowser``, więc działa w obu motywach bez
+re-renderu. Zero zaszytych hexów.
 """
 
 from __future__ import annotations
@@ -53,18 +55,21 @@ def _table(headers: list[str], rows: list[list[str]]) -> str:
     return (
         "<table border='1' cellspacing='0' cellpadding='0' "
         "style='border-collapse:collapse;margin:4px 0'>"
-        f"<tr style='background:palette(mid)'>{th}</tr>{trs}</table>"
+        f"<tr style='background:palette(alternate-base);color:palette(text)'>{th}</tr>{trs}</table>"
     )
 
 
 def _code(text: str) -> str:
-    return f"<code style='background:palette(mid);padding:1px 4px;border-radius:2px'>{text}</code>"
+    return (
+        "<code style='background:palette(alternate-base);color:palette(text);"
+        f"padding:1px 4px;border-radius:2px'>{text}</code>"
+    )
 
 
 def _pre(text: str) -> str:
     return (
-        f"<pre style='background:palette(mid);padding:8px;border-radius:4px;"
-        f"white-space:pre-wrap'>{text}</pre>"
+        f"<pre style='background:palette(alternate-base);color:palette(text);"
+        f"padding:8px;border-radius:4px;white-space:pre-wrap'>{text}</pre>"
     )
 
 

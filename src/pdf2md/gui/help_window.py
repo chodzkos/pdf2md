@@ -105,6 +105,7 @@ class HelpWindow(QDialog):
         """Zakładki pomocy jako ``(tytuł, html)`` — składane helperami HTML."""
         return [
             ("Silniki konwersji", _engines_tab()),
+            ("Instalacja silników", _install_tab()),
             ("Post-processing LLM", _llm_tab()),
             ("Profile skanowania", _profiles_tab()),
             ("CLI", _cli_tab()),
@@ -141,6 +142,54 @@ def _engines_tab() -> str:
         "anglocentryczny. Dla skanów po polsku użyj <b>PaddleOCR-VL</b> lub <b>Surya</b>."
     )
     return _section("Silniki konwersji", table + when + parked)
+
+
+def _install_tab() -> str:
+    core = _section(
+        "Silniki rdzeniowe",
+        _pre("uv sync --extra engines-core")
+        + _p(
+            "Instaluje PyMuPDF4LLM, Marker, Docling i Surya. torch z CUDA "
+            f"({_code('cu130')}) wchodzi automatycznie."
+        ),
+    )
+    tools = _section(
+        "Narzędzia systemowe",
+        _ul(
+            "<b>Tesseract</b> (+ język <b>pol</b>) — OCR skanów w Marker/Docling",
+            f"<b>Poppler</b> ({_code('pdftoppm')}) — PDF → obraz",
+        )
+        + _p("Oba muszą być w PATH.")
+        + _p(
+            "<b>Windows:</b> Tesseract — instalator UB Mannheim (zaznacz Polish); Poppler — "
+            "rozpakuj ZIP i dodaj " + _code("C:\\poppler\\Library\\bin") + " do PATH."
+        )
+        + _pre("# WSL / Ubuntu:\nsudo apt install tesseract-ocr tesseract-ocr-pol poppler-utils"),
+    )
+    gpu = _section(
+        "GPU / CUDA",
+        _p(
+            f"torch instaluje się jako {_code('+cu130')} przy {_code('uv sync')} (Windows i WSL). "
+            f"Sprawdź sekcję GPU w {_code('pdf2md doctor')}."
+        )
+        + _p(f"Jeśli CUDA jest niedostępna albo torch wszedł jako {_code('+cpu')}:")
+        + _pre(
+            "uv lock --upgrade-package torch --upgrade-package torchvision\n"
+            "uv sync --extra engines-core"
+        ),
+    )
+    services = _section(
+        "Silniki-usługi (zaawansowane)",
+        _p(
+            "MinerU, PaddleOCR-VL i olmOCR (zaparkowany) są izolowane w osobnych środowiskach i "
+            "działają <b>tylko w WSL</b> — vLLM nie wspiera natywnego Windows. Szczegóły w INSTALL.md."
+        ),
+    )
+    footer = _p(
+        "Pełna instrukcja krok po kroku: <b>INSTALL.md</b> w repozytorium (przycisk "
+        "„Strona projektu” w oknie <b>O programie</b>)."
+    )
+    return _section("Instalacja silników", core + tools + gpu + services + footer)
 
 
 def _llm_tab() -> str:

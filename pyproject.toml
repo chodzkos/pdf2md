@@ -47,6 +47,11 @@ engines-core = [
     "pymupdf4llm>=0.0.17",
     "marker-pdf>=1.10,<2",
     "docling>=2.0",
+    # torch/torchvision zadeklarowane JAWNIE (mimo że ciągną je marker-pdf/surya):
+    # [tool.uv.sources] łapie tylko zadeklarowane pakiety, nie transitive — bez tego
+    # źródło cu130 jest ignorowane i Windows dostaje wariant +cpu z PyPI.
+    "torch>=2.12",
+    "torchvision>=0.27",
 ]
 llm = [
     "anthropic>=0.29",
@@ -164,3 +169,16 @@ exclude_lines = [
 
 [tool.uv.sources]
 chodzkos-gui-kit = { git = "https://github.com/chodzkos/gui-kit", rev = "v0.4.3" }
+# torch z PyPI na Windowsie = wariant CPU-only (+cpu) → Surya/Marker liczą na CPU
+# mimo GPU. Indeks cu130 (torch 2.12.1) UNCONDITIONAL — oba systemy biorą
+# 2.12.1+cu130 (jeden toolkit, bez kruchych per-platformowych pinów). Działa tylko
+# bo torch/torchvision są zadeklarowane w engines-core (sources ignoruje transitive).
+torch = [{ index = "pytorch-cu130" }]
+torchvision = [{ index = "pytorch-cu130" }]
+
+# explicit=true → indeks używany TYLKO dla pakietów, które go jawnie wskażą
+# (torch/torchvision), nie dla reszty zależności.
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true

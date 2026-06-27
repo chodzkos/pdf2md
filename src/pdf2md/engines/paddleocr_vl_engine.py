@@ -2,7 +2,7 @@
 
 PaddleOCR-VL działa jako zewnętrzna usługa (serwer vLLM z modelem PaddleOCR-VL), a pdf2md
 jest tylko klientem HTTP — nie importuje paddle/paddlepaddle ani nie trzyma modelu w procesie.
-Cykl życia serwera jest zarządzany przez użytkownika (zob. SILNIKI_INSTALACJA.md 2.8).
+Cykl życia serwera jest zarządzany przez użytkownika (zob. INSTALL.md 7.3).
 
 is_available() pinguje serwer (GET /models). VRAM jest po stronie serwera, więc
 unload_model() to no-op — model zwalnia się przez zatrzymanie serwera.
@@ -65,10 +65,7 @@ class PaddleOCRVLEngine(VLMEngine):
         ConversionResult z komunikatem (markdown pusty, warnings=[komunikat])."""
         base_url = self._base_url()
         if not self.is_available():
-            msg = (
-                f"Serwer PaddleOCR-VL pod {base_url} nie odpowiada — uruchom go "
-                "(SILNIKI_INSTALACJA.md 2.8)"
-            )
+            msg = f"Serwer PaddleOCR-VL pod {base_url} nie odpowiada — uruchom go (INSTALL.md 7.3)"
             logger.error(msg)
             return self._error_result(pdf_path, msg)
         try:
@@ -118,7 +115,7 @@ class PaddleOCRVLEngine(VLMEngine):
         except OSError as exc:
             raise _PaddleOCRServerError(
                 f"Serwer PaddleOCR-VL pod {self._base_url()} nie odpowiada — uruchom go "
-                "(SILNIKI_INSTALACJA.md 2.8)"
+                "(INSTALL.md 7.3)"
             ) from exc
         return str(data["choices"][0]["message"]["content"])
 

@@ -59,7 +59,7 @@ docling_device = "auto"
 mineru_backend = "pipeline"
 
 [olmocr]
-# Izolowany venv olmOCR (subprocess). "" = auto: ~/.venvs/olmocr/bin/python (zob. SILNIKI_INSTALACJA.md 2.7)
+# Izolowany venv olmOCR (subprocess). "" = auto: ~/.venvs/olmocr/bin/python (zob. INSTALL.md 7.2)
 olmocr_python = ""
 olmocr_model = "allenai/olmOCR-2-7B-1025-FP8"
 # Flagi vLLM na 24 GB: bez nich olmocr spawnuje vLLM z 128k KV-cache → OOM "no memory for cache blocks"

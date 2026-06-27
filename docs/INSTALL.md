@@ -96,6 +96,9 @@ uv run pdf2md list-engines    # które silniki widziane jako dostępne (+ wymóg
 ### 4b. Ręczna checklista (uruchom każde; obok — co znaczy „OK")
 
 ```bash
+# --- uv ---
+uv --version                  # OK: wersja uv
+
 # --- narzędzia systemowe ---
 tesseract --version           # OK: wersja, np. "tesseract 5.x"
 tesseract --list-langs        # OK: na liście "pol" i "eng"
@@ -256,6 +259,8 @@ VLLM_USE_FLASHINFER_SAMPLER=0 python -m olmocr.pipeline <workspace> --pdfs <plik
   --gpu_memory_utilization 0.90 --max_model_len 16384
 deactivate
 ```
+> Bez `--max_model_len`/`--gpu_memory_utilization` vLLM bierze 128k KV-cache i pada z
+> `No available memory for cache blocks` — stąd te flagi (na OOM zejdź do `0.80`).
 > Gołe `vllm serve` z tymi flagami wstaje poprawnie. W trybie spawn-per-plik serwer-dziecko olmocr
 > potrafi nie wstać pod nightly-vLLM/transformers 5.x — dlatego produkcyjnie używaj trybu
 > `--server <url>` (pole `olmocr_server_url`): własny, raz wystartowany serwer.
@@ -308,7 +313,8 @@ VLLM_USE_FLASHINFER_SAMPLER=0 vllm serve PaddlePaddle/PaddleOCR-VL-1.6 \
 ```
 Pierwszy start łapie grafy CUDA (kilkadziesiąt sekund). Gotowy, gdy widzisz `Application startup
 complete` / `Uvicorn running on http://0.0.0.0:8000`. API zgodne z OpenAI na `http://localhost:8000/v1`
-— z tym gada adapter `paddleocr_vl_engine.py`.
+— z tym gada adapter `paddleocr_vl_engine.py`. (Warning `_POSIX_C_SOURCE redefined` z triton/gcc jest
+nieszkodliwy.)
 
 Szybki test z drugiego terminala na stronie skanu:
 ```bash
@@ -482,6 +488,8 @@ skopiuj cache `~/.cache/huggingface/`, ale to opcjonalne).
   sterownika w Ubuntu).
 - **PaddleOCR-VL `ModuleNotFoundError: paddle`** → do samego serwera VLM `paddle` nie jest potrzebny;
   serwuj `vllm serve PaddlePaddle/PaddleOCR-VL-1.6`. Paddle tylko w osobnym venv-kliencie (7.3c).
+- **PaddleOCR-VL `invalid choice: 'genai_server'`** → użyj `vllm serve` zamiast `genai_server`;
+  ewentualnie najpierw `paddleocr install_genai_server_deps vllm`.
 - **PaddleOCR-VL `libcudart.so.13: cannot open`** → rozjazd cu12/cu13; instaluj vLLM z
   `--torch-backend=auto` (NIE ręczny `--extra-index-url cu129 --index-strategy unsafe-best-match`);
   jak venv zepsuty — odtwórz od zera.

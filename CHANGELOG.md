@@ -15,6 +15,7 @@
 
 ### Zmienione
 
+- **Okno pomocy to teraz wspólny `HelpWindow` z `chodzkos-gui-kit`** (pin `v0.5.0`); usunięty lokalny szkielet okna i własne helpery HTML. pdf2md był wzorcem ekstrakcji tego widgetu — teraz go konsumuje. **Treść 6 zakładek bez zmian** (Silniki / Instalacja / LLM / Profile / CLI / Model AI) — zostaje jako `help_tabs()` (dane pdf2md) składane kitowymi helperami (`section`/`paragraph`/`table`/`code`/`preformatted`); kolory przez `palette(...)`, delegacja zmiennego stanu do `pdf2md doctor`. Re-render przy zmianie motywu (re-`setHtml` na `PaletteChange`) i ciemną belkę DWM (`TitlebarSync`) liczy teraz kit — semantyka zachowana. `follow_app_titlebar` zostaje w pdf2md dla pozostałych okien (Ustawienia / O programie).
 - **Domyślny model korekty Ollama: `qwen2.5:14b` → `qwen3:14b`** (spójność z dokumentacją i oknem pomocy). Zmiana dotyczy tylko wartości domyślnej dla nowych instalacji — istniejący `~/.config/pdf2md/config.toml` nie jest nadpisywany (świadomie, jak przy `marker_max_pages`).
 - **Anulowanie konwersji w GUI**: kooperacyjne przerwanie między stronami i plikami oraz zwalnianie VRAM (unload modelu po anulowaniu).
 - `marker_max_pages` domyślnie `0` (wszystkie strony); Surya wymuszona na GPU (CUDA) zamiast CPU.

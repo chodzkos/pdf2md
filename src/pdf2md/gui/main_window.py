@@ -5,7 +5,14 @@ from __future__ import annotations
 from pathlib import Path
 
 from chodzkos_gui_kit.qt.theme import ThemeManager, ThemeSetting, current_palette
-from chodzkos_gui_kit.qt.widgets import FileList, FileListTexts, LogView, PathEntry, PathEntryTexts
+from chodzkos_gui_kit.qt.widgets import (
+    FileList,
+    FileListTexts,
+    HelpWindow,
+    LogView,
+    PathEntry,
+    PathEntryTexts,
+)
 from loguru import logger
 from PySide6.QtCore import QSize, QUrl
 from PySide6.QtGui import QDesktopServices, QIcon
@@ -29,7 +36,7 @@ from PySide6.QtWidgets import (
 from pdf2md.core.config import get_settings
 from pdf2md.detection.dependencies import check_pandoc
 from pdf2md.exporters.pandoc_epub_exporter import PandocEpubExporter
-from pdf2md.gui.help_window import HelpWindow
+from pdf2md.gui.help_window import HELP_TITLE, help_tabs
 from pdf2md.gui.settings_dialog import SettingsDialog
 from pdf2md.gui.theming import attach_dark_titlebar, themed_message_box
 from pdf2md.gui.widgets.engine_selector import EngineSelectorWidget
@@ -283,7 +290,7 @@ class MainWindow(QMainWindow):
         box.exec()
         clicked = box.clickedButton()
         if clicked is help_btn:
-            HelpWindow(self).exec()
+            HelpWindow(self, title=HELP_TITLE, tabs=help_tabs()).exec()
         elif clicked is project_btn:
             self._open_project_page()
 

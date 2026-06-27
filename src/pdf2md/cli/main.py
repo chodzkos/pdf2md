@@ -25,6 +25,7 @@ from pdf2md.core.config import Settings, get_settings, save_settings
 from pdf2md.core.converter import ConversionError, Converter
 from pdf2md.core.registry import engine_registry, llm_registry
 from pdf2md.detection.dependencies import check_all
+from pdf2md.detection.hardware import HardwareInfo, detect_hardware
 from pdf2md.detection.pdf_type import detect_pdf_type
 from pdf2md.engines.base import ConversionEngine
 from pdf2md.exporters import MarkdownExporter, PandocEpubExporter
@@ -46,6 +47,7 @@ ENGINE_CATALOG: tuple[dict[str, object], ...] = (
         "llm": False,
         "license": "AGPL/kom.",
         "hint": "uv pip install pymupdf4llm",
+        "min_vram_gb": 0,  # CPU — zawsze wykonalny
         "description": "Szybki ekstraktor tekstu z natywnych PDF-ów.",
     },
     {
@@ -57,6 +59,7 @@ ENGINE_CATALOG: tuple[dict[str, object], ...] = (
         "llm": True,
         "license": "GPL",
         "hint": "uv pip install marker-pdf",
+        "min_vram_gb": 4,  # przybliżone; działa też na CPU (wolno)
         "description": "Uniwersalny konwerter z OCR i trybem LLM.",
     },
     {
@@ -68,6 +71,7 @@ ENGINE_CATALOG: tuple[dict[str, object], ...] = (
         "llm": False,
         "license": "MIT",
         "hint": "uv pip install docling",
+        "min_vram_gb": 2,  # przybliżone; działa też na CPU (wolno)
         "description": "Enterprise parser dokumentów, tabele, RAG.",
     },
     {
@@ -80,7 +84,8 @@ ENGINE_CATALOG: tuple[dict[str, object], ...] = (
         "linux_only": True,  # vLLM — tylko Linux/WSL
         "license": "AGPL",
         "hint": "uv tool install mineru --with mineru[all]",
-        "description": "Dokumenty naukowe, layout, CJK.",
+        "min_vram_gb": 6,  # backend pipeline; backend vlm ~12 GB (cięższy)
+        "description": "Dokumenty naukowe, layout, CJK. Backend pipeline (lekki) lub vlm (~12 GB).",
     },
     {
         "key": "olmocr",
@@ -93,6 +98,7 @@ ENGINE_CATALOG: tuple[dict[str, object], ...] = (
         "linux_only": True,  # vLLM — tylko Linux/WSL
         "license": "Apache-2.0",
         "hint": "pip install olmocr (osobne środowisko + CUDA)",
+        "min_vram_gb": 24,  # zmierzone: 9.5 GB model + 9.3 GB KV-cache + grafy CUDA
         "description": "VLM 7B do skanów: czysty Markdown, równania, tabele.",
     },
     {
@@ -110,6 +116,7 @@ ENGINE_CATALOG: tuple[dict[str, object], ...] = (
             "PaddlePaddle/PaddleOCR-VL-1.6 --trust-remote-code --no-enable-prefix-caching "
             "(zob. INSTALL.md 7.3)"
         ),
+        "min_vram_gb": 12,  # przybliżone (serwowany VLM)
         "description": "Serwer VLM (OpenAI-compatible): wielojęzyczny parser dokumentów.",
     },
     {
@@ -122,6 +129,7 @@ ENGINE_CATALOG: tuple[dict[str, object], ...] = (
         "gpu": True,
         "license": "GPL/komercyjna",
         "hint": "uv pip install surya-ocr",
+        "min_vram_gb": 6,  # przybliżone
         "description": "Layout + OCR + reading order, kontrola/fallback.",
     },
     {
@@ -134,6 +142,7 @@ ENGINE_CATALOG: tuple[dict[str, object], ...] = (
         "gpu": True,
         "license": "różne (zależnie od silnika OCR)",
         "hint": "uv pip install surya-ocr ebooklib (+ GPU); zob. INSTALL.md",
+        "min_vram_gb": 6,  # przybliżone (domyślnie Surya)
         "description": "Skan książki → VLM-OCR, korekta LLM, składanie, EPUB/Markdown.",
     },
 )
@@ -323,10 +332,77 @@ def _normalize_config_key(key: str) -> str:
     return normalized
 
 
-def _print_engine_table() -> None:
+def _hardware_summary(hw: HardwareInfo, cuda_version: str) -> str:
+    """Buduje wykonalny, gradacyjny opis sprzętu do sekcji GPU w doctorze."""
+    if hw.state == "ok":
+        version = cuda_version or "?"
+        vram = f"{hw.vram_gb:.0f}" if hw.vram_gb is not None else "?"
+        return f"✅ CUDA {version} · {hw.name} · {vram} GB · {hw.arch}"
+    if hw.state == "driver_too_old":
+        vram = f"{hw.vram_gb:.0f} GB" if hw.vram_gb is not None else "nieznany VRAM"
+        return (
+            f"⚠️ Karta wykryta ({hw.name}, {vram}), ale sterownik wspiera tylko "
+            f"CUDA {hw.driver_cuda}. pdf2md wymaga CUDA 13 → zaktualizuj sterownik NVIDIA "
+            "(https://www.nvidia.com/Download/index.aspx). Bez aktualizacji aplikacja działa na CPU."
+        )
+    if hw.state == "no_gpu":
+        return (
+            "ℹ️ Brak karty NVIDIA — tryb CPU. PyMuPDF4LLM działa pełną prędkością; "
+            "Marker/Docling na CPU (wolno)."
+        )
+    return (
+        "⚠️ Karta wykryta, ale CUDA niedostępna dla torcha. Sprawdź instalację "
+        "sterownika/torcha (tryb CPU do czasu naprawy)."
+    )
+
+
+def _min_vram_gb(item: dict[str, object]) -> float:
+    """Orientacyjny próg VRAM silnika w GiB (0 = silnik działa na CPU)."""
+    value = item.get("min_vram_gb", 0)
+    return float(value) if isinstance(value, (int, float)) else 0.0
+
+
+def _engine_feasibility(item: dict[str, object], hw: HardwareInfo) -> str:
+    """Wykonalność silnika względem wykrytego sprzętu (✅ / ⚠️ / ❌).
+
+    Progi VRAM (poza olmOCR) są SZACUNKAMI — stąd pas „⚠️ na granicy" zamiast twardego „nie"
+    tam, gdzie da się docisnąć dostrajaniem. Wymiar Linux/WSL łączy się z VRAM-em: silnik na
+    vLLM pod Windows jest niewykonalny niezależnie od pamięci karty.
+    """
+    # Wymiar systemu: vLLM-owe silniki pod natywnym Windows nie ruszą, choćby VRAM starczał.
+    if item.get("linux_only") and platform.system() != "Linux":
+        return "❌ wymaga Linux/WSL"
+
+    min_vram = _min_vram_gb(item)
+    requires_gpu = bool(item.get("gpu"))
+
+    if min_vram == 0:
+        return "✅ CPU"
+
+    if hw.state == "ok" and hw.vram_gb is not None:
+        vram = hw.vram_gb
+        if vram >= min_vram:
+            return "✅ zmieści się"
+        if vram >= min_vram * 0.7:
+            return "⚠️ na granicy (dostraja --gpu_memory_utilization / --max_model_len)"
+        return f"❌ za mało VRAM (~{min_vram:.0f} GB, masz {vram:.0f})"
+
+    # Brak działającego GPU (no_gpu / driver_too_old / cuda_unavailable).
+    if requires_gpu:
+        if hw.state == "driver_too_old":
+            return "❌ wymaga CUDA (zaktualizuj sterownik)"
+        return "❌ wymaga działającego CUDA"
+    # Silnik z fallbackiem CPU (Marker/Docling/MinerU-pipeline) — działa, tylko wolno.
+    return "✅ CPU (wolno)"
+
+
+def _print_engine_table(hw: HardwareInfo | None = None) -> None:
+    if hw is None:
+        hw = detect_hardware()
     table = Table(title="Silniki konwersji")
     table.add_column("Nazwa")
     table.add_column("Status")
+    table.add_column("Wykonalność")
     table.add_column("Core/Opc.")
     table.add_column("OCR")
     table.add_column("GPU")
@@ -352,6 +428,7 @@ def _print_engine_table() -> None:
         table.add_row(
             str(item["name"]),
             status,
+            _engine_feasibility(item, hw),
             str(item["scope"]),
             "tak" if item["ocr"] else "nie",
             "wymagane" if item.get("gpu") else "nie",
@@ -664,6 +741,7 @@ def doctor(ctx: click.Context) -> None:
     console.print(system_table)
 
     gpu = deps["gpu"]
+    hw = detect_hardware()
     gpu_table = Table(title="GPU")
     gpu_table.add_column("Element")
     gpu_table.add_column("Status")
@@ -675,6 +753,7 @@ def doctor(ctx: click.Context) -> None:
     )
     gpu_table.add_row("CUDA version", str(gpu.get("cuda_version") or "brak"))
     gpu_table.add_row("Urządzenie", str(gpu.get("device_name") or "brak"))
+    gpu_table.add_row("Ocena sprzętu", _hardware_summary(hw, str(gpu.get("cuda_version") or "")))
     console.print(gpu_table)
 
     tools_table = Table(title="Narzędzia")
@@ -701,7 +780,7 @@ def doctor(ctx: click.Context) -> None:
         )
     )
 
-    _print_engine_table()
+    _print_engine_table(hw)
 
     keys_table = Table(title="Klucze API")
     keys_table.add_column("Provider")

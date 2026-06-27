@@ -18,6 +18,7 @@ izolowane silniki VLM-OCR Fazy 2 i przeniesienie projektu na nową maszynę.
 9. [Weryfikacja końcowa](#9-weryfikacja-końcowa)
 10. [Przeniesienie na nową maszynę](#10-przeniesienie-na-nową-maszynę)
 11. [Rozwiązywanie problemów](#11-rozwiązywanie-problemów)
+12. [Sprzęt: inne karty, mniej VRAM, starszy sterownik](#12-sprzęt-inne-karty-mniej-vram-starszy-sterownik)
 
 ---
 
@@ -42,6 +43,10 @@ Zasada: **silniki rdzeniowe** (PyMuPDF4LLM, Marker, Docling, Surya) idą do venv
 **Ciężkie silniki-usługi** (MinerU, olmOCR, PaddleOCR-VL) są izolowane w osobnych środowiskach, bo
 ich zależności (vLLM, PaddlePaddle, transformers) konfliktują ze sobą i z projektem. vLLM działa
 tylko pod Linux/WSL — na natywnym Windows te trzy silniki nie ruszą (ale Marker/Surya na GPU tak).
+
+> **Inna karta niż RTX 5090, mniej VRAM albo starszy sterownik?** Patrz **sekcja 12** — co działa na
+> ilu GB i dlaczego do GPU potrzebny jest aktualny sterownik. Najszybciej: `pdf2md doctor` powie, co
+> Twój konkretny sprzęt uciągnie.
 
 ---
 
@@ -96,9 +101,6 @@ uv run pdf2md list-engines    # które silniki widziane jako dostępne (+ wymóg
 ### 4b. Ręczna checklista (uruchom każde; obok — co znaczy „OK")
 
 ```bash
-# --- uv ---
-uv --version                  # OK: wersja uv
-
 # --- narzędzia systemowe ---
 tesseract --version           # OK: wersja, np. "tesseract 5.x"
 tesseract --list-langs        # OK: na liście "pol" i "eng"
@@ -259,8 +261,6 @@ VLLM_USE_FLASHINFER_SAMPLER=0 python -m olmocr.pipeline <workspace> --pdfs <plik
   --gpu_memory_utilization 0.90 --max_model_len 16384
 deactivate
 ```
-> Bez `--max_model_len`/`--gpu_memory_utilization` vLLM bierze 128k KV-cache i pada z
-> `No available memory for cache blocks` — stąd te flagi (na OOM zejdź do `0.80`).
 > Gołe `vllm serve` z tymi flagami wstaje poprawnie. W trybie spawn-per-plik serwer-dziecko olmocr
 > potrafi nie wstać pod nightly-vLLM/transformers 5.x — dlatego produkcyjnie używaj trybu
 > `--server <url>` (pole `olmocr_server_url`): własny, raz wystartowany serwer.
@@ -313,8 +313,7 @@ VLLM_USE_FLASHINFER_SAMPLER=0 vllm serve PaddlePaddle/PaddleOCR-VL-1.6 \
 ```
 Pierwszy start łapie grafy CUDA (kilkadziesiąt sekund). Gotowy, gdy widzisz `Application startup
 complete` / `Uvicorn running on http://0.0.0.0:8000`. API zgodne z OpenAI na `http://localhost:8000/v1`
-— z tym gada adapter `paddleocr_vl_engine.py`. (Warning `_POSIX_C_SOURCE redefined` z triton/gcc jest
-nieszkodliwy.)
+— z tym gada adapter `paddleocr_vl_engine.py`.
 
 Szybki test z drugiego terminala na stronie skanu:
 ```bash
@@ -488,10 +487,60 @@ skopiuj cache `~/.cache/huggingface/`, ale to opcjonalne).
   sterownika w Ubuntu).
 - **PaddleOCR-VL `ModuleNotFoundError: paddle`** → do samego serwera VLM `paddle` nie jest potrzebny;
   serwuj `vllm serve PaddlePaddle/PaddleOCR-VL-1.6`. Paddle tylko w osobnym venv-kliencie (7.3c).
-- **PaddleOCR-VL `invalid choice: 'genai_server'`** → użyj `vllm serve` zamiast `genai_server`;
-  ewentualnie najpierw `paddleocr install_genai_server_deps vllm`.
 - **PaddleOCR-VL `libcudart.so.13: cannot open`** → rozjazd cu12/cu13; instaluj vLLM z
   `--torch-backend=auto` (NIE ręczny `--extra-index-url cu129 --index-strategy unsafe-best-match`);
   jak venv zepsuty — odtwórz od zera.
 - **PaddleOCR-VL sypie się ścianą po ścianie na Blackwellu** → udokumentowane bagno; odpuść i użyj
   MinerU/vlm (już działa) albo oficjalnego Dockera. Nie blokuj nim Etapu 12 (minimum = Surya).
+
+---
+
+## 12. Sprzęt: inne karty, mniej VRAM, starszy sterownik
+
+### Sterownik: jeden toolkit — aktualny sterownik albo CPU
+
+pdf2md instaluje torcha w wariancie **+cu130 (CUDA 13)** — jeden, testowany toolkit. **Nie**
+dostarczamy buildu pod CUDA 12 (mieszanie toolkitów to źródło trudnych błędów, m.in. `libcudart.so.13`).
+Konsekwencja:
+
+- **Chcesz GPU** → potrzebny sterownik NVIDIA wspierający **CUDA 13** (aktualny z
+  [nvidia.com](https://www.nvidia.com/Download/index.aspx)). Dla kart Ampere/Ada/Blackwell aktualizacja
+  sterownika **zawsze** to umożliwia — nie ma karty z tych generacji, która byłaby „uwięziona".
+- **Nie możesz zaktualizować** (np. zablokowany sterownik korporacyjny/OEM) → aplikacja działa na
+  **CPU**: PyMuPDF4LLM pełną prędkością, Marker/Docling wolno. Bez Suryi i silników VLM.
+
+Jak sprawdzić, co sterownik obsługuje: `nvidia-smi` — w nagłówku „CUDA Version: X.Y" to **najwyższe
+CUDA, jakie obsługuje Twój sterownik**. Jeśli < 13 → zaktualizuj. `pdf2md doctor` wykrywa to i mówi
+wprost („karta wykryta, ale sterownik wspiera tylko CUDA X.Y → zaktualizuj"), zamiast cicho pokazać
+brak GPU.
+
+### Które karty są wspierane
+
+| Karta (przykłady) | Architektura | GPU w pdf2md? |
+|---|---|---|
+| RTX 50xx (5060/5090) | Blackwell | ✅ (cu130 wymagane) |
+| RTX 40xx (4080) | Ada Lovelace | ✅ |
+| RTX 30xx (3070) | Ampere | ✅ |
+| RTX 20xx / GTX 16xx | Turing | ✅ (z aktualnym sterownikiem) |
+| GTX 10xx i starsze | Pascal i starsze | ❌ tylko CPU (nowy PyTorch nie ma kerneli) |
+
+Wszystko od Turinga/Ampere wzwyż działa na GPU pod warunkiem aktualnego sterownika. Pascal (GTX 10xx)
+i starsze → CPU; dla Doclinga wymuś `pdf2md config set docling_device cpu` (inaczej „CUDA error: no
+kernel image is available").
+
+### Co działa na ilu VRAM (orientacyjnie)
+
+Architektura decyduje „czy GPU w ogóle", a **VRAM decyduje, które silniki**. Progi są przybliżone
+(poza olmOCR) — `pdf2md doctor` poda konkret dla Twojej karty (✅ zmieści się / ⚠️ na granicy / ❌ za mało).
+
+| VRAM | Co realnie ruszy |
+|---|---|
+| CPU / brak CUDA | PyMuPDF4LLM (pełna prędkość); Marker/Docling na CPU (wolno). Bez Suryi i VLM-ów |
+| ~6–10 GB | + Marker / Surya / Docling na GPU (ostrożnie z batch-size). Serwowane VLM-y: nie |
+| ~10–16 GB | + PaddleOCR-VL / MinerU-vlm z dostrajaniem (`--gpu_memory_utilization`, `--max_model_len`). olmOCR: nie |
+| ~≥20 GB | pełna Faza 2, w tym olmOCR (~24 GB) |
+
+Tylko **olmOCR** ma twardy próg (~24 GB — zmierzony: 9.5 GB model + 9.3 GB KV-cache + grafy). Reszta
+to szacunki — na granicy próbuj z niższym `--gpu_memory_utilization` i mniejszym `--max_model_len`.
+**MinerU** ma dwa backendy: `pipeline` (lekki, działa na skromnym VRAM) i `vlm` (ciężki, jak inne
+serwowane VLM-y) — na mniejszej karcie trzymaj się `pipeline`.

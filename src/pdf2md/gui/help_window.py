@@ -1,136 +1,58 @@
-"""Okno pomocy offline pdf2md — szkielet (treść w kolejnym kroku).
+"""Treść okna pomocy offline pdf2md — zakładki dla kitowego ``HelpWindow``.
 
-Zakładki są **wstrzykiwane w pętli** z :meth:`HelpWindow._tabs` (lista
-``(tytuł, html)``), nie sztywnymi metodami ``_make_X_tab`` — pod przyszłą
-ekstrakcję wspólnego okna pomocy do gui-kit.
+Okno (belka DWM + re-render motywu) liczy wspólny kit
+(:class:`chodzkos_gui_kit.qt.widgets.HelpWindow`). pdf2md był wzorcem ekstrakcji
+tego widgetu — teraz go konsumuje. Tu zostaje WYŁĄCZNIE wiedza o pdf2md: lista
+zakładek ``(tytuł, html)`` (:func:`help_tabs`) składana kitowymi helperami HTML.
 
 Kolory w HTML idą WYŁĄCZNIE przez funkcję ``palette(...)`` Qt — tła treści na
-``palette(alternate-base)`` + tekst ``palette(text)`` (para trzymająca kontrast
-w obu motywach; ``mid``/``dark``/``shadow`` to role ramek/cieni, nie powierzchni).
-Zero zaszytych hexów.
+``palette(alternate-base)`` + tekst ``palette(text)``; zero zaszytych hexów.
+``QTextBrowser`` rozwiązuje ``palette(...)`` do konkretnych kolorów przy
+``setHtml`` i nie aktualizuje ich przy zmianie motywu — re-render na
+``PaletteChange`` (re-``setHtml`` tym samym html) robi teraz kit dla WSZYSTKICH
+zakładek (``HelpWindow.changeEvent``).
 
-``QTextDocument`` rozwiązuje ``palette(...)`` do KONKRETNYCH kolorów przy
-``setHtml`` i nie aktualizuje ich przy zmianie motywu — dlatego
-:meth:`HelpWindow.changeEvent` re-renderuje zakładki na ``PaletteChange``.
+Wołający::
+
+    from chodzkos_gui_kit.qt.widgets import HelpWindow
+    from pdf2md.gui.help_window import HELP_TITLE, help_tabs
+    HelpWindow(parent, title=HELP_TITLE, tabs=help_tabs()).exec()
 """
 
 from __future__ import annotations
 
-from PySide6.QtCore import QEvent
-from PySide6.QtWidgets import (
-    QDialog,
-    QDialogButtonBox,
-    QScrollArea,
-    QTabWidget,
-    QTextBrowser,
-    QVBoxLayout,
-    QWidget,
+from chodzkos_gui_kit.qt.widgets import (
+    code as _code,
+)
+from chodzkos_gui_kit.qt.widgets import (
+    paragraph as _p,
+)
+from chodzkos_gui_kit.qt.widgets import (
+    preformatted as _pre,
+)
+from chodzkos_gui_kit.qt.widgets import (
+    section as _section,
+)
+from chodzkos_gui_kit.qt.widgets import (
+    table as _table,
+)
+from chodzkos_gui_kit.qt.widgets import (
+    unordered_list as _ul,
 )
 
-from pdf2md.gui.theming import follow_app_titlebar
+HELP_TITLE = "Pomoc — pdf2md"
 
 
-def _scroll(widget: QWidget) -> QScrollArea:
-    area = QScrollArea()
-    area.setWidgetResizable(True)
-    area.setWidget(widget)
-    return area
-
-
-def _section(title: str, body: str) -> str:
-    return f"<h3>{title}</h3>{body}"
-
-
-def _p(text: str) -> str:
-    return f"<p>{text}</p>"
-
-
-def _ul(*items: str) -> str:
-    rows = "".join(f"<li>{i}</li>" for i in items)
-    return f"<ul>{rows}</ul>"
-
-
-def _table(headers: list[str], rows: list[list[str]]) -> str:
-    th = "".join(f"<th style='padding:4px 8px;text-align:left'>{h}</th>" for h in headers)
-    trs = ""
-    for row in rows:
-        tds = "".join(f"<td style='padding:4px 8px'>{c}</td>" for c in row)
-        trs += f"<tr>{tds}</tr>"
-    return (
-        "<table border='1' cellspacing='0' cellpadding='0' "
-        "style='border-collapse:collapse;margin:4px 0'>"
-        f"<tr style='background:palette(alternate-base);color:palette(text)'>{th}</tr>{trs}</table>"
-    )
-
-
-def _code(text: str) -> str:
-    return (
-        "<code style='background:palette(alternate-base);color:palette(text);"
-        f"padding:1px 4px;border-radius:2px'>{text}</code>"
-    )
-
-
-def _pre(text: str) -> str:
-    return (
-        f"<pre style='background:palette(alternate-base);color:palette(text);"
-        f"padding:8px;border-radius:4px;white-space:pre-wrap'>{text}</pre>"
-    )
-
-
-class HelpWindow(QDialog):
-    """Okno pomocy z zakładkami (szkielet — jedna placeholder-zakładka)."""
-
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self.setWindowTitle("Pomoc — pdf2md")
-        # Tylko rozmiar startowy — geometrii NIE persystujemy (żadne okno pdf2md
-        # tego nie robi; dodatkowe pole w typowanym Settings = narzut bez wartości).
-        self.resize(720, 560)
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(6)
-
-        # (browser, html) — źródło do przemalowania przy zmianie motywu: QTextDocument
-        # zamraża kolory palette(...) przy setHtml, więc po zmianie palety re-renderujemy.
-        self._browsers: list[tuple[QTextBrowser, str]] = []
-        tabs = QTabWidget()
-        for title, html in self._tabs():
-            browser = QTextBrowser()
-            browser.setHtml(html)
-            self._browsers.append((browser, html))
-            tabs.addTab(_scroll(browser), title)
-        layout.addWidget(tabs)
-
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
-
-        # Ciemna belka tytułu podążająca za motywem aplikacji (jak settings_dialog).
-        self._titlebar = follow_app_titlebar(self)
-
-    def changeEvent(self, event: QEvent) -> None:
-        """Przemalowuje treść zakładek po zmianie palety (motywu).
-
-        ``palette(...)`` w HTML jest rozwiązywane do konkretnych kolorów przy
-        ``setHtml`` i NIE aktualizuje się samo przy zmianie motywu — więc na
-        ``PaletteChange`` re-renderujemy każdą zakładkę z bieżącą paletą.
-        """
-        if event.type() == QEvent.Type.PaletteChange:
-            for browser, html in self._browsers:
-                browser.setHtml(html)
-        super().changeEvent(event)
-
-    def _tabs(self) -> list[tuple[str, str]]:
-        """Zakładki pomocy jako ``(tytuł, html)`` — składane helperami HTML."""
-        return [
-            ("Silniki konwersji", _engines_tab()),
-            ("Instalacja silników", _install_tab()),
-            ("Post-processing LLM", _llm_tab()),
-            ("Profile skanowania", _profiles_tab()),
-            ("CLI", _cli_tab()),
-            ("Model AI / Ollama", _models_tab()),
-        ]
+def help_tabs() -> list[tuple[str, str]]:
+    """Zakładki pomocy jako ``(tytuł, html)`` — składane kitowymi helperami HTML."""
+    return [
+        ("Silniki konwersji", _engines_tab()),
+        ("Instalacja silników", _install_tab()),
+        ("Post-processing LLM", _llm_tab()),
+        ("Profile skanowania", _profiles_tab()),
+        ("CLI", _cli_tab()),
+        ("Model AI / Ollama", _models_tab()),
+    ]
 
 
 # ── Treść zakładek (po polsku; opis realnego stanu z kodu) ─────────────────────

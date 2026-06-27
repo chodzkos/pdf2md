@@ -4,6 +4,7 @@
 
 ### Dodane
 
+- **`doctor`: gradacja sprzętowa** — wykrywa za stary sterownik NVIDIA (karta jest, ale CUDA 13 niedostępna → komunikat „zaktualizuj sterownik" zamiast cichego braku GPU) i pokazuje wykonalność każdego silnika względem wykrytego VRAM (✅ zmieści się / ⚠️ na granicy — do dostrojenia / ❌ za mało). Pomoc (zakładka „Instalacja silników") opisuje wymóg sterownika (jeden toolkit `+cu130`) i zależność „który silnik ruszy" od VRAM.
 - **Faza 2 — premium scan pipeline** (Etapy 11–15): preprocessing skanów, silniki VLM-OCR, korekta LLM z walidacją, składanie książki i eksport EPUB/Markdown, profile skanowania.
 - Silnik **Surya** (in-process, GPU) oraz **PaddleOCR-VL** (serwer OpenAI-compatible przez vLLM, izolowany venv) jako silniki VLM-OCR Fazy 2.
 - Silnik **olmOCR-2-7B FP8** — adapter gotowy, **silnik zaparkowany**: serwuje na 24 GB z `--max_model_len 16384 --gpu_memory_utilization 0.90`, ale zajmuje ~całą kartę (nie współistnieje z modelem korekty LLM), start serwera 90–150 s na wywołanie i jest anglocentryczny. Dla dokumentów PL używać PaddleOCR-VL/Surya; jedyny sensowny tryb produkcyjny to external-server.

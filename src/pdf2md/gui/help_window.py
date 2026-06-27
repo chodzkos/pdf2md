@@ -141,8 +141,21 @@ def _install_tab() -> str:
     gpu = _section(
         "GPU / CUDA",
         _p(
-            f"torch instaluje się jako {_code('+cu130')} przy {_code('uv sync')} (Windows i WSL). "
-            f"Sprawdź sekcję GPU w {_code('pdf2md doctor')}."
+            f"torch instaluje się jako {_code('+cu130')} (CUDA 13) przy {_code('uv sync')} "
+            "(Windows i WSL) — jeden, testowany toolkit. Do pracy na GPU potrzebny jest "
+            "<b>aktualny sterownik NVIDIA wspierający CUDA 13</b>. Bez aktualnego sterownika "
+            f"aplikacja działa na CPU (nie schodzimy z {_code('+cu130')})."
+        )
+        + _p(
+            "<b>VRAM decyduje, które silniki ruszą:</b> skromna karta (np. 8 GB) → "
+            "Marker / Surya / Docling na GPU, ale bez ciężkich serwowanych VLM-ów; "
+            "pełna Faza 2 (z olmOCR) dopiero przy ~24 GB."
+        )
+        + _p(
+            f"Sprawdź {_code('pdf2md doctor')} — pokaże, co Twój konkretny sprzęt uciągnie "
+            "(✅ / ⚠️ / ❌ per silnik) i czy sterownik jest wystarczająco nowy (karta wykryta, "
+            "ale za stary sterownik → komunikat o aktualizacji). Pełna tabela sprzętowa: "
+            "<b>INSTALL.md</b> sekcja 12."
         )
         + _p(f"Jeśli CUDA jest niedostępna albo torch wszedł jako {_code('+cpu')}:")
         + _pre(
@@ -245,7 +258,8 @@ def _models_tab() -> str:
     )
     vram = _p(
         "<b>VRAM:</b> model 14B mieści się swobodnie na 24 GB. Większe modele (np. 27B/30B) dają "
-        "lepszą jakość korekty, jeśli starcza pamięci."
+        "lepszą jakość korekty, jeśli starcza pamięci. Na mniejszej karcie wybierz mniejszy model "
+        "(np. 7B/8B) — inaczej Ollama zejdzie na CPU i korekta będzie wolna."
     )
     howto = _p(
         "Model korekty wskażesz w <b>Ustawieniach</b> albo komendą "

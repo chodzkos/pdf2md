@@ -603,7 +603,7 @@ Cztery silniki OCR oparte na modelach wizyjno-językowych, jako adaptery `Conver
 
 ### Co robisz Ty
 - [ ] `git checkout -b etap-12-vlm-ocr`
-- [ ] **Instalacja zewnętrznych silników wg `SILNIKI_INSTALACJA.md`** (Surya w głównym venv; olmOCR i PaddleOCR-VL w osobnych środowiskach; PaddleOCR-VL na Blackwellu → vLLM nightly cu129 + prekompilowany flash-attn)
+- [ ] **Instalacja zewnętrznych silników wg `INSTALL.md`** (Surya w głównym venv; olmOCR i PaddleOCR-VL w osobnych środowiskach; PaddleOCR-VL na Blackwellu → vLLM nightly cu129 + prekompilowany flash-attn)
 - [ ] Sprawdzasz że GPU jest wykrywane (`nvidia-smi`, `torch.cuda.is_available()`)
 - [ ] Testujesz każdy silnik na 2-3 stronach skanu — porównujesz z Markerem z Fazy 1
 - [ ] Po teście sprawdzasz `nvidia-smi` — czy `unload_model()` (kill procesu) faktycznie zwolnił VRAM

@@ -140,7 +140,7 @@ Te silniki wchodzą do gry dopiero w Fazie 2 (zob. ROADMAP, etapy 11–15). Są 
 >   `VLLM_USE_FLASHINFER_SAMPLER=0 vllm serve PaddlePaddle/PaddleOCR-VL-1.6 --trust-remote-code
 >   --no-enable-prefix-caching` (env wymagane — flashinfer JIT-uje sampler i pada na nvcc, ten sam
 >   fix co MinerU/vlm). `paddle` (framework) niepotrzebny do samego VLM; pełny pipeline z layoutem
->   = osobny venv-klient. Szczegóły krok po kroku w SILNIKI_INSTALACJA.md (sek. 2.8).
+>   = osobny venv-klient. Szczegóły krok po kroku w INSTALL.md (sek. 2.8).
 > - **Jakość (skan polskiej książki historycznej):** bardzo dobra — poprawne diakrytyki, zachowane
 >   akapity, wierne odtworzenie nawiasów kwadratowych z oryginału. Drobne artefakty na zawijaniach
 >   wierszy (sklejone słowa, pojedyncze literówki) — do dobicia modelem korekty w Etapie 13.

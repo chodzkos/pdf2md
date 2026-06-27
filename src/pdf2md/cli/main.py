@@ -108,7 +108,7 @@ ENGINE_CATALOG: tuple[dict[str, object], ...] = (
         "hint": (
             "Uruchom serwer: VLLM_USE_FLASHINFER_SAMPLER=0 vllm serve "
             "PaddlePaddle/PaddleOCR-VL-1.6 --trust-remote-code --no-enable-prefix-caching "
-            "(zob. SILNIKI_INSTALACJA.md 2.8)"
+            "(zob. INSTALL.md 7.3)"
         ),
         "description": "Serwer VLM (OpenAI-compatible): wielojęzyczny parser dokumentów.",
     },
@@ -133,7 +133,7 @@ ENGINE_CATALOG: tuple[dict[str, object], ...] = (
         "llm": True,
         "gpu": True,
         "license": "różne (zależnie od silnika OCR)",
-        "hint": "uv pip install surya-ocr ebooklib (+ GPU); zob. SILNIKI_INSTALACJA.md",
+        "hint": "uv pip install surya-ocr ebooklib (+ GPU); zob. INSTALL.md",
         "description": "Skan książki → VLM-OCR, korekta LLM, składanie, EPUB/Markdown.",
     },
 )
@@ -622,7 +622,7 @@ def scan(pdf: str, profile: str, output_dir: str, keep_work: bool, verbose: bool
     if not engine.is_available():
         raise click.ClickException(
             "Silnik Scan Pipeline nie jest dostępny — wymaga GPU i silnika VLM-OCR "
-            "(zob. SILNIKI_INSTALACJA.md)."
+            "(zob. INSTALL.md)."
         )
 
     start = time.monotonic()

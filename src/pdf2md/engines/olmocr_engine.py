@@ -1,7 +1,7 @@
 """Adapter silnika olmOCR (VLM 7B do skanów) — izolowany venv + subprocess.
 
 olmOCR ma stos vLLM konfliktujący z projektem, więc żyje w osobnym venv (``~/.venvs/olmocr``,
-zob. SILNIKI_INSTALACJA.md 2.7). pdf2md woła go przez subprocess (wzór jak MinerU). Obecność
+zob. INSTALL.md 7.2). pdf2md woła go przez subprocess (wzór jak MinerU). Obecność
 środowiska sprawdzamy po binie ``vllm`` w venv — NIGDY nie importujemy olmocr w procesie pdf2md.
 
 olmOCR shelluje CLI ``vllm`` po gołej nazwie, więc env subprocesu musi mieć ``PATH`` z binem
@@ -29,7 +29,7 @@ from pdf2md.core.config import get_settings
 from pdf2md.engines.base import ConversionResult
 from pdf2md.engines.vlm_base import VLMEngine
 
-#: Domyślna ścieżka izolowanego venv olmOCR (konwencja z SILNIKI_INSTALACJA.md 2.7).
+#: Domyślna ścieżka izolowanego venv olmOCR (konwencja z INSTALL.md 7.2).
 _DEFAULT_VENV_PYTHON = Path.home() / ".venvs" / "olmocr" / "bin" / "python"
 
 
@@ -74,13 +74,13 @@ class OlmOCREngine(VLMEngine):
         if not self.is_available():
             raise RuntimeError(
                 "Silnik olmOCR nie jest dostępny: wymaga kompletnego izolowanego venv "
-                "(~/.venvs/olmocr z vLLM) oraz GPU. Zob. SILNIKI_INSTALACJA.md 2.7."
+                "(~/.venvs/olmocr z vLLM) oraz GPU. Zob. INSTALL.md 7.2."
             )
         python = self._olmocr_python()
         if python is None:
             raise RuntimeError(
                 "Nie znaleziono pythona venv olmOCR. Ustaw olmocr_python w config.toml "
-                "albo zainstaluj wg SILNIKI_INSTALACJA.md 2.7."
+                "albo zainstaluj wg INSTALL.md 7.2."
             )
 
         settings = get_settings()

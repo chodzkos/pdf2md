@@ -1112,7 +1112,7 @@ Klasa PaddleOCRVLEngine(ExternalVLMEngine):
 
 Po zakończeniu:
 1. Pokaż jak zainstalować każdy silnik (Surya w głównym venv; olmOCR i PaddleOCR-VL w osobnych
-   środowiskach — odeślij do SILNIKI_INSTALACJA.md)
+   środowiskach — odeślij do INSTALL.md)
 2. Pokaż jak sprawdzić GPU: python -c "import torch; print(torch.cuda.is_available())"
 3. pdf2md list-engines (Surya/olmOCR/PaddleOCR-VL widoczne, oznaczone wymaganiem GPU i kategorią)
 ```
@@ -1686,7 +1686,7 @@ W engines/paddleocr_vl_engine.py popraw adapter PaddleOCR-VL. Architektura bez z
 2. POPRAW PODPOWIEDŹ (hint) w metadanych silnika:
    - Zamiast „pip install paddlepaddle..." daj sens usługi:
      „Uruchom serwer: VLLM_USE_FLASHINFER_SAMPLER=0 vllm serve PaddlePaddle/PaddleOCR-VL-1.6
-      --trust-remote-code --no-enable-prefix-caching (zob. SILNIKI_INSTALACJA.md 2.8)".
+      --trust-remote-code --no-enable-prefix-caching (zob. INSTALL.md 7.3)".
    - Jeśli masz pole opisujące, co znaczy „dostępny", napisz: „serwer pod paddleocr_vl_url
      odpowiada".
 
@@ -1717,7 +1717,7 @@ W engines/paddleocr_vl_engine.py popraw adapter PaddleOCR-VL. Architektura bez z
 OBSŁUGA BŁĘDÓW w convert():
    - ConnectionError/Timeout → ConversionResult z błędem:
      „Serwer PaddleOCR-VL pod {paddleocr_vl_url} nie odpowiada — uruchom go
-      (SILNIKI_INSTALACJA.md 2.8)".
+      (INSTALL.md 7.3)".
    - HTTP != 200 → zaloguj logger.error ze statusem i obciętym body (~500 znaków) i zwróć
      ConversionResult z błędem zawierającym tę końcówkę.
 
@@ -1734,7 +1734,7 @@ Pokaż diff.
 > serwera (model ciepły, szybkie strony — dobre do wsadu/książek). Zarządzanie cyklem życia
 > serwera (start/stop, ~92% VRAM) jest w v1.0 ręczne; ewentualne automatyczne podnoszenie/
 > ubijanie serwera z poziomu pdf2md to osobny feature, nie ten prompt. Przepis startu serwera
-> i test `curl` — SILNIKI_INSTALACJA.md sek. 2.8.
+> i test `curl` — INSTALL.md sek. 2.8.
 
 ---
 
@@ -1752,7 +1752,7 @@ Pokaż diff.
 > obecność środowiska, NIE importuje `olmocr`. unload = zamknięcie procesu (VRAM zwalnia OS).
 
 ```
-KROK 1 — ŚRODOWISKO (to nie jest kod; zrób wg SILNIKI_INSTALACJA.md sek. 2.7):
+KROK 1 — ŚRODOWISKO (to nie jest kod; zrób wg INSTALL.md sek. 2.7):
 - uv venv ~/.venvs/olmocr, instalacja olmocr + model (allenai/olmOCR-2-...-FP8; FP8 OK na sm_120).
 - ZWERYFIKUJ AKTUALNĄ komendę pipeline'u i nazwę modelu w dokumentacji olmOCR — to ruchomy cel,
   nie polegaj na pamięci. Sprawdź, jak uruchomić olmOCR na pojedynczym PDF/obrazie i w jakim
@@ -1790,7 +1790,7 @@ KROK 4 — TEST end-to-end:
 Pokaż diff (KROK 2) i wynik testu (KROK 4).
 ```
 
-> Uwaga: instalacja izolowanego środowiska olmOCR — SILNIKI_INSTALACJA.md sek. 2.7. Sekcja
+> Uwaga: instalacja izolowanego środowiska olmOCR — INSTALL.md sek. 2.7. Sekcja
 > „olmOCR" w (historycznym) PROMPCIE #12 jest referencją projektową tego adaptera.
 
 ---
@@ -1957,7 +1957,7 @@ DPI_OLD_BOOKS) i sygnatury zostają na górze.
 
 6. Zachowanie konwersji BEZ zmian: gdy zależność JEST — convert() działa identycznie (import po
    prostu dzieje się w metodzie). Gdy zależności BRAK i ktoś użyje silnika → czytelny błąd w
-   convert() („silnik X wymaga <pakiet>; zob. SILNIKI_INSTALACJA.md"), NIE crash na starcie.
+   convert() („silnik X wymaga <pakiet>; zob. INSTALL.md"), NIE crash na starcie.
 
 TESTY:
    - regresja „brak ciężkich importów na starcie": w IZOLOWANYM subprocess wykonaj
@@ -2213,7 +2213,7 @@ GAŁĄŹ: feat/olmocr-adapter-d10  (osobny branch; bez auto-push; czekaj na zgod
    Bez zmian publicznego interfejsu poza dodaniem powyższych pól configu. Silnik POZOSTAJE
    zarejestrowany (to działający silnik opcjonalny, nie usuwamy go jak pdf-craft).
 
-2. Doc SILNIKI_INSTALACJA.md sek. 2.7 (olmOCR) — uzgodnij z rzeczywistością:
+2. Doc INSTALL.md sek. 2.7 (olmOCR) — uzgodnij z rzeczywistością:
    - środowisko: venv ~/.venvs/olmocr → `uv pip install olmocr` → DODATKOWO nightly-vLLM jak Paddle
      (sek. 2.8): `uv pip install -U vllm --pre --torch-backend=auto --extra-index-url
      https://wheels.vllm.ai/nightly`. (Samo `uv pip install olmocr` NIE ciągnie torch/vllm — to było źródłem błędu.)

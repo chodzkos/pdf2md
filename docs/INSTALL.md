@@ -528,6 +528,11 @@ Wszystko od Turinga/Ampere wzwyż działa na GPU pod warunkiem aktualnego sterow
 i starsze → CPU; dla Doclinga wymuś `pdf2md config set docling_device cpu` (inaczej „CUDA error: no
 kernel image is available").
 
+**Minimum dla GPU (silniki wymagające CUDA):** karta NVIDIA **Turing (compute 7.5) lub nowsza** —
+konkretnie **GTX 16-series (GTX 1650/1660)**, **RTX 20-series (RTX 2060+)**, lub dowolna **RTX 30/40/50-series**.
+GTX 10-series (Pascal, np. GTX 1070/1080) i wcześniejsze nie są obsługiwane przez build cu130 — działają
+wyłącznie w trybie CPU. `pdf2md doctor` powie wprost, jeśli wykryta karta jest zbyt stara.
+
 ### Co działa na ilu VRAM (orientacyjnie)
 
 Architektura decyduje „czy GPU w ogóle", a **VRAM decyduje, które silniki**. Progi są przybliżone

@@ -165,6 +165,7 @@ def test_detect_hardware_no_torch_with_card(monkeypatch: pytest.MonkeyPatch) -> 
     assert info.state == "no_torch"
     assert info.name == "NVIDIA GeForce RTX 4070"
     assert info.vram_gb == 12.0
+    assert info.compute_cap == "8.9"  # zachowane z nvidia-smi do warunkowego komunikatu
 
 
 def test_detect_hardware_no_gpu_when_smi_missing(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -247,6 +248,16 @@ def test_arch_label_known_and_unknown() -> None:
     assert hardware._arch_label((6, 1)) == "Pascal (6.1)"
     assert hardware._arch_label((5, 2)) == "Pascal lub starsza (5.2)"
     assert hardware._arch_label((10, 3)) == "compute 10.3"
+
+
+def test_is_compute_cap_too_old() -> None:
+    """Próg Turing (7.5): starsze True, Turing+ False, nieznane → False (nie zgadujemy)."""
+    assert hardware.is_compute_cap_too_old("6.1") is True  # Pascal
+    assert hardware.is_compute_cap_too_old("7.0") is True  # Volta
+    assert hardware.is_compute_cap_too_old("7.5") is False  # Turing (granica)
+    assert hardware.is_compute_cap_too_old("8.6") is False  # Ampere
+    assert hardware.is_compute_cap_too_old("") is False  # nieznane
+    assert hardware.is_compute_cap_too_old("garbage") is False
 
 
 def test_min_supported_cap_parses_arch_list() -> None:

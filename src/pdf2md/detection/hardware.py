@@ -95,6 +95,15 @@ def _parse_cap(value: str) -> tuple[int, int] | None:
         return None
 
 
+def is_compute_cap_too_old(compute_cap: str) -> bool:
+    """True, gdy ZNANA compute capability jest poniżej minimum buildu cu130 (Turing 7.5).
+
+    Zwraca False, gdy compute_cap jest nieznane/niepoprawne — nie zgadujemy „za stara".
+    """
+    cap = _parse_cap(compute_cap)
+    return cap is not None and cap < MIN_COMPUTE_CAP
+
+
 def _min_supported_cap(arch_list: Any) -> tuple[int, int]:
     """Minimalna compute capability wspierana przez build torcha (z ``get_arch_list``).
 

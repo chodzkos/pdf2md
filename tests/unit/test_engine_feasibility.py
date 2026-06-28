@@ -111,6 +111,26 @@ def test_hardware_summary_no_torch_says_install_torch() -> None:
     assert "uv sync" in summary
 
 
+def test_hardware_summary_no_torch_old_card_warns_pointless() -> None:
+    """no_torch + znana stara karta (compute 6.1) → dopisek, że instalacja torcha nie pomoże."""
+    summary = _hardware_summary(_hw("no_torch", 8, compute_cap="6.1"), cuda_version="")
+    assert "uv sync" in summary  # nadal podstawowa podpowiedź
+    assert "zbyt stara na GPU" in summary
+    assert "compute 6.1" in summary
+
+
+def test_hardware_summary_no_torch_ok_card_no_warning() -> None:
+    """no_torch + karta dość nowa (compute 8.6) → BEZ dopisku o za starej karcie."""
+    summary = _hardware_summary(_hw("no_torch", 12, compute_cap="8.6"), cuda_version="")
+    assert "zbyt stara na GPU" not in summary
+
+
+def test_hardware_summary_no_torch_unknown_cap_no_warning() -> None:
+    """no_torch + nieznana compute_cap → nie zgadujemy, BEZ dopisku."""
+    summary = _hardware_summary(_hw("no_torch", 8, compute_cap=""), cuda_version="")
+    assert "zbyt stara na GPU" not in summary
+
+
 def test_hardware_summary_ok_lists_card() -> None:
     info = HardwareInfo("ok", "RTX 3090", 24.0, "Ampere (8.6)", "")
     summary = _hardware_summary(info, cuda_version="13.0")

@@ -25,7 +25,7 @@ from pdf2md.core.config import Settings, get_settings, save_settings
 from pdf2md.core.converter import ConversionError, Converter
 from pdf2md.core.registry import engine_registry, llm_registry
 from pdf2md.detection.dependencies import check_all
-from pdf2md.detection.hardware import HardwareInfo, detect_hardware
+from pdf2md.detection.hardware import HardwareInfo, detect_hardware, is_compute_cap_too_old
 from pdf2md.detection.pdf_type import detect_pdf_type
 from pdf2md.engines.base import ConversionEngine
 from pdf2md.exporters import MarkdownExporter, PandocEpubExporter
@@ -362,10 +362,19 @@ def _hardware_summary(hw: HardwareInfo, cuda_version: str) -> str:
             "(https://www.nvidia.com/Download/index.aspx). Bez aktualizacji — tryb CPU."
         )
     if hw.state == "no_torch":
-        return (
+        msg = (
             "ℹ️ PyTorch nie jest zainstalowany w tym środowisku — uruchom z venv pdf2md albo "
             "zainstaluj zależności: `uv sync --extra engines-core`. (Do tego czasu tryb CPU.)"
         )
+        # Gdy znamy compute_cap karty (z nvidia-smi) i jest za stara — ostrzeż, by nie tracić
+        # czasu na instalację torcha „pod GPU"; silniki CUDA i tak nie ruszą na tej architekturze.
+        if is_compute_cap_too_old(hw.compute_cap):
+            msg += (
+                f" Uwaga: wykryta karta ({name}, compute {hw.compute_cap}) i tak jest zbyt stara "
+                "na GPU — silniki CUDA nie ruszą nawet po instalacji torcha; nadają się tylko "
+                "silniki CPU."
+            )
+        return msg
     if hw.state == "no_gpu":
         return (
             "ℹ️ Brak karty NVIDIA — tryb CPU. Silniki CPU (PyMuPDF4LLM, Marker, Docling) działają; "

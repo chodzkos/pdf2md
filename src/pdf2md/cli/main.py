@@ -332,28 +332,46 @@ def _normalize_config_key(key: str) -> str:
     return normalized
 
 
+# Wspólny opis minimum karty — reużywany w stanach no_gpu i arch_too_old (spójność komunikatu).
+MIN_CARD = (
+    "Silniki wymagające CUDA potrzebują karty NVIDIA Turing (compute 7.5) lub nowszej: "
+    "GTX 16-series (GTX 1650/1660), RTX 20-series (RTX 2060+), lub dowolna RTX 30/40/50-series. "
+    "Starsze (GTX 10-series Pascal i wcześniejsze) nie są obsługiwane przez build cu130."
+)
+
+
 def _hardware_summary(hw: HardwareInfo, cuda_version: str) -> str:
-    """Buduje wykonalny, gradacyjny opis sprzętu do sekcji GPU w doctorze."""
+    """Buduje wykonalny, gradacyjny opis sprzętu do sekcji GPU w doctorze (komunikat per stan)."""
+    name = hw.name or "GPU"
+    vram = f"{hw.vram_gb:.0f} GB" if hw.vram_gb is not None else "nieznany VRAM"
     if hw.state == "ok":
         version = cuda_version or "?"
-        vram = f"{hw.vram_gb:.0f}" if hw.vram_gb is not None else "?"
-        return f"✅ CUDA {version} · {hw.name} · {vram} GB · {hw.arch}"
-    if hw.state == "driver_too_old":
-        vram = f"{hw.vram_gb:.0f} GB" if hw.vram_gb is not None else "nieznany VRAM"
+        vram_ok = f"{hw.vram_gb:.0f}" if hw.vram_gb is not None else "?"
+        return f"✅ CUDA {version} · {hw.name} · {vram_ok} GB · {hw.arch}"
+    if hw.state == "arch_too_old":
+        cap = f"compute {hw.compute_cap}" if hw.compute_cap else "architektura sprzed Turinga"
         return (
-            f"⚠️ Karta wykryta ({hw.name}, {vram}), ale sterownik wspiera tylko "
-            f"CUDA {hw.driver_cuda}. pdf2md wymaga CUDA 13 → zaktualizuj sterownik NVIDIA "
-            "(https://www.nvidia.com/Download/index.aspx). Bez aktualizacji aplikacja działa na CPU."
+            f"⚠️ Karta {name} ({vram}, {cap}) jest ZBYT STARA na tryb GPU — build cu130 wymaga "
+            "≥ sm_75 (Turing). GPU niedostępne, działa tylko CPU. Aktualizacja sterownika NIE "
+            f"pomoże (architektura za stara). {MIN_CARD} (INSTALL.md §12.)"
+        )
+    if hw.state == "driver_too_old":
+        return (
+            f"⚠️ Karta {name} ({vram}) wykryta, ale sterownik wspiera tylko CUDA {hw.driver_cuda}. "
+            "Zaktualizuj sterownik NVIDIA do wersji z CUDA 13 "
+            "(https://www.nvidia.com/Download/index.aspx). Bez aktualizacji — tryb CPU."
+        )
+    if hw.state == "no_torch":
+        return (
+            "ℹ️ PyTorch nie jest zainstalowany w tym środowisku — uruchom z venv pdf2md albo "
+            "zainstaluj zależności: `uv sync --extra engines-core`. (Do tego czasu tryb CPU.)"
         )
     if hw.state == "no_gpu":
         return (
-            "ℹ️ Brak karty NVIDIA — tryb CPU. PyMuPDF4LLM działa pełną prędkością; "
-            "Marker/Docling na CPU (wolno)."
+            "ℹ️ Brak karty NVIDIA — tryb CPU. Silniki CPU (PyMuPDF4LLM, Marker, Docling) działają; "
+            f"silniki wymagające CUDA są niedostępne. {MIN_CARD}"
         )
-    return (
-        "⚠️ Karta wykryta, ale CUDA niedostępna dla torcha. Sprawdź instalację "
-        "sterownika/torcha (tryb CPU do czasu naprawy)."
-    )
+    return f"⚠️ Karta {name} wykryta, ale CUDA niedostępna dla torcha (przyczyna nieustalona). Tryb CPU."
 
 
 def _min_vram_gb(item: dict[str, object]) -> float:
@@ -387,10 +405,16 @@ def _engine_feasibility(item: dict[str, object], hw: HardwareInfo) -> str:
             return "⚠️ na granicy (dostraja --gpu_memory_utilization / --max_model_len)"
         return f"❌ za mało VRAM (~{min_vram:.0f} GB, masz {vram:.0f})"
 
-    # Brak działającego GPU (no_gpu / driver_too_old / cuda_unavailable).
+    # Brak działającego GPU — podpowiedź MUSI pasować do przyczyny (ta sama co „Ocena sprzętu").
     if requires_gpu:
-        if hw.state == "driver_too_old":
-            return "❌ wymaga CUDA (zaktualizuj sterownik)"
+        reason = {
+            "arch_too_old": "karta za stara na GPU",
+            "driver_too_old": "zaktualizuj sterownik",
+            "no_torch": "zainstaluj torch / zły venv",
+            "no_gpu": "brak karty",
+        }.get(hw.state)
+        if reason is not None:
+            return f"❌ wymaga CUDA ({reason})"
         return "❌ wymaga działającego CUDA"
     # Silnik z fallbackiem CPU (Marker/Docling/MinerU-pipeline) — działa, tylko wolno.
     return "✅ CPU (wolno)"
@@ -751,8 +775,16 @@ def doctor(ctx: click.Context) -> None:
         "CUDA smoke test",
         "✅ używalna" if gpu.get("cuda_usable") else "❌ nieużywalna",
     )
-    gpu_table.add_row("CUDA version", str(gpu.get("cuda_version") or "brak"))
-    gpu_table.add_row("Urządzenie", str(gpu.get("device_name") or "brak"))
+    # CUDA version / Urządzenie: gdy torch nie widzi karty, uzupełnij z nvidia-smi (hw) —
+    # żeby tabela nie pokazywała „brak", gdy karta fizycznie jest (np. za stara / stary sterownik).
+    cuda_version = str(gpu.get("cuda_version") or hw.driver_cuda or "brak")
+    device_name = str(gpu.get("device_name") or hw.name or "")
+    if device_name and hw.vram_gb is not None:
+        device_label = f"{device_name}, {hw.vram_gb:.0f} GB"
+    else:
+        device_label = device_name or "brak"
+    gpu_table.add_row("CUDA version", cuda_version)
+    gpu_table.add_row("Urządzenie", device_label)
     gpu_table.add_row("Ocena sprzętu", _hardware_summary(hw, str(gpu.get("cuda_version") or "")))
     console.print(gpu_table)
 

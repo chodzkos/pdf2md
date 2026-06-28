@@ -8,8 +8,15 @@ from pdf2md.cli.main import _engine_feasibility, _hardware_summary
 from pdf2md.detection.hardware import HardwareInfo
 
 
-def _hw(state: str, vram_gb: float | None = None) -> HardwareInfo:
-    return HardwareInfo(state=state, name="GPU", vram_gb=vram_gb, arch="", driver_cuda="12.2")
+def _hw(state: str, vram_gb: float | None = None, compute_cap: str = "") -> HardwareInfo:
+    return HardwareInfo(
+        state=state,
+        name="GPU",
+        vram_gb=vram_gb,
+        arch="",
+        driver_cuda="12.2",
+        compute_cap=compute_cap,
+    )
 
 
 def _gpu_engine(min_vram: float) -> dict[str, object]:
@@ -47,19 +54,29 @@ def test_thresholds_at_8_16_24_gb() -> None:
     assert _engine_feasibility(olmocr, _hw("ok", 24)).startswith("✅")
 
 
-def test_gpu_engine_without_cuda() -> None:
-    """Silnik wymagający GPU bez działającej CUDA → ❌ wymaga CUDA."""
+def test_gpu_engine_hint_matches_cause() -> None:
+    """Silnik wymagający GPU bez działającej CUDA → podpowiedź pasuje do PRZYCZYNY."""
     item = _gpu_engine(6)
-    assert _engine_feasibility(item, _hw("no_gpu")) == "❌ wymaga działającego CUDA"
+    assert _engine_feasibility(item, _hw("no_gpu")) == "❌ wymaga CUDA (brak karty)"
     assert (
         _engine_feasibility(item, _hw("driver_too_old")) == "❌ wymaga CUDA (zaktualizuj sterownik)"
     )
+    assert (
+        _engine_feasibility(item, _hw("arch_too_old")) == "❌ wymaga CUDA (karta za stara na GPU)"
+    )
+    assert (
+        _engine_feasibility(item, _hw("no_torch")) == "❌ wymaga CUDA (zainstaluj torch / zły venv)"
+    )
+    # Stan nietypowy → ogólny fallback.
+    assert _engine_feasibility(item, _hw("cuda_unavailable")) == "❌ wymaga działającego CUDA"
 
 
-def test_cpu_fallback_engine_without_gpu() -> None:
-    """Silnik z fallbackiem CPU (Marker/Docling) bez GPU → ✅ CPU (wolno)."""
+def test_cpu_fallback_engine_regardless_of_state() -> None:
+    """Silnik z fallbackiem CPU (Marker/Docling) działa niezależnie od stanu GPU → ✅ CPU (wolno)."""
     item = {"name": "Marker", "min_vram_gb": 4}  # bez flagi gpu
     assert _engine_feasibility(item, _hw("no_gpu")) == "✅ CPU (wolno)"
+    assert _engine_feasibility(item, _hw("arch_too_old")) == "✅ CPU (wolno)"
+    assert _engine_feasibility(item, _hw("no_torch")) == "✅ CPU (wolno)"
 
 
 def test_linux_only_engine_on_windows(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -72,9 +89,26 @@ def test_linux_only_engine_on_windows(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_hardware_summary_driver_too_old_mentions_update() -> None:
     """Komunikat dla za starego sterownika prowadzi do aktualizacji."""
     summary = _hardware_summary(_hw("driver_too_old", 24), cuda_version="")
-    assert "zaktualizuj sterownik" in summary
+    assert "ktualizuj sterownik" in summary  # „Zaktualizuj sterownik"
     assert "CUDA 12.2" in summary
     assert "CUDA 13" in summary
+
+
+def test_hardware_summary_arch_too_old_says_card_too_old() -> None:
+    """Komunikat dla za starej karty: zbyt stara, aktualizacja sterownika NIE pomoże + minimum."""
+    summary = _hardware_summary(_hw("arch_too_old", 8, compute_cap="6.1"), cuda_version="")
+    assert "ZBYT STARA" in summary
+    assert "compute 6.1" in summary
+    assert "NIE" in summary and "pomoże" in summary
+    assert "Turing" in summary  # z MIN_CARD
+    assert "§12" in summary
+
+
+def test_hardware_summary_no_torch_says_install_torch() -> None:
+    summary = _hardware_summary(_hw("no_torch"), cuda_version="")
+    assert summary.startswith("ℹ️")
+    assert "PyTorch" in summary
+    assert "uv sync" in summary
 
 
 def test_hardware_summary_ok_lists_card() -> None:
@@ -85,7 +119,9 @@ def test_hardware_summary_ok_lists_card() -> None:
     assert "24 GB" in summary
 
 
-def test_hardware_summary_no_gpu() -> None:
+def test_hardware_summary_no_gpu_includes_min_card() -> None:
     summary = _hardware_summary(_hw("no_gpu"), cuda_version="")
     assert summary.startswith("ℹ️")
     assert "CPU" in summary
+    assert "Turing" in summary  # tekst MIN_CARD
+    assert "GTX 16" in summary

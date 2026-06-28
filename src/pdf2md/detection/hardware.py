@@ -1,16 +1,23 @@
 """Wykrywanie sprzętu GPU i jego ograniczeń (gradacja dla `pdf2md doctor`).
 
-Rozróżnia cztery stany, które prowadzą do różnych, *wykonalnych* komunikatów:
+Rozróżnia sześć stanów, które prowadzą do różnych, *wykonalnych* komunikatów:
 
 * ``ok`` — torch widzi działającą CUDA (mamy nazwę karty, VRAM, architekturę),
-* ``driver_too_old`` — karta fizycznie jest, ale sterownik wspiera tylko CUDA < 13
-  (torch jest skompilowany pod CUDA 13 → ``is_available()`` zwraca False mimo karty),
+* ``arch_too_old`` — karta jest, ale architektura jest sprzed Turinga (compute < 7.5);
+  build cu130 nie ma dla niej kerneli → tryb CPU, a aktualizacja sterownika NIE pomoże,
+* ``driver_too_old`` — karta jest i jest dość nowa (compute ≥ 7.5), ale sterownik wspiera
+  tylko CUDA < 13 (torch +cu130 → ``is_available()`` False mimo karty) → aktualizacja POMOŻE,
+* ``no_torch`` — PyTorch nie jest importowalny w tym środowisku (zły venv / brak zależności);
+  nazwę i VRAM karty nadal próbujemy odczytać z ``nvidia-smi``,
 * ``no_gpu`` — brak karty NVIDIA (``nvidia-smi`` niedostępne) → tryb CPU,
 * ``cuda_unavailable`` — ogólny fallback (karta jest, ale nie wpadła w powyższe).
 
-ZERO nowych zależności: korzystamy z torcha (jeśli jest) i z ``nvidia-smi``
-(subprocess), które doctor i tak woła do innych narzędzi. Funkcje są odporne na
-brak narzędzi — nigdy nie rzucają.
+KOLEJNOŚĆ jest krytyczna: ``compute_cap`` ma PIERWSZEŃSTWO przed wersją sterownika. Karta
+sprzed Turinga (np. GTX 1070, compute 6.1) ze sterownikiem raportującym CUDA 12.7 to
+``arch_too_old`` (karta za stara), NIE ``driver_too_old`` — aktualizacja sterownika nic nie da.
+
+ZERO nowych zależności: korzystamy z torcha (jeśli jest) i z ``nvidia-smi`` (subprocess),
+które doctor i tak woła. Funkcje są odporne na brak narzędzi — nigdy nie rzucają.
 """
 
 from __future__ import annotations
@@ -19,9 +26,12 @@ import re
 import shutil
 import subprocess
 from dataclasses import dataclass
+from typing import Any
 
 # pdf2md instaluje torcha w wariancie +cu130 → do GPU potrzebny sterownik z CUDA 13.
 REQUIRED_CUDA_MAJOR = 13
+# Minimum architektury dla buildu +cu130 — Turing (sm_75). Niżej (Pascal/Volta) = brak kerneli.
+MIN_COMPUTE_CAP = (7, 5)
 
 
 @dataclass(frozen=True)
@@ -29,11 +39,13 @@ class HardwareInfo:
     """Wynik wykrywania sprzętu GPU.
 
     Attributes:
-        state: Jeden z ``ok`` / ``driver_too_old`` / ``no_gpu`` / ``cuda_unavailable``.
+        state: ``ok`` / ``arch_too_old`` / ``driver_too_old`` / ``no_torch`` / ``no_gpu`` /
+            ``cuda_unavailable``.
         name: Nazwa karty (pusta, gdy brak GPU).
         vram_gb: Pamięć karty w GiB (None, gdy nieznana / brak GPU).
-        arch: Czytelna architektura, np. ``"Ampere (8.6)"`` (pusta dla stanów bez torcha).
+        arch: Czytelna architektura, np. ``"Ampere (8.6)"`` (pusta dla stanów bez tej informacji).
         driver_cuda: Najwyższe CUDA wspierane przez sterownik, np. ``"12.2"`` (puste, gdy nieznane).
+        compute_cap: Compute capability karty, np. ``"6.1"`` (puste, gdy nieznane).
     """
 
     state: str
@@ -41,6 +53,7 @@ class HardwareInfo:
     vram_gb: float | None
     arch: str
     driver_cuda: str
+    compute_cap: str = ""
 
 
 def _arch_label(capability: tuple[int, int]) -> str:
@@ -73,57 +86,112 @@ def _cuda_major(version: str) -> int | None:
         return None
 
 
-def _probe_nvidia_smi() -> tuple[str, float | None, str] | None:
-    """Pyta ``nvidia-smi`` o kartę. Zwraca (nazwa, vram_gb, cuda_sterownika) lub None.
-
-    None oznacza brak fizycznej karty NVIDIA (``nvidia-smi`` niedostępne lub nie odpowiada) —
-    traktujemy to jako tryb CPU, nie błąd krytyczny.
-    """
-    if not shutil.which("nvidia-smi"):
-        return None
-    name = ""
-    vram_gb: float | None = None
-    driver_cuda = ""
+def _parse_cap(value: str) -> tuple[int, int] | None:
+    """Parsuje compute capability ``"X.Y"`` → ``(X, Y)``; None gdy nieznane/niepoprawne."""
     try:
-        query = subprocess.run(
-            ["nvidia-smi", "--query-gpu=memory.total,name", "--format=csv,noheader,nounits"],
+        major, minor = value.split(".")
+        return int(major), int(minor)
+    except (ValueError, AttributeError):
+        return None
+
+
+def _min_supported_cap(arch_list: Any) -> tuple[int, int]:
+    """Minimalna compute capability wspierana przez build torcha (z ``get_arch_list``).
+
+    Lista wygląda jak ``["sm_75", "sm_80", "sm_120", ...]`` (ostatnia cyfra = minor).
+    Fallback ``(7, 5)`` (Turing), gdy lista pusta/niedostępna.
+    """
+    caps: list[tuple[int, int]] = []
+    try:
+        for entry in arch_list or []:
+            match = re.fullmatch(r"sm_(\d+)", str(entry))
+            if match:
+                digits = match.group(1)
+                caps.append((int(digits[:-1]), int(digits[-1])))
+    except Exception:
+        return MIN_COMPUTE_CAP
+    return min(caps) if caps else MIN_COMPUTE_CAP
+
+
+def _smi_query(fields: list[str]) -> str | None:
+    """Uruchamia ``nvidia-smi --query-gpu``; zwraca pierwszy niepusty wiersz stdout lub None.
+
+    None, gdy nvidia-smi nie odpowiada albo zwraca błąd (np. nieobsługiwane pole na starszej
+    wersji) — dzwoniący może wtedy spróbować węższego zapytania.
+    """
+    try:
+        proc = subprocess.run(
+            ["nvidia-smi", f"--query-gpu={','.join(fields)}", "--format=csv,noheader,nounits"],
             capture_output=True,
             text=True,
             timeout=5,
         )
     except Exception:
         return None
-    lines = [ln for ln in (query.stdout or "").splitlines() if ln.strip()]
-    if lines:
-        parts = [p.strip() for p in lines[0].split(",")]
-        if parts and parts[0]:
-            try:
-                vram_gb = round(float(parts[0]) / 1024, 1)  # MiB → GiB
-            except ValueError:
-                vram_gb = None
-        if len(parts) > 1:
-            name = parts[1]
-    # Najwyższe CUDA sterownika czytamy z nagłówka gołego `nvidia-smi` (regex odporny na układ).
+    if proc.returncode != 0:
+        return None
+    lines = [ln for ln in (proc.stdout or "").splitlines() if ln.strip()]
+    return lines[0] if lines else None
+
+
+def _read_driver_cuda() -> str:
+    """Najwyższe CUDA sterownika z nagłówka gołego ``nvidia-smi`` (puste, gdy nieznane)."""
     try:
         plain = subprocess.run(["nvidia-smi"], capture_output=True, text=True, timeout=5)
         match = re.search(r"CUDA Version:\s*([0-9]+)\.([0-9]+)", plain.stdout or "")
         if match:
-            driver_cuda = f"{match.group(1)}.{match.group(2)}"
+            return f"{match.group(1)}.{match.group(2)}"
     except Exception:
         pass
-    return name, vram_gb, driver_cuda
+    return ""
+
+
+def _probe_nvidia_smi() -> tuple[str, float | None, str, str] | None:
+    """Pyta ``nvidia-smi`` o kartę. Zwraca (nazwa, vram_gb, compute_cap, cuda_sterownika) lub None.
+
+    Najpierw JEDNO zapytanie o name+memory+compute_cap+driver_version; gdy starszy nvidia-smi nie
+    zna ``compute_cap`` (błąd), spada do węższego zapytania (nazwa+VRAM) i compute_cap zostaje
+    nieznane. None oznacza brak fizycznej karty (tryb CPU, nie błąd krytyczny).
+    """
+    if not shutil.which("nvidia-smi"):
+        return None
+    line = _smi_query(["name", "memory.total", "compute_cap", "driver_version"])
+    has_cap = line is not None
+    if line is None:
+        line = _smi_query(["name", "memory.total"])  # starszy nvidia-smi bez compute_cap
+    if line is None:
+        return None
+    parts = [p.strip() for p in line.split(",")]
+    name = parts[0] if parts and parts[0] else ""
+    vram_gb: float | None = None
+    if len(parts) > 1:
+        try:
+            vram_gb = round(float(parts[1]) / 1024, 1)  # MiB → GiB
+        except ValueError:
+            vram_gb = None
+    compute_cap = ""
+    if has_cap and len(parts) > 2 and parts[2] and not parts[2].startswith("["):
+        compute_cap = parts[2]  # "[Not Supported]"/"[N/A]" → traktujemy jako nieznane
+    return name, vram_gb, compute_cap, _read_driver_cuda()
+
+
+def _import_torch() -> Any:
+    """Importuje torcha lub zwraca None (Any, by reszta funkcji była niezależna od stubów)."""
+    try:
+        import torch
+
+        return torch
+    except Exception:
+        return None
 
 
 def detect_hardware() -> HardwareInfo:
-    """Wykrywa stan GPU z gradacją (CUDA OK / za stary sterownik / brak karty).
+    """Wykrywa stan GPU z gradacją (compute_cap ma pierwszeństwo przed sterownikiem).
 
     Returns:
         :class:`HardwareInfo` — struktura opisująca wykryty sprzęt i jego ograniczenia.
     """
-    try:
-        import torch
-    except Exception:
-        torch = None
+    torch = _import_torch()
 
     # 1) Najpewniejsza ścieżka: torch ma działającą CUDA → pełne dane karty.
     if torch is not None:
@@ -132,23 +200,41 @@ def detect_hardware() -> HardwareInfo:
                 props = torch.cuda.get_device_properties(0)
                 vram_gb = round(props.total_memory / 1024**3, 1)
                 name = torch.cuda.get_device_name(0)
-                arch = _arch_label(torch.cuda.get_device_capability(0))
-                return HardwareInfo("ok", name, vram_gb, arch, "")
+                cap = torch.cuda.get_device_capability(0)
+                compute_cap = f"{cap[0]}.{cap[1]}"
+                arch = _arch_label(cap)
+                # Rzadkie: karta poniżej minimum z arch_list buildu torcha.
+                if tuple(cap) < _min_supported_cap(torch.cuda.get_arch_list()):
+                    return HardwareInfo("arch_too_old", name, vram_gb, arch, "", compute_cap)
+                return HardwareInfo("ok", name, vram_gb, arch, "", compute_cap)
         except Exception:
             pass
 
-    # 2) torch nie widzi CUDA — sprawdź, czy karta w ogóle istnieje (nvidia-smi).
+    # 2) Bez działającej CUDA — czy karta fizycznie istnieje (nvidia-smi)?
     probe = _probe_nvidia_smi()
     if probe is None:
-        return HardwareInfo("no_gpu", "", None, "", "")
+        return HardwareInfo("no_gpu", "", None, "", "", "")
+    name, vram_gb, compute_cap, driver_cuda = probe
 
-    name, vram_gb, driver_cuda = probe
-    torch_has_cuda = bool(getattr(getattr(torch, "version", None), "cuda", "")) if torch else False
+    # 3) torch w ogóle nieobecny, a karta jest → no_torch (nazwa/VRAM z nvidia-smi).
+    if torch is None:
+        return HardwareInfo("no_torch", name, vram_gb, "", driver_cuda, compute_cap)
+
+    # 4) Karta jest, torch jest, CUDA nie działa. compute_cap MA PIERWSZEŃSTWO przed sterownikiem.
+    cap_tuple = _parse_cap(compute_cap)
+    try:
+        arch_list = torch.cuda.get_arch_list()
+    except Exception:
+        arch_list = []
+    if cap_tuple is not None and cap_tuple < _min_supported_cap(arch_list):
+        # 4a) Karta za stara — aktualizacja sterownika NIE pomoże.
+        return HardwareInfo("arch_too_old", name, vram_gb, _arch_label(cap_tuple), "", compute_cap)
+
+    # 4b) Karta dość nowa (lub compute_cap nieznane), ale sterownik < CUDA 13 → aktualizacja pomoże.
+    torch_has_cuda = bool(getattr(getattr(torch, "version", None), "cuda", ""))
     driver_major = _cuda_major(driver_cuda)
-
-    # 3) Karta jest, torch ma CUDA, ale sterownik za stary → wykonalny komunikat o aktualizacji.
     if torch_has_cuda and driver_major is not None and driver_major < REQUIRED_CUDA_MAJOR:
-        return HardwareInfo("driver_too_old", name, vram_gb, "", driver_cuda)
+        return HardwareInfo("driver_too_old", name, vram_gb, "", driver_cuda, compute_cap)
 
-    # 4) Karta jest, ale nie wpadła w powyższe — ogólny fallback.
-    return HardwareInfo("cuda_unavailable", name, vram_gb, "", driver_cuda)
+    # 4c) Ogólny fallback.
+    return HardwareInfo("cuda_unavailable", name, vram_gb, "", driver_cuda, compute_cap)

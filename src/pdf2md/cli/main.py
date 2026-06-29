@@ -429,7 +429,22 @@ def _engine_feasibility(item: dict[str, object], hw: HardwareInfo) -> str:
     return "✅ CPU (wolno)"
 
 
-def _print_engine_table(hw: HardwareInfo | None = None) -> None:
+def _env_flag(name: str) -> bool:
+    """Czyta flagę bool ze zmiennej środowiskowej (1/true/yes/on = włączona)."""
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _plain_console() -> Console:
+    """Konsola pod stabilne snapshoty: bez ANSI/kolorów i ze stałą szerokością.
+
+    Treść (statusy, wersje, emoji) bez zmian — deterministyczna jest tylko prezentacja:
+    brak kolorów eliminuje sekwencje ANSI, a stała szerokość usuwa zależność od terminala.
+    """
+    return Console(no_color=True, highlight=False, force_terminal=False, width=100)
+
+
+def _print_engine_table(hw: HardwareInfo | None = None, out: Console | None = None) -> None:
+    out = out or console
     if hw is None:
         hw = detect_hardware()
     table = Table(title="Silniki konwersji")
@@ -469,7 +484,7 @@ def _print_engine_table(hw: HardwareInfo | None = None) -> None:
             str(item["license"]),
             description,
         )
-    console.print(table)
+    out.print(table)
 
 
 def _llm_status(provider: LLMProvider, settings: Settings) -> str:
@@ -757,13 +772,22 @@ def scan(pdf: str, profile: str, output_dir: str, keep_work: bool, verbose: bool
 
 
 @cli.command()
+@click.option(
+    "--plain",
+    is_flag=True,
+    help="Deterministyczne wyjście pod snapshoty: bez kolorów ANSI i ze stałą szerokością "
+    "(można też ustawić zmienną środowiskową DOCTOR_PLAIN=1).",
+)
 @click.pass_context
-def doctor(ctx: click.Context) -> None:
+def doctor(ctx: click.Context, plain: bool) -> None:
     """Diagnozuje środowisko uruchomieniowe."""
     settings: Settings = ctx.obj["settings"]
     deps = check_all()
 
-    console.print(Panel.fit("pdf2md doctor", style="bold cyan"))
+    plain = plain or _env_flag("DOCTOR_PLAIN")
+    out = _plain_console() if plain else console
+
+    out.print(Panel.fit("pdf2md doctor", style="bold cyan"))
 
     system_table = Table(title="System")
     system_table.add_column("Element")
@@ -771,7 +795,7 @@ def doctor(ctx: click.Context) -> None:
     system_table.add_row("OS", _detect_os_label())
     system_table.add_row("Python", sys.version.split()[0])
     system_table.add_row("Platforma", str(deps.get("system", {}).get("platform", "")))
-    console.print(system_table)
+    out.print(system_table)
 
     gpu = deps["gpu"]
     hw = detect_hardware()
@@ -795,7 +819,7 @@ def doctor(ctx: click.Context) -> None:
     gpu_table.add_row("CUDA version", cuda_version)
     gpu_table.add_row("Urządzenie", device_label)
     gpu_table.add_row("Ocena sprzętu", _hardware_summary(hw, str(gpu.get("cuda_version") or "")))
-    console.print(gpu_table)
+    out.print(gpu_table)
 
     tools_table = Table(title="Narzędzia")
     tools_table.add_column("Narzędzie")
@@ -809,11 +833,15 @@ def doctor(ctx: click.Context) -> None:
     tools_table.add_row("Tesseract pol/eng", "✅ tak" if {"pol", "eng"} <= langs else "⚠️ niepełne")
     tools_table.add_row("Poppler", "✅ dostępny" if deps["poppler"] else "❌ brak")
     tools_table.add_row("Pandoc", "✅ dostępny" if deps["pandoc"] else "⚠️ brak")
-    console.print(tools_table)
+    out.print(tools_table)
 
     ollama = deps["ollama"]
-    ollama_models = ", ".join(ollama.get("models", [])) or "brak"
-    console.print(
+    models = ollama.get("models", [])
+    # W trybie plain sortujemy listę modeli — kolejność z API Ollamy bywa niestabilna.
+    if plain:
+        models = sorted(models)
+    ollama_models = ", ".join(models) or "brak"
+    out.print(
         Panel(
             f"Status: {'✅ działa' if ollama['available'] else '❌ niedostępna'}\n"
             f"Modele: {ollama_models}",
@@ -821,7 +849,7 @@ def doctor(ctx: click.Context) -> None:
         )
     )
 
-    _print_engine_table(hw)
+    _print_engine_table(hw, out)
 
     keys_table = Table(title="Klucze API")
     keys_table.add_column("Provider")
@@ -829,7 +857,7 @@ def doctor(ctx: click.Context) -> None:
     keys_table.add_row("Anthropic", _mask_secret(settings.anthropic_api_key))
     keys_table.add_row("OpenAI", _mask_secret(settings.openai_api_key))
     keys_table.add_row("Gemini", _mask_secret(settings.gemini_api_key))
-    console.print(keys_table)
+    out.print(keys_table)
 
 
 @cli.group("config")

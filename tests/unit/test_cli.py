@@ -78,6 +78,48 @@ def test_doctor_returns_zero(cli_test_env: Path) -> None:
     assert "CUDA smoke test" in result.output
 
 
+def test_doctor_plain_renders_without_ansi(cli_test_env: Path) -> None:
+    result = CliRunner().invoke(cli, ["doctor", "--plain"])
+
+    assert result.exit_code == 0
+    # Treść merytoryczna bez zmian wobec trybu zwykłego.
+    assert "CUDA smoke test" in result.output
+    # Brak sekwencji ANSI — wyjście nadaje się pod stabilne snapshoty.
+    assert "\x1b[" not in result.output
+
+
+def test_doctor_plain_is_stable_between_runs(cli_test_env: Path) -> None:
+    first = CliRunner().invoke(cli, ["doctor", "--plain"])
+    second = CliRunner().invoke(cli, ["doctor", "--plain"])
+
+    assert first.exit_code == 0
+    assert second.exit_code == 0
+    assert first.output == second.output
+
+
+def test_doctor_plain_via_env(cli_test_env: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DOCTOR_PLAIN", "1")
+    result = CliRunner().invoke(cli, ["doctor"])
+
+    assert result.exit_code == 0
+    assert "\x1b[" not in result.output
+
+
+def test_doctor_plain_sorts_ollama_models(
+    cli_test_env: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    deps = _fake_dependencies()
+    deps["ollama"] = {"available": True, "models": ["qwen3:14b", "llama3", "gemma"]}
+    monkeypatch.setattr("pdf2md.cli.main.check_all", lambda: deps)
+
+    result = CliRunner().invoke(cli, ["doctor", "--plain"])
+
+    assert result.exit_code == 0
+    # Kolejność modeli z API Ollamy bywa niestabilna — w trybie plain sortujemy.
+    models_line = next(line for line in result.output.splitlines() if "gemma" in line)
+    assert models_line.index("gemma") < models_line.index("llama3") < models_line.index("qwen3")
+
+
 def test_convert_dry_run_does_not_create_markdown(cli_test_env: Path) -> None:
     pdf = cli_test_env / "plik.pdf"
     pdf.write_bytes(b"%PDF-1.7\n%%EOF\n")

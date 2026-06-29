@@ -34,7 +34,7 @@ from PySide6.QtWidgets import (
 )
 
 from pdf2md.core.config import get_settings
-from pdf2md.detection.dependencies import check_pandoc
+from pdf2md.detection.tools import check_pandoc
 from pdf2md.exporters.pandoc_epub_exporter import PandocEpubExporter
 from pdf2md.gui.help_window import HELP_TITLE, help_tabs
 from pdf2md.gui.settings_dialog import SettingsDialog

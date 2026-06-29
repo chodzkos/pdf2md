@@ -9,7 +9,7 @@ from typing import Any, ClassVar
 
 from loguru import logger
 
-from pdf2md.detection.dependencies import cuda_usable
+from pdf2md.detection.hardware import cuda_usable
 from pdf2md.engines.base import ConversionEngine, ConversionResult
 
 

@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (
 
 from pdf2md.core.config import Settings, get_settings, save_settings
 from pdf2md.core.registry import engine_registry
-from pdf2md.detection.dependencies import cuda_usable
+from pdf2md.detection.hardware import cuda_usable
 from pdf2md.gui.theming import follow_app_titlebar, themed_message_box
 
 

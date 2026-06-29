@@ -132,6 +132,78 @@ def test_check_gpu_reports_cuda_usable(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result["device_name"] == "Fake CUDA"
 
 
+def test_probe_tool_absent_when_not_in_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(dependencies.shutil, "which", lambda _command: None)
+
+    assert dependencies.probe_tool("widget", ["--version"]) == {
+        "available": False,
+        "version": "",
+    }
+
+
+def test_probe_tool_present_without_version_args(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(dependencies.shutil, "which", lambda _command: "/usr/bin/widget")
+
+    # Bez version_args sonda nie uruchamia subprocessu — sprawdza tylko obecność w PATH.
+    def fail_run(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("subprocess nie powinien być wywołany")
+
+    monkeypatch.setattr(dependencies.subprocess, "run", fail_run)
+
+    assert dependencies.probe_tool("widget") == {"available": True, "version": ""}
+
+
+def test_probe_tool_parses_version(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(dependencies.shutil, "which", lambda _command: "/usr/bin/widget")
+
+    def fake_run(
+        command: list[str],
+        *,
+        capture_output: bool,
+        text: bool,
+        timeout: int,
+    ) -> subprocess.CompletedProcess[str]:
+        assert command == ["widget", "--version"]
+        assert timeout == 5
+        return subprocess.CompletedProcess(command, 0, stdout="widget 2.4.1\nfoo\n")
+
+    monkeypatch.setattr(dependencies.subprocess, "run", fake_run)
+
+    assert dependencies.probe_tool("widget", ["--version"]) == {
+        "available": True,
+        "version": "2.4.1",
+    }
+
+
+def test_probe_tool_custom_parser(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(dependencies.shutil, "which", lambda _command: "/usr/bin/widget")
+    monkeypatch.setattr(
+        dependencies.subprocess,
+        "run",
+        lambda *a, **k: subprocess.CompletedProcess(a[0], 0, stdout="ver=9.9\n"),
+    )
+
+    result = dependencies.probe_tool(
+        "widget", ["--version"], version_parser=lambda out: out.split("=")[-1].strip()
+    )
+
+    assert result == {"available": True, "version": "9.9"}
+
+
+def test_probe_tool_unavailable_when_version_call_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(dependencies.shutil, "which", lambda _command: "/usr/bin/widget")
+
+    def fake_run(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise OSError("boom")
+
+    monkeypatch.setattr(dependencies.subprocess, "run", fake_run)
+
+    assert dependencies.probe_tool("widget", ["--version"]) == {
+        "available": False,
+        "version": "",
+    }
+
+
 def test_check_tesseract_returns_version_and_languages(monkeypatch: pytest.MonkeyPatch) -> None:
     """Tesseract raportuje wersje i dostepne jezyki."""
     monkeypatch.setattr(dependencies.shutil, "which", lambda command: "/usr/bin/tesseract")

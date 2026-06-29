@@ -26,6 +26,7 @@ import re
 import shutil
 import subprocess
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Any
 
 # pdf2md instaluje torcha w wariancie +cu130 → do GPU potrzebny sterownik z CUDA 13.
@@ -247,3 +248,49 @@ def detect_hardware() -> HardwareInfo:
 
     # 4c) Ogólny fallback.
     return HardwareInfo("cuda_unavailable", name, vram_gb, "", driver_cuda, compute_cap)
+
+
+@lru_cache(maxsize=1)
+def cuda_usable() -> bool:
+    """Sprawdza, czy CUDA jest nie tylko widoczna, ale wykonuje prosty kernel."""
+    try:
+        import torch
+    except Exception:
+        return False
+
+    try:
+        if not torch.cuda.is_available():
+            return False
+        tensor = torch.zeros(1).cuda()
+        torch.cuda.synchronize()
+        del tensor
+    except Exception:
+        return False
+    return True
+
+
+def check_gpu() -> dict[str, Any]:
+    """Sprawdza dostępność GPU (CUDA przez PyTorch).
+
+    Returns:
+        Słownik z informacjami o PyTorch i CUDA.
+    """
+    result: dict[str, Any] = {
+        "torch_available": False,
+        "cuda_available": False,
+        "cuda_usable": False,
+        "device_name": "",
+        "cuda_version": "",
+    }
+    try:
+        import torch
+
+        result["torch_available"] = True
+        result["cuda_version"] = str(getattr(torch.version, "cuda", "") or "")
+        if torch.cuda.is_available():
+            result["cuda_available"] = True
+            result["device_name"] = torch.cuda.get_device_name(0)
+        result["cuda_usable"] = cuda_usable()
+    except Exception:
+        pass
+    return result

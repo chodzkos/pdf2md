@@ -1,20 +1,28 @@
+# Hooki NARZĘDZIOWE (ruff/ruff-format/mypy) wołają `uv run`, więc do działania pre-commit
+# wymaga `uv` na PATH (language: system tego NIE instaluje). `uv run` używa tego samego
+# środowiska co kanoniczne bramki — z gui-kit z gita, Qt i aktualnymi wersjami — dzięki czemu
+# mypy realnie sprawdza CAŁY pakiet src/ (w tym GUI), zamiast izolowanego środowiska z pinami.
 repos:
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.5.0
+  - repo: local
     hooks:
       - id: ruff
         name: ruff (linter)
-        args: [--fix]
+        entry: uv run ruff check --fix .
+        language: system
+        types: [python]
+        pass_filenames: false
+        require_serial: true
       - id: ruff-format
         name: ruff (formatter)
-
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.10.0
-    hooks:
+        entry: uv run ruff format .
+        language: system
+        types: [python]
+        pass_filenames: false
+        require_serial: true
       - id: mypy
         name: mypy (type check)
-        args: [--config-file=pyproject.toml]
-        exclude: ^tests/
-        additional_dependencies:
-          - pydantic-settings
-          - loguru
+        entry: uv run mypy src/
+        language: system
+        types: [python]
+        pass_filenames: false
+        require_serial: true

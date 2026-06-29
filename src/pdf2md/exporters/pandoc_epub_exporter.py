@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from pdf2md.detection.tools import check_pandoc
+from chodzkos_detection import check_pandoc
 
 
 class PandocEpubExporter:

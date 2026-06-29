@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from chodzkos_detection import check_pandoc
 from chodzkos_gui_kit.qt.theme import ThemeManager, ThemeSetting, current_palette
 from chodzkos_gui_kit.qt.widgets import (
     FileList,
@@ -34,7 +35,6 @@ from PySide6.QtWidgets import (
 )
 
 from pdf2md.core.config import get_settings
-from pdf2md.detection.tools import check_pandoc
 from pdf2md.exporters.pandoc_epub_exporter import PandocEpubExporter
 from pdf2md.gui.help_window import HELP_TITLE, help_tabs
 from pdf2md.gui.settings_dialog import SettingsDialog

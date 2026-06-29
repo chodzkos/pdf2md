@@ -1,8 +1,8 @@
 """Zbiorczy raport środowiska dla `pdf2md doctor`.
 
-Sondy narzędzi CLI mieszkają w `pdf2md.detection.tools`, a usług sieciowych
-w `pdf2md.detection.services`; tu pozostaje agregator `check_all`.
-Wszystkie funkcje są odporne na brak narzędzia — nie rzucają wyjątków.
+Sondy narzędzi CLI i usług sieciowych pochodzą z pakietu `chodzkos_detection`
+(stdlib-only), a detekcja sprzętu z lokalnego `pdf2md.detection.hardware`;
+tu pozostaje agregator `check_all`. Funkcje są odporne na brak narzędzia.
 """
 
 from __future__ import annotations
@@ -10,9 +10,9 @@ from __future__ import annotations
 import platform
 from typing import Any
 
-from pdf2md.detection.hardware import check_gpu
-from pdf2md.detection.services import check_ollama
-from pdf2md.detection.tools import check_tools
+from chodzkos_detection import check_ollama, check_tools
+
+from pdf2md.detection.hardware import check_gpu  # LOKALNY (sprzęt) — celowo nie z pakietu
 
 
 def check_all() -> dict[str, Any]:

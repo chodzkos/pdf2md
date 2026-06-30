@@ -37,6 +37,8 @@ ollama_url = "http://localhost:11434"
 default_engine = "pymupdf4llm"
 default_output_dir = ""
 default_language = "pol+eng"
+# Backend eksportu EPUB: pandoc (domyślny) albo calibre (ebook-convert)
+epub_backend = "pandoc"
 
 [marker]
 marker_device = "cpu"
@@ -157,6 +159,7 @@ class Settings(BaseSettings):
     default_engine: str = "pymupdf4llm"
     default_output_dir: str = ""
     default_language: str = "pol+eng"
+    epub_backend: str = "pandoc"  # backend eksportu EPUB: pandoc albo calibre
     marker_device: str = "cpu"
     marker_workers: int = 1
     marker_max_pages: int = 0  # 0 = cały dokument; >0 ogranicza strony tylko na jawne żądanie
@@ -225,6 +228,15 @@ class Settings(BaseSettings):
             raise ValueError("docling_device musi mieć wartość: auto, cpu albo cuda")
         return normalized
 
+    @field_validator("epub_backend")
+    @classmethod
+    def validate_epub_backend(cls, value: str) -> str:
+        """Dopuszcza tylko wspierane backendy eksportu EPUB."""
+        normalized = value.lower().strip()
+        if normalized not in {"pandoc", "calibre"}:
+            raise ValueError("epub_backend musi mieć wartość: pandoc albo calibre")
+        return normalized
+
     @field_validator("theme")
     @classmethod
     def validate_theme(cls, value: str) -> str:
@@ -266,6 +278,7 @@ def save_settings(settings: Settings) -> None:
         f'default_engine = "{settings.default_engine}"\n',
         f'default_output_dir = "{settings.default_output_dir}"\n',
         f'default_language = "{settings.default_language}"\n',
+        f'epub_backend = "{settings.epub_backend}"\n',
         "\n[marker]\n",
         f'marker_device = "{settings.marker_device}"\n',
         f"marker_workers = {settings.marker_workers}\n",

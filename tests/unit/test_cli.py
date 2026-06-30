@@ -55,6 +55,7 @@ def _fake_dependencies() -> dict[str, Any]:
         "tesseract": {"available": False, "version": "", "languages": []},
         "poppler": False,
         "pandoc": False,
+        "calibre": False,
         "ollama": {"available": False, "models": []},
     }
 
@@ -195,7 +196,7 @@ def test_convert_runs_engine_and_exports_result(
             calls["convert"] = (args, kwargs)
             return ConversionResult(markdown="# wynik", engine_used="FakeEngine", pages=1)
 
-    def fake_export(markdown: str, output_path: Path) -> Path:
+    def fake_export(markdown: str, output_path: Path, epub_backend: str = "pandoc") -> Path:
         calls["export"] = (markdown, output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(markdown, encoding="utf-8")

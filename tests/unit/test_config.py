@@ -73,6 +73,31 @@ def test_invalid_theme_rejected() -> None:
         Settings(theme="neon")
 
 
+def test_epub_backend_is_normalized() -> None:
+    """epub_backend jest sprowadzany do małych liter i przycinany."""
+    settings = Settings(epub_backend=" Calibre ")
+
+    assert settings.epub_backend == "calibre"
+
+
+def test_invalid_epub_backend_rejected() -> None:
+    """Walidator odrzuca backend EPUB spoza pandoc/calibre."""
+    with pytest.raises(ValueError, match="epub_backend"):
+        Settings(epub_backend="mobi")
+
+
+def test_epub_backend_persists_through_save_and_reload(isolated_config: Path) -> None:
+    """epub_backend zapisany przez save_settings trafia do config.toml i wraca po reloadzie."""
+    settings = get_settings()
+    settings.epub_backend = "calibre"
+    save_settings(settings)
+
+    assert 'epub_backend = "calibre"' in isolated_config.read_text(encoding="utf-8")
+
+    config._settings_cache = None  # wymuś reload z dysku
+    assert get_settings().epub_backend == "calibre"
+
+
 def test_get_settings_loads_toml_values(isolated_config: Path) -> None:
     """Wartości z config.toml trafiają do Settings."""
     isolated_config.parent.mkdir(parents=True)

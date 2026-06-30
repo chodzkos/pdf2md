@@ -28,7 +28,7 @@ from pdf2md.detection.dependencies import check_all
 from pdf2md.detection.hardware import HardwareInfo, detect_hardware, is_compute_cap_too_old
 from pdf2md.detection.pdf_type import detect_pdf_type
 from pdf2md.engines.base import ConversionEngine
-from pdf2md.exporters import MarkdownExporter, PandocEpubExporter
+from pdf2md.exporters import EPUB_BACKENDS, MarkdownExporter, build_epub_exporter
 from pdf2md.llm.base import LLMProvider
 from pdf2md.utils.logging import setup_logging
 
@@ -546,13 +546,14 @@ def _print_dry_run(
             "tak" if deps["tesseract"]["available"] else "nie",
         )
         table.add_row("Pandoc", "tak" if deps["pandoc"] else "nie")
+        table.add_row("Calibre", "tak" if deps["calibre"] else "nie")
         table.add_row("Ollama", "tak" if deps["ollama"]["available"] else "nie")
         console.print(table)
 
 
-def _export_result(markdown: str, output_path: Path) -> Path:
+def _export_result(markdown: str, output_path: Path, epub_backend: str = "pandoc") -> Path:
     if output_path.suffix.lower() == ".epub":
-        return PandocEpubExporter().export(markdown, output_path)
+        return build_epub_exporter(epub_backend).export(markdown, output_path)
     return MarkdownExporter().export(markdown, output_path)
 
 
@@ -588,6 +589,12 @@ def cli(ctx: click.Context) -> None:
 @click.option("--llm-model", help="Model LLM nadpisujący config tylko dla tego uruchomienia.")
 @click.option("--llm-mode", type=click.Choice(LLM_MODES), default="none", show_default=True)
 @click.option("--lang", default="pol+eng", show_default=True, help="Język OCR.")
+@click.option(
+    "--epub-backend",
+    type=click.Choice(EPUB_BACKENDS),
+    default=None,
+    help="Backend eksportu EPUB (nadpisuje config); fallback na Pandoc gdy Calibre brak.",
+)
 @click.option("--dry-run", is_flag=True, help="Pokaż plan bez konwersji.")
 @click.option("--verbose", "-v", is_flag=True, help="Szczegółowy output.")
 @click.pass_context
@@ -601,6 +608,7 @@ def convert(
     llm_model: str | None,
     llm_mode: str,
     lang: str,
+    epub_backend: str | None,
     dry_run: bool,
     verbose: bool,
 ) -> None:
@@ -609,6 +617,7 @@ def convert(
         setup_logging(verbose=True)
     settings: Settings = ctx.obj["settings"]
     engine_name = engine or settings.default_engine
+    selected_epub_backend = epub_backend or settings.epub_backend
     selected_engine = _select_engine(engine_name)
     input_files = _expand_files(files)
     if not input_files:
@@ -651,7 +660,9 @@ def convert(
                     llm_mode=llm_mode,
                     engine_kwargs=engine_kwargs,
                 )
-                exported_path = _export_result(result.markdown, output_paths[path])
+                exported_path = _export_result(
+                    result.markdown, output_paths[path], selected_epub_backend
+                )
                 converted += 1
                 if verbose:
                     console.print(f"[green]Zapisano:[/] {exported_path}")
@@ -833,6 +844,9 @@ def doctor(ctx: click.Context, plain: bool) -> None:
     tools_table.add_row("Tesseract pol/eng", "✅ tak" if {"pol", "eng"} <= langs else "⚠️ niepełne")
     tools_table.add_row("Poppler", "✅ dostępny" if deps["poppler"] else "❌ brak")
     tools_table.add_row("Pandoc", "✅ dostępny" if deps["pandoc"] else "⚠️ brak")
+    tools_table.add_row(
+        "Calibre (ebook-convert)", "✅ dostępny" if deps["calibre"] else "⚠️ brak (opcjonalny)"
+    )
     out.print(tools_table)
 
     ollama = deps["ollama"]

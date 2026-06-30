@@ -35,7 +35,8 @@ from PySide6.QtWidgets import (
 )
 
 from pdf2md.core.config import get_settings
-from pdf2md.exporters.pandoc_epub_exporter import PandocEpubExporter
+from pdf2md.detection.dependencies import check_calibre
+from pdf2md.exporters import build_epub_exporter
 from pdf2md.gui.help_window import HELP_TITLE, help_tabs
 from pdf2md.gui.settings_dialog import SettingsDialog
 from pdf2md.gui.theming import attach_dark_titlebar, themed_message_box
@@ -422,7 +423,7 @@ class MainWindow(QMainWindow):
                 QMessageBox.ButtonRole.ActionRole,
             )
         export_epub = None
-        if check_pandoc() and self._last_markdown_outputs:
+        if self._last_markdown_outputs and (check_pandoc() or check_calibre()):
             export_epub = message.addButton("Eksportuj do EPUB", QMessageBox.ButtonRole.ActionRole)
         message.addButton("Zamknij", QMessageBox.ButtonRole.AcceptRole)
         message.exec()
@@ -446,7 +447,7 @@ class MainWindow(QMainWindow):
             logger.warning(f"Nie udało się otworzyć folderu wynikowego: {exc}")
 
     def _export_last_outputs_to_epub(self) -> None:
-        exporter = PandocEpubExporter()
+        exporter = build_epub_exporter(get_settings().epub_backend)
         exported = 0
         for markdown_path in self._last_markdown_outputs:
             try:

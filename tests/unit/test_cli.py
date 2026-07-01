@@ -13,6 +13,7 @@ from click.testing import CliRunner
 
 from pdf2md.cli.main import cli
 from pdf2md.core import config
+from pdf2md.core.image_extraction import ExtractedImage
 from pdf2md.engines.base import ConversionResult
 
 
@@ -217,6 +218,63 @@ def test_convert_runs_engine_and_exports_result(
     args, kwargs = calls["convert"]
     assert args == (str(pdf), fake_engine)
     assert kwargs["engine_kwargs"] == {"lang": "pol+eng"}
+
+
+def test_convert_extract_images_adds_markdown_references(
+    cli_test_env: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pdf = cli_test_env / "plik.pdf"
+    pdf.write_bytes(b"%PDF-1.7\n%%EOF\n")
+    output_dir = cli_test_env / "out"
+    calls: dict[str, object] = {}
+    fake_engine = SimpleNamespace(
+        name="FakeEngine",
+        supports_ocr=False,
+        is_available=lambda: True,
+    )
+
+    class FakeConverter:
+        def convert(self, *args: object, **kwargs: object) -> ConversionResult:
+            return ConversionResult(markdown="# wynik", engine_used="FakeEngine", pages=1)
+
+    def fake_extract(pdf_path: Path, images_dir: Path, *, min_size: int) -> list[ExtractedImage]:
+        calls["extract"] = (pdf_path, images_dir, min_size)
+        images_dir.mkdir(parents=True, exist_ok=True)
+        image_path = images_dir / "page1_img1.png"
+        image_path.write_bytes(b"png")
+        return [ExtractedImage(path=image_path, page=1, index=1, width=120, height=100)]
+
+    def fake_export(markdown: str, output_path: Path, epub_backend: str = "pandoc") -> Path:
+        calls["export"] = (markdown, output_path, epub_backend)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(markdown, encoding="utf-8")
+        return output_path
+
+    monkeypatch.setattr("pdf2md.cli.main._select_engine", lambda name: fake_engine)
+    monkeypatch.setattr("pdf2md.cli.main.Converter", FakeConverter)
+    monkeypatch.setattr("pdf2md.cli.main.extract_pdf_images", fake_extract)
+    monkeypatch.setattr("pdf2md.cli.main._export_result", fake_export)
+
+    result = CliRunner().invoke(
+        cli,
+        [
+            "convert",
+            str(pdf),
+            "--engine",
+            "fake",
+            "--output-dir",
+            str(output_dir),
+            "--extract-images",
+            "--image-min-size",
+            "90",
+        ],
+    )
+
+    assert result.exit_code == 0
+    output_path = output_dir / "plik.md"
+    assert "![](<plik_images/page1_img1.png>)" in output_path.read_text(encoding="utf-8")
+    assert calls["extract"] == (pdf, output_dir / "plik_images", 90)
 
 
 def test_convert_errors_when_selected_engine_unavailable(

@@ -8,10 +8,9 @@ tu pozostaje agregator `check_all`. Funkcje są odporne na brak narzędzia.
 from __future__ import annotations
 
 import platform
-import shutil
 from typing import Any
 
-from chodzkos_detection import check_ollama, check_tools
+from chodzkos_detection import check_ollama, check_tools, probe_tool
 
 from pdf2md.detection.hardware import check_gpu  # LOKALNY (sprzęt) — celowo nie z pakietu
 
@@ -19,10 +18,10 @@ from pdf2md.detection.hardware import check_gpu  # LOKALNY (sprzęt) — celowo 
 def check_calibre() -> bool:
     """Sprawdza, czy w PATH jest `ebook-convert` (CLI Calibre).
 
-    Detekcja lokalna (stdlib) — pakiet `chodzkos_detection` nie zna Calibre,
-    a jest on tylko opcjonalnym backendem eksportu EPUB obok Pandoca.
+    Wykrywa przez generyczny `probe_tool` z `chodzkos_detection` (jak pandoc/
+    poppler); Calibre to opcjonalny backend eksportu EPUB obok Pandoca.
     """
-    return shutil.which("ebook-convert") is not None
+    return bool(probe_tool("ebook-convert")["available"])
 
 
 def check_all() -> dict[str, Any]:

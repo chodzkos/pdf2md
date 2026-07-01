@@ -76,10 +76,19 @@ def test_invalid_yaml_wrong_type_raises(tmp_path: Path) -> None:
 def test_load_profile_from_path(tmp_path: Path) -> None:
     """Profil można wczytać bezpośrednio ze ścieżki do pliku YAML."""
     custom = tmp_path / "moj.yaml"
-    custom.write_text("name: moj\ndpi: 350\n", encoding="utf-8")
+    custom.write_text("name: moj\ndpi: 350\noutput: {epub_backend: Calibre}\n", encoding="utf-8")
     profile = load_profile(str(custom))
     assert profile.name == "moj"
     assert profile.dpi == 350
+    assert profile.output.epub_backend == "calibre"
+
+
+def test_invalid_epub_backend_in_profile_raises(tmp_path: Path) -> None:
+    """Nieznany backend EPUB w profilu jest odrzucany przy walidacji."""
+    bad = tmp_path / "bad-epub-backend.yaml"
+    bad.write_text("name: zly\noutput: {epub_backend: mobi}\n", encoding="utf-8")
+    with pytest.raises(ProfileError, match="epub_backend"):
+        load_profile(str(bad))
 
 
 def test_save_custom_profile_roundtrip(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -92,6 +101,22 @@ def test_save_custom_profile_roundtrip(tmp_path: Path, monkeypatch: pytest.Monke
     assert "moj-custom" in list_profiles()
     reloaded = load_profile("moj-custom")
     assert reloaded.dpi == 333
+    assert reloaded.output.epub_backend == "pandoc"
+
+
+def test_epub_backend_persists_in_custom_profile(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Backend EPUB zapisany w profilu użytkownika wraca po reloadzie."""
+    monkeypatch.setattr(profiles, "_USER_PROFILES_DIR", tmp_path / "profiles")
+    profile = Profile(name="epub-calibre", dpi=333)
+    profile.output.epub = True
+    profile.output.epub_backend = "calibre"
+
+    path = save_custom_profile(profile, "epub-calibre")
+
+    assert "epub_backend: calibre" in Path(path).read_text(encoding="utf-8")
+    assert load_profile("epub-calibre").output.epub_backend == "calibre"
 
 
 def test_user_profile_overrides_builtin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

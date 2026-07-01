@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 _USER_PROFILES_DIR = Path.home() / ".config" / "pdf2md" / "profiles"
 
@@ -69,8 +69,18 @@ class Validation(_Strict):
 class Output(_Strict):
     markdown: bool = True
     epub: bool = False
+    epub_backend: str = "pandoc"
     quality_report: bool = False
     html_report: bool = False
+
+    @field_validator("epub_backend")
+    @classmethod
+    def validate_epub_backend(cls, value: str) -> str:
+        """Dopuszcza tylko wspierane backendy eksportu EPUB."""
+        normalized = value.lower().strip()
+        if normalized not in {"pandoc", "calibre"}:
+            raise ValueError("epub_backend musi mieć wartość: pandoc albo calibre")
+        return normalized
 
 
 class Profile(_Strict):

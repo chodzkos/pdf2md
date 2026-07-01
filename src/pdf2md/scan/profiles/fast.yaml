@@ -3,4 +3,4 @@ dpi: 300
 preprocess: {deskew: true, denoise: false, dewarp: false}
 ocr: {engine: paddleocr, gpu: true}
 llm_cleanup: {enabled: true, provider: ollama, model: qwen3:14b, chunk: page}
-output: {markdown: true, epub: true}
+output: {markdown: true, epub: true, epub_backend: pandoc}

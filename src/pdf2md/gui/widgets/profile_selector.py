@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from chodzkos_detection import check_pandoc
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -17,7 +18,23 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from pdf2md.detection.dependencies import check_calibre
 from pdf2md.gui.theming import follow_app_titlebar, themed_message_box
+
+_EPUB_BACKEND_LABELS = {
+    "pandoc": "Pandoc",
+    "calibre": "Calibre",
+}
+
+
+def available_epub_backend_options() -> list[tuple[str, str]]:
+    """Zwraca wykryte backendy EPUB jako pary (wartość, etykieta)."""
+    options: list[tuple[str, str]] = []
+    if check_pandoc():
+        options.append(("pandoc", _EPUB_BACKEND_LABELS["pandoc"]))
+    if check_calibre():
+        options.append(("calibre", _EPUB_BACKEND_LABELS["calibre"]))
+    return options
 
 
 class ProfileSelectorWidget(QWidget):
@@ -77,7 +94,15 @@ class ProfileEditDialog(QDialog):
 
         self._epub = QCheckBox()
         self._epub.setChecked(profile.output.epub)
-        layout.addRow("Eksport EPUB:", self._epub)
+
+        self._epub_backend = QComboBox()
+        self._populate_epub_backend(profile.output.epub_backend)
+        self._epub.toggled.connect(self._sync_epub_backend_enabled)
+        epub_row = QHBoxLayout()
+        epub_row.addWidget(self._epub)
+        epub_row.addWidget(self._epub_backend)
+        epub_row.addStretch()
+        layout.addRow("Eksport EPUB:", epub_row)
 
         self._report = QCheckBox()
         self._report.setChecked(profile.output.quality_report or profile.output.html_report)
@@ -96,6 +121,22 @@ class ProfileEditDialog(QDialog):
 
         self._titlebar = follow_app_titlebar(self)
 
+    def _populate_epub_backend(self, selected_backend: str) -> None:
+        self._epub_backend.clear()
+        for value, label in available_epub_backend_options():
+            self._epub_backend.addItem(label, value)
+
+        selected_idx = self._epub_backend.findData(selected_backend)
+        if selected_idx >= 0:
+            self._epub_backend.setCurrentIndex(selected_idx)
+        elif self._epub_backend.count() == 0:
+            self._epub_backend.addItem("Brak dostępnych backendów", None)
+
+        self._sync_epub_backend_enabled()
+
+    def _sync_epub_backend_enabled(self) -> None:
+        self._epub_backend.setEnabled(self._epub.isChecked() and self._epub_backend.count() > 1)
+
     def _on_save(self) -> None:
         from pdf2md.scan.profiles import load_profile, save_custom_profile
 
@@ -104,6 +145,9 @@ class ProfileEditDialog(QDialog):
         profile.name = name
         profile.dpi = self._dpi.value()
         profile.output.epub = self._epub.isChecked()
+        backend = self._epub_backend.currentData()
+        if backend in {"pandoc", "calibre"}:
+            profile.output.epub_backend = str(backend)
         profile.output.quality_report = self._report.isChecked()
         try:
             path = save_custom_profile(profile, name)

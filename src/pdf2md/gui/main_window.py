@@ -82,6 +82,36 @@ def _files_count_label(count: int) -> str:
     return f"{count} {form}"
 
 
+def _epub_backend_label(backend: str) -> str:
+    if backend == "calibre":
+        return "Calibre"
+    if backend == "pandoc":
+        return "Pandoc"
+    return backend
+
+
+def _resolve_epub_backend(preferred_backend: str) -> tuple[str | None, str | None]:
+    """Wybiera dostępny backend EPUB i zwraca opcjonalny komunikat fallbacku."""
+    preferred = preferred_backend.lower().strip()
+    available: list[str] = []
+    if check_pandoc():
+        available.append("pandoc")
+    if check_calibre():
+        available.append("calibre")
+
+    if preferred in available:
+        return preferred, None
+    if not available:
+        return None, "Pandoc ani Calibre nie są dostępne. Nie można wyeksportować EPUB."
+
+    fallback = "pandoc" if "pandoc" in available else available[0]
+    message = (
+        f"Backend EPUB z profilu ({_epub_backend_label(preferred)}) jest niedostępny.\n"
+        f"Używam dostępnego backendu: {_epub_backend_label(fallback)}."
+    )
+    return fallback, message
+
+
 class MainWindow(QMainWindow):
     """Główne okno pdf2md."""
 
@@ -446,8 +476,32 @@ class MainWindow(QMainWindow):
         except Exception as exc:
             logger.warning(f"Nie udało się otworzyć folderu wynikowego: {exc}")
 
+    def _selected_profile_epub_backend(self) -> str:
+        from pdf2md.scan.profiles import load_profile
+
+        profile = load_profile(self._profile_selector.get_profile_name())
+        return profile.output.epub_backend
+
     def _export_last_outputs_to_epub(self) -> None:
-        exporter = build_epub_exporter(get_settings().epub_backend)
+        try:
+            preferred_backend = self._selected_profile_epub_backend()
+        except Exception as exc:
+            themed_message_box(
+                self,
+                QMessageBox.Icon.Warning,
+                "Eksport EPUB",
+                f"Nie udało się odczytać backendu EPUB z profilu:\n{exc}",
+            ).exec()
+            return
+
+        backend, warning = _resolve_epub_backend(preferred_backend)
+        if warning:
+            logger.warning(warning)
+            themed_message_box(self, QMessageBox.Icon.Warning, "Eksport EPUB", warning).exec()
+        if backend is None:
+            return
+
+        exporter = build_epub_exporter(backend)
         exported = 0
         for markdown_path in self._last_markdown_outputs:
             try:

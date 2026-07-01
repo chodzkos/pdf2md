@@ -6,4 +6,4 @@ ocr: {primary: olmocr, secondary: surya, compare_outputs: true}
 llm_cleanup: {enabled: true, provider: ollama, model: qwen3:14b, mode: conservative, chunk: page_then_chapter}
 postprocess: {remove_headers_footers: true, merge_paragraphs: true, fix_hyphenation: true, footnotes: true, toc_detection: true}
 validation: {detect_low_confidence_pages: true, rerun_bad_pages: true}
-output: {markdown: true, epub: true, html_report: true}
+output: {markdown: true, epub: true, epub_backend: pandoc, html_report: true}

@@ -5,4 +5,4 @@ layout: {engine: surya}
 ocr: {engine: paddleocr-vl, gpu: true}
 llm_cleanup: {enabled: true, provider: ollama, model: qwen3:14b, chunk: page}
 postprocess: {remove_headers_footers: true, merge_paragraphs: true, fix_hyphenation: true}
-output: {markdown: true, epub: true, quality_report: true}
+output: {markdown: true, epub: true, epub_backend: pandoc, quality_report: true}

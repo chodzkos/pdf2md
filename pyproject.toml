@@ -29,6 +29,7 @@ dependencies = [
     "rich>=13.7",
     "click>=8.1",
     "PySide6>=6.7",
+    "Pillow>=10.0",
     "pyyaml>=6.0",
     "chodzkos-gui-kit[qt]",
     "chodzkos-detection",

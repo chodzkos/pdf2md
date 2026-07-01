@@ -23,6 +23,11 @@ from pdf2md import __version__
 from pdf2md.core import config as config_module
 from pdf2md.core.config import Settings, get_settings, save_settings
 from pdf2md.core.converter import ConversionError, Converter
+from pdf2md.core.image_extraction import (
+    append_image_references,
+    extract_pdf_images,
+    image_output_dir,
+)
 from pdf2md.core.registry import engine_registry, llm_registry
 from pdf2md.detection.dependencies import check_all
 from pdf2md.detection.hardware import HardwareInfo, detect_hardware, is_compute_cap_too_old
@@ -595,6 +600,18 @@ def cli(ctx: click.Context) -> None:
     default=None,
     help="Backend eksportu EPUB (nadpisuje config); fallback na Pandoc gdy Calibre brak.",
 )
+@click.option(
+    "--extract-images",
+    is_flag=True,
+    help="Wyciągnij obrazy z PDF do <output>_images i dodaj referencje Markdown.",
+)
+@click.option(
+    "--image-min-size",
+    type=click.IntRange(min=1),
+    default=100,
+    show_default=True,
+    help="Minimalna szerokość i wysokość obrazu do ekstrakcji, w pikselach.",
+)
 @click.option("--dry-run", is_flag=True, help="Pokaż plan bez konwersji.")
 @click.option("--verbose", "-v", is_flag=True, help="Szczegółowy output.")
 @click.pass_context
@@ -609,6 +626,8 @@ def convert(
     llm_mode: str,
     lang: str,
     epub_backend: str | None,
+    extract_images: bool,
+    image_min_size: int,
     dry_run: bool,
     verbose: bool,
 ) -> None:
@@ -660,9 +679,21 @@ def convert(
                     llm_mode=llm_mode,
                     engine_kwargs=engine_kwargs,
                 )
-                exported_path = _export_result(
-                    result.markdown, output_paths[path], selected_epub_backend
-                )
+                output_path = output_paths[path]
+                if extract_images:
+                    images = extract_pdf_images(
+                        path,
+                        image_output_dir(output_path),
+                        min_size=image_min_size,
+                    )
+                    result.markdown = append_image_references(
+                        result.markdown,
+                        images,
+                        output_path,
+                    )
+                    if verbose:
+                        console.print(f"[cyan]Obrazy:[/] wyciągnięto {len(images)}")
+                exported_path = _export_result(result.markdown, output_path, selected_epub_backend)
                 converted += 1
                 if verbose:
                     console.print(f"[green]Zapisano:[/] {exported_path}")

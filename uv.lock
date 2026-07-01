@@ -1849,6 +1849,9 @@ engines-core = [
     { name = "torch" },
     { name = "torchvision" },
 ]
+images = [
+    { name = "pymupdf" },
+]
 llm = [
     { name = "anthropic" },
     { name = "google-genai" },
@@ -1893,6 +1896,7 @@ requires-dist = [
     { name = "opencv-python", marker = "extra == 'scan'", specifier = ">=4.8" },
     { name = "pillow", specifier = ">=10.0" },
     { name = "pydantic-settings", specifier = ">=2.3" },
+    { name = "pymupdf", marker = "extra == 'images'", specifier = ">=1.27" },
     { name = "pymupdf4llm", marker = "extra == 'engines-core'", specifier = ">=0.0.17" },
     { name = "pymupdf4llm", marker = "extra == 'pymupdf'", specifier = ">=0.0.17" },
     { name = "pyside6", specifier = ">=6.7" },
@@ -1901,7 +1905,7 @@ requires-dist = [
     { name = "torch", marker = "extra == 'engines-core'", specifier = ">=2.12", index = "https://download.pytorch.org/whl/cu130" },
     { name = "torchvision", marker = "extra == 'engines-core'", specifier = ">=0.27", index = "https://download.pytorch.org/whl/cu130" },
 ]
-provides-extras = ["pymupdf", "marker", "docling", "engines-core", "llm", "scan"]
+provides-extras = ["pymupdf", "images", "marker", "docling", "engines-core", "llm", "scan"]
 
 [package.metadata.requires-dev]
 dev = [

@@ -39,6 +39,9 @@ dependencies = [
 pymupdf = [
     "pymupdf4llm>=0.0.17",
 ]
+images = [
+    "pymupdf>=1.27",
+]
 marker = [
     "marker-pdf>=1.10,<2",
 ]

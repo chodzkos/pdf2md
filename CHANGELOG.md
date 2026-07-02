@@ -18,6 +18,7 @@
 
 ### Zmienione
 
+- **Marker: obrazy inline zapisywane jako prawdziwe `.png`** — Marker nazywa obrazy z rozszerzeniem `.jpeg`, ale koduje je jako PNG (plik `.jpeg` z treścią PNG; `file` pokazuje „PNG image data"). Adapter zapisuje je teraz pod nazwą z suffixem `.png` (zgodnym z formatem) i przepisuje każdą referencję w Markdownie (`![](x.jpeg)` → `![](x.png)`), zachowując strukturę podkatalogów. Plik i referencja przestają kłamać.
 - **Okno pomocy to teraz wspólny `HelpWindow` z `chodzkos-gui-kit`** (pin `v0.5.0`); usunięty lokalny szkielet okna i własne helpery HTML. pdf2md był wzorcem ekstrakcji tego widgetu — teraz go konsumuje. **Treść 6 zakładek bez zmian** (Silniki / Instalacja / LLM / Profile / CLI / Model AI) — zostaje jako `help_tabs()` (dane pdf2md) składane kitowymi helperami (`section`/`paragraph`/`table`/`code`/`preformatted`); kolory przez `palette(...)`, delegacja zmiennego stanu do `pdf2md doctor`. Re-render przy zmianie motywu (re-`setHtml` na `PaletteChange`) i ciemną belkę DWM (`TitlebarSync`) liczy teraz kit — semantyka zachowana. `follow_app_titlebar` zostaje w pdf2md dla pozostałych okien (Ustawienia / O programie).
 - **Domyślny model korekty Ollama: `qwen2.5:14b` → `qwen3:14b`** (spójność z dokumentacją i oknem pomocy). Zmiana dotyczy tylko wartości domyślnej dla nowych instalacji — istniejący `~/.config/pdf2md/config.toml` nie jest nadpisywany (świadomie, jak przy `marker_max_pages`).
 - **Anulowanie konwersji w GUI**: kooperacyjne przerwanie między stronami i plikami oraz zwalnianie VRAM (unload modelu po anulowaniu).
@@ -30,6 +31,8 @@
 - **Usunięty menubar** (Plik/Pomoc) — meta-funkcje skonsolidowane na lekkim górnym pasku (GUI_STANDARD §6): przełącznik **Motyw**, **⚙ Ustawienia** (był w menu Plik) i **ⓘ O programie**. Menubar i lekki pasek się dublowały (§6 wprowadził pasek *zamiast* menubara). „Strona projektu" (dawniej menu Pomoc) przeniesiona do okna „O programie" jako przycisk — naturalny dom linków meta, z miejscem na przyszłą „Pomoc" offline. Przyciski listy plików (+Pliki/+Folder/Usuń/Wyczyść) to akcje `FileList` — bez zmian.
 
 ### Naprawione
+
+- **EPUB gubił obrazy inline** (oba backendy, GUI i CLI) — eksportery tworzyły temp `.md` w `/tmp` (`%TEMP%`), a Pandoc/Calibre szukają względnych referencji `![](obraz.png)` **obok pliku wejściowego**, gdzie obrazów nie było → EPUB bez obrazów, bez błędu. `export()` przyjmuje teraz `source_dir` i tworzy temp obok obrazów (fallback: katalog wyniku, nigdy gołe `/tmp`); Pandoc dodatkowo dostaje `--resource-path=<source_dir>` jako drugą linię obrony. GUI wskazuje katalog pliku `.md`, CLI katalog wyniku.
 
 - **`doctor` nie pokazuje mylącego hintu instalacji pod Windows** dla silników vLLM (MinerU / olmOCR / PaddleOCR-VL) — oznaczone jako wymagające Linux/WSL (status „❌ Niedostępny (wymaga Linux/WSL)" + uwaga, bez komendy instalacji, która i tak by nie zadziałała). Na Linux/WSL bez zmian (status „Niezainstalowany" + hint). Surya/Marker (GPU pod Windows) nietknięte.
 - **Marker konwertował tylko 1. stronę** przy nieświeżym `~/.config/pdf2md/config.toml` (utrwalony `marker_max_pages=1` z czasów starego defaultu) — zmiana wartości domyślnej w kodzie nie nadpisuje istniejącego configu platformdirs.

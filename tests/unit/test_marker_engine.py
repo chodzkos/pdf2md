@@ -150,10 +150,10 @@ def test_convert_uses_marker_api_without_loading_real_models(
     assert captured["closed"] is True
 
 
-def test_convert_saves_marker_inline_images_next_to_output_markdown(
+def test_convert_saves_marker_inline_images_as_png_and_rewrites_refs(
     monkeypatch: pytest.MonkeyPatch, tmp_path
 ) -> None:
-    """Obrazy zwrócone przez Markera są zapisywane pod ścieżkami użytymi w Markdown."""
+    """Obrazy Markera (.jpeg z treścią PNG) zapisujemy jako .png i przepisujemy referencje."""
     pil_image: Any = pytest.importorskip("PIL.Image")
     pdf = tmp_path / "doc.pdf"
     pdf.write_bytes(b"%PDF-1.7\n")
@@ -188,8 +188,9 @@ def test_convert_saves_marker_inline_images_next_to_output_markdown(
     def fake_text_from_rendered(
         rendered: object,
     ) -> tuple[str, dict[str, object], dict[str, object]]:
-        markdown = "![](x.png)\n\n![](sub/y.png)\n"
-        return markdown, {}, {"x.png": image, "sub/y.png": nested_image}
+        # Marker nazywa obrazy .jpeg, ale koduje je jako PNG.
+        markdown = "![](x.jpeg)\n\n![](sub/y.jpeg)\n"
+        return markdown, {}, {"x.jpeg": image, "sub/y.jpeg": nested_image}
 
     def fake_convert_if_not_rgb(img: Any) -> Any:
         captured.setdefault("converted", []).append(img)
@@ -241,9 +242,12 @@ def test_convert_saves_marker_inline_images_next_to_output_markdown(
 
     result = engine.convert(str(pdf), output_path=str(output_path))
 
+    # Referencje przepisane na .png, pliki zapisane jako .png (nie .jpeg).
     assert result.markdown == "![](x.png)\n\n![](sub/y.png)\n"
     assert (tmp_path / "out" / "x.png").is_file()
     assert (tmp_path / "out" / "sub" / "y.png").is_file()
+    assert not (tmp_path / "out" / "x.jpeg").exists()
+    assert not (tmp_path / "out" / "sub" / "y.jpeg").exists()
     assert captured["converted"] == [image, nested_image]
 
 

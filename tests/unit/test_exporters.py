@@ -36,7 +36,7 @@ def test_pandoc_epub_exporter_runs_pandoc_and_removes_temp_file(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    output = tmp_path / "book.epub"
+    output = tmp_path / "out" / "book.epub"
     calls: list[list[str]] = []
     temp_paths: list[Path] = []
     monkeypatch.setattr("pdf2md.exporters.pandoc_epub_exporter.check_pandoc", lambda: True)
@@ -61,8 +61,48 @@ def test_pandoc_epub_exporter_runs_pandoc_and_removes_temp_file(
     result = PandocEpubExporter().export("# Tytul", output)
 
     assert result == output
-    assert calls == [["pandoc", str(temp_paths[0]), "-o", str(output)]]
+    # Bez source_dir temp .md ląduje obok wyniku (nie w /tmp) i tam wskazuje --resource-path.
+    assert temp_paths[0].parent == output.parent
+    assert calls == [
+        ["pandoc", str(temp_paths[0]), "-o", str(output), f"--resource-path={output.parent}"]
+    ]
     assert output.read_bytes() == b"epub"
+    assert not temp_paths[0].exists()
+
+
+def test_pandoc_epub_exporter_puts_temp_in_source_dir(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source_dir = tmp_path / "images"
+    source_dir.mkdir()
+    output = tmp_path / "out" / "book.epub"
+    calls: list[list[str]] = []
+    temp_paths: list[Path] = []
+    monkeypatch.setattr("pdf2md.exporters.pandoc_epub_exporter.check_pandoc", lambda: True)
+
+    def fake_run(
+        command: list[str],
+        *,
+        check: bool,
+        capture_output: bool,
+        text: bool,
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        temp_paths.append(Path(command[1]))
+        # Temp musi istnieć w source_dir w trakcie wywołania Pandoca (obok obrazów).
+        assert temp_paths[0].parent == source_dir
+        assert temp_paths[0].is_file()
+        output.write_bytes(b"epub")
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr("pdf2md.exporters.pandoc_epub_exporter.subprocess.run", fake_run)
+
+    PandocEpubExporter().export("![](fig.png)", output, source_dir=source_dir)
+
+    assert calls == [
+        ["pandoc", str(temp_paths[0]), "-o", str(output), f"--resource-path={source_dir}"]
+    ]
     assert not temp_paths[0].exists()
 
 
@@ -80,7 +120,9 @@ def test_calibre_epub_exporter_runs_ebook_convert_and_removes_temp_file(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    output = tmp_path / "book.epub"
+    source_dir = tmp_path / "images"
+    source_dir.mkdir()
+    output = tmp_path / "out" / "book.epub"
     calls: list[list[str]] = []
     temp_paths: list[Path] = []
     monkeypatch.setattr("pdf2md.exporters.calibre_epub_exporter.check_calibre", lambda: True)
@@ -97,12 +139,15 @@ def test_calibre_epub_exporter_runs_ebook_convert_and_removes_temp_file(
         assert check is True
         assert capture_output is True
         assert text is True
+        # Temp .md leży obok obrazów (source_dir), nie w /tmp — Calibre rozwiąże ![](fig.png).
+        assert temp_paths[0].parent == source_dir
+        assert temp_paths[0].is_file()
         output.write_bytes(b"epub")
         return subprocess.CompletedProcess(command, 0)
 
     monkeypatch.setattr("pdf2md.exporters.calibre_epub_exporter.subprocess.run", fake_run)
 
-    result = CalibreEpubExporter().export("# Tytul", output)
+    result = CalibreEpubExporter().export("![](fig.png)", output, source_dir=source_dir)
 
     assert result == output
     assert calls == [["ebook-convert", str(temp_paths[0]), str(output)]]

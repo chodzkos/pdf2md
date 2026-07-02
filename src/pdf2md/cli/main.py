@@ -558,7 +558,11 @@ def _print_dry_run(
 
 def _export_result(markdown: str, output_path: Path, epub_backend: str = "pandoc") -> Path:
     if output_path.suffix.lower() == ".epub":
-        return build_epub_exporter(epub_backend).export(markdown, output_path)
+        # Obrazy inline leżą obok wyniku — wskaż katalog źródłowy, żeby temp .md
+        # nie trafił do /tmp i względne referencje ![](obraz.png) się rozwiązały.
+        return build_epub_exporter(epub_backend).export(
+            markdown, output_path, source_dir=output_path.parent
+        )
     return MarkdownExporter().export(markdown, output_path)
 
 

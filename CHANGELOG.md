@@ -31,6 +31,8 @@
 
 ### Naprawione
 
+- **EPUB gubił obrazy inline** (oba backendy, GUI i CLI) — eksportery tworzyły temp `.md` w `/tmp` (`%TEMP%`), a Pandoc/Calibre szukają względnych referencji `![](obraz.png)` **obok pliku wejściowego**, gdzie obrazów nie było → EPUB bez obrazów, bez błędu. `export()` przyjmuje teraz `source_dir` i tworzy temp obok obrazów (fallback: katalog wyniku, nigdy gołe `/tmp`); Pandoc dodatkowo dostaje `--resource-path=<source_dir>` jako drugą linię obrony. GUI wskazuje katalog pliku `.md`, CLI katalog wyniku.
+
 - **`doctor` nie pokazuje mylącego hintu instalacji pod Windows** dla silników vLLM (MinerU / olmOCR / PaddleOCR-VL) — oznaczone jako wymagające Linux/WSL (status „❌ Niedostępny (wymaga Linux/WSL)" + uwaga, bez komendy instalacji, która i tak by nie zadziałała). Na Linux/WSL bez zmian (status „Niezainstalowany" + hint). Surya/Marker (GPU pod Windows) nietknięte.
 - **Marker konwertował tylko 1. stronę** przy nieświeżym `~/.config/pdf2md/config.toml` (utrwalony `marker_max_pages=1` z czasów starego defaultu) — zmiana wartości domyślnej w kodzie nie nadpisuje istniejącego configu platformdirs.
 - **torch na Windows wchodził jako `+cpu`** (Surya/Marker liczyły na CPU mimo karty) — wymuszone `+cu130` przez zadeklarowanie `torch`/`torchvision` jako jawnej zależności (inaczej `[tool.uv.sources]` ignoruje pakiet tranzytywny) + źródło indeksu cu130 + `uv lock --upgrade-package torch torchvision`.

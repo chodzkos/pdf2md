@@ -506,7 +506,13 @@ class MainWindow(QMainWindow):
         for markdown_path in self._last_markdown_outputs:
             try:
                 markdown = markdown_path.read_text(encoding="utf-8")
-                exporter.export(markdown, markdown_path.with_suffix(".epub"))
+                # Obrazy inline leżą obok pliku .md — bez source_dir Pandoc/Calibre
+                # tworzą temp w /tmp i gubią względne referencje (EPUB bez obrazów).
+                exporter.export(
+                    markdown,
+                    markdown_path.with_suffix(".epub"),
+                    source_dir=markdown_path.parent,
+                )
                 exported += 1
             except Exception as exc:
                 themed_message_box(

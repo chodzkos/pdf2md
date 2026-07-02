@@ -53,6 +53,7 @@ class MarkerEngine(ConversionEngine):
             marker_workers_value,
             default=1,
         )
+        output_path = kwargs.pop("output_path", None)
         marker_max_pages = self._coerce_optional_positive_int(
             kwargs.pop("marker_max_pages", settings.marker_max_pages)
         )
@@ -60,9 +61,13 @@ class MarkerEngine(ConversionEngine):
             self._configure_worker_env(marker_workers)
             self._configure_gpu_batches(settings)
             self._configure_torch_device(torch_device)
-            config_parser_cls, pdf_converter_cls, create_model_dict, text_from_rendered = (
-                self._load_marker_api()
-            )
+            (
+                config_parser_cls,
+                pdf_converter_cls,
+                create_model_dict,
+                text_from_rendered,
+                convert_if_not_rgb,
+            ) = self._load_marker_api()
             pymupdf: Any = importlib.import_module("pymupdf")
 
             config_parser, llm_service = self._prepare_config_parser(
@@ -83,7 +88,9 @@ class MarkerEngine(ConversionEngine):
 
             logger.info(f"Konwertuję {path} przez Marker")
             rendered = converter(str(path))
-            markdown, _, _ = text_from_rendered(rendered)
+            markdown, _, images = text_from_rendered(rendered)
+            marker_output_path = Path(str(output_path)) if output_path else path.with_suffix(".md")
+            self._save_inline_images(images, marker_output_path, convert_if_not_rgb)
             pages = self._converted_page_count(converter, path, pymupdf)
         except Exception:
             logger.exception(f"Marker nie zdołał przekonwertować pliku: {path}")
@@ -161,7 +168,7 @@ class MarkerEngine(ConversionEngine):
             )
             return config_parser_cls(fallback_config), None
 
-    def _load_marker_api(self) -> tuple[Any, Any, Any, Any]:
+    def _load_marker_api(self) -> tuple[Any, Any, Any, Any, Any]:
         """Importuje Marker dopiero w momencie konwersji."""
         config_module = importlib.import_module("marker.config.parser")
         converter_module = importlib.import_module("marker.converters.pdf")
@@ -172,12 +179,41 @@ class MarkerEngine(ConversionEngine):
             converter_module.PdfConverter,
             models_module.create_model_dict,
             output_module.text_from_rendered,
+            output_module.convert_if_not_rgb,
         )
 
     def _extract_metadata(self, rendered: object) -> dict[str, object]:
         """Wyciąga metadane z obiektu renderowanego, jeśli Marker je zwraca."""
         metadata = getattr(rendered, "metadata", {})
         return metadata if isinstance(metadata, dict) else {}
+
+    def _save_inline_images(
+        self,
+        images: object,
+        output_path: Path,
+        convert_if_not_rgb: Any,
+    ) -> None:
+        """Zapisuje obrazy Markera pod ścieżkami użytymi już w Markdown."""
+        if not isinstance(images, dict) or not images:
+            return
+
+        saved = 0
+        for img_name, img in images.items():
+            if not isinstance(img_name, str):
+                continue
+            image_path = self._inline_image_path(output_path, img_name)
+            image_path.parent.mkdir(parents=True, exist_ok=True)
+            converted = convert_if_not_rgb(img)
+            converted.save(image_path, format="PNG")
+            saved += 1
+        if saved:
+            logger.info(f"Zapisano obrazy Markera: {saved} plik(ów)")
+
+    def _inline_image_path(self, output_path: Path, img_name: str) -> Path:
+        image_path = Path(img_name)
+        if image_path.is_absolute():
+            return image_path
+        return output_path.parent / image_path
 
     def _converted_page_count(self, converter: object, path: Path, pymupdf: Any) -> int:
         """Zwraca liczbę stron faktycznie przetworzonych przez Marker, jeśli jest dostępna."""

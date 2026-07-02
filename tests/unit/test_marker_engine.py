@@ -119,6 +119,7 @@ def test_convert_uses_marker_api_without_loading_real_models(
             FakePdfConverter,
             fake_create_model_dict,
             fake_text_from_rendered,
+            lambda image: image,
         ),
     )
     monkeypatch.setattr("pdf2md.engines.marker_engine.importlib.import_module", fake_import_module)
@@ -147,6 +148,103 @@ def test_convert_uses_marker_api_without_loading_real_models(
     assert captured["path"] == str(pdf)
     assert captured["opened"] == str(pdf)
     assert captured["closed"] is True
+
+
+def test_convert_saves_marker_inline_images_next_to_output_markdown(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    """Obrazy zwrócone przez Markera są zapisywane pod ścieżkami użytymi w Markdown."""
+    pil_image: Any = pytest.importorskip("PIL.Image")
+    pdf = tmp_path / "doc.pdf"
+    pdf.write_bytes(b"%PDF-1.7\n")
+    output_path = tmp_path / "out" / "doc.md"
+    image = pil_image.new("RGBA", (12, 10), color=(255, 0, 0, 128))
+    nested_image = pil_image.new("RGB", (8, 8), color=(0, 255, 0))
+    captured: dict[str, Any] = {}
+
+    class FakeConfigParser:
+        def __init__(self, config: dict[str, object]) -> None:
+            return None
+
+        def generate_config_dict(self) -> dict[str, object]:
+            return {}
+
+        def get_processors(self) -> list[object]:
+            return []
+
+        def get_renderer(self) -> str:
+            return "renderer"
+
+        def get_llm_service(self) -> None:
+            return None
+
+    class FakePdfConverter:
+        def __init__(self, **kwargs: object) -> None:
+            return None
+
+        def __call__(self, path: str) -> object:
+            return type("Rendered", (), {"metadata": {}})()
+
+    def fake_text_from_rendered(
+        rendered: object,
+    ) -> tuple[str, dict[str, object], dict[str, object]]:
+        markdown = "![](x.png)\n\n![](sub/y.png)\n"
+        return markdown, {}, {"x.png": image, "sub/y.png": nested_image}
+
+    def fake_convert_if_not_rgb(img: Any) -> Any:
+        captured.setdefault("converted", []).append(img)
+        return img.convert("RGB")
+
+    class FakeDoc:
+        def __len__(self) -> int:
+            return 1
+
+        def close(self) -> None:
+            return None
+
+    class FakePymupdf:
+        @staticmethod
+        def open(path: str) -> FakeDoc:
+            return FakeDoc()
+
+    engine = MarkerEngine()
+    monkeypatch.setattr(engine, "is_available", lambda: True)
+    monkeypatch.setattr(engine, "_configure_torch_device", lambda torch_device: None)
+    monkeypatch.setattr(engine, "_configure_worker_env", lambda workers: None)
+    monkeypatch.setattr(
+        "pdf2md.engines.marker_engine.get_settings",
+        lambda: SimpleNamespace(
+            marker_device="cpu",
+            marker_workers=1,
+            marker_max_pages=1,
+            marker_torch_device="",
+            marker_recognition_batch_size=0,
+            marker_detector_batch_size=0,
+            marker_layout_batch_size=0,
+            marker_table_rec_batch_size=0,
+        ),
+    )
+    monkeypatch.setattr(
+        engine,
+        "_load_marker_api",
+        lambda: (
+            FakeConfigParser,
+            FakePdfConverter,
+            lambda: {},
+            fake_text_from_rendered,
+            fake_convert_if_not_rgb,
+        ),
+    )
+    monkeypatch.setattr(
+        "pdf2md.engines.marker_engine.importlib.import_module", lambda name: FakePymupdf
+    )
+
+    result = engine.convert(str(pdf), output_path=str(output_path))
+
+    assert result.markdown == "![](x.png)\n\n![](sub/y.png)\n"
+    assert (tmp_path / "out" / "x.png").is_file()
+    assert (tmp_path / "out" / "sub" / "y.png").is_file()
+    assert captured["converted"] == [image, nested_image]
 
 
 def test_convert_raises_when_marker_unavailable(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
@@ -237,6 +335,7 @@ def test_convert_falls_back_without_llm_when_service_unavailable(
             FakePdfConverter,
             lambda: {"model": "fake"},
             fake_text_from_rendered,
+            lambda image: image,
         ),
     )
     monkeypatch.setattr(
@@ -321,7 +420,13 @@ def _capture_marker_config(
     monkeypatch.setattr(
         engine,
         "_load_marker_api",
-        lambda: (FakeConfigParser, FakePdfConverter, lambda: {}, lambda r: ("md", {}, {})),
+        lambda: (
+            FakeConfigParser,
+            FakePdfConverter,
+            lambda: {},
+            lambda r: ("md", {}, {}),
+            lambda image: image,
+        ),
     )
     monkeypatch.setattr(
         "pdf2md.engines.marker_engine.importlib.import_module", lambda name: FakePymupdf
@@ -482,11 +587,15 @@ def test_configure_torch_device_forces_cpu_for_unsupported_cuda(
 
 
 def test_load_marker_api_returns_expected_objects(monkeypatch: pytest.MonkeyPatch) -> None:
+    convert_if_not_rgb = object()
     modules = {
         "marker.config.parser": SimpleNamespace(ConfigParser=object()),
         "marker.converters.pdf": SimpleNamespace(PdfConverter=object()),
         "marker.models": SimpleNamespace(create_model_dict=lambda: {}),
-        "marker.output": SimpleNamespace(text_from_rendered=lambda rendered: ("", {}, {})),
+        "marker.output": SimpleNamespace(
+            text_from_rendered=lambda rendered: ("", {}, {}),
+            convert_if_not_rgb=convert_if_not_rgb,
+        ),
     }
 
     monkeypatch.setattr(
@@ -494,7 +603,7 @@ def test_load_marker_api_returns_expected_objects(monkeypatch: pytest.MonkeyPatc
         lambda name: modules[name],
     )
 
-    config_parser, converter, create_model_dict, text_from_rendered = (
+    config_parser, converter, create_model_dict, text_from_rendered, convert_rgb = (
         MarkerEngine()._load_marker_api()
     )
 
@@ -502,3 +611,4 @@ def test_load_marker_api_returns_expected_objects(monkeypatch: pytest.MonkeyPatc
     assert converter is modules["marker.converters.pdf"].PdfConverter
     assert create_model_dict is modules["marker.models"].create_model_dict
     assert text_from_rendered is modules["marker.output"].text_from_rendered
+    assert convert_rgb is convert_if_not_rgb

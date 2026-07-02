@@ -100,6 +100,18 @@ class TestConverter:
         assert out.exists()
         assert out.read_text(encoding="utf-8") == "# treść"
 
+    def test_convert_passes_output_path_to_marker(self, tmp_path: Path) -> None:
+        """Marker dostaje output_path, żeby zapisać obrazy inline obok Markdowna."""
+        pdf = tmp_path / "doc.pdf"
+        pdf.write_bytes(b"fake pdf")
+        out = tmp_path / "output.md"
+        engine = _make_engine(markdown="# treść")
+        engine.name = "Marker"
+
+        Converter().convert(str(pdf), engine, output_path=str(out))
+
+        engine.convert.assert_called_once_with(str(pdf), output_path=str(out))
+
     def test_convert_raises_when_file_not_found(self) -> None:
         """convert() rzuca ConversionError gdy plik nie istnieje."""
         engine = _make_engine()

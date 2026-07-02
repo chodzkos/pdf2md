@@ -54,6 +54,8 @@ class Converter:
         logger.info(f"Konwertuję: {path.name} (silnik: {engine.name})")
         start = time.monotonic()
         options = {**(engine_kwargs or {}), **(engine_options or {})}
+        if output_path is not None and engine.name.lower() == "marker":
+            options.setdefault("output_path", output_path)
         result = engine.convert(pdf_path, **options)
         result.conversion_time = time.monotonic() - start
 

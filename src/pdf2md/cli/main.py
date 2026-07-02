@@ -672,14 +672,18 @@ def convert(
             if selected_engine.supports_ocr:
                 engine_kwargs["lang"] = lang
             try:
+                output_path = output_paths[path]
+                engine_options: dict[str, object] = {}
+                if selected_engine.name.lower() == "marker":
+                    engine_options["output_path"] = str(output_path)
                 result = converter.convert(
                     str(path),
                     selected_engine,
                     llm=llm_provider,
                     llm_mode=llm_mode,
                     engine_kwargs=engine_kwargs,
+                    engine_options=engine_options,
                 )
-                output_path = output_paths[path]
                 if extract_images:
                     images = extract_pdf_images(
                         path,

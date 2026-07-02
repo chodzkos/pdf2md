@@ -9,6 +9,8 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any
 
+_IMAGES_EXTRA_HINT = "Ekstrakcja obrazów wymaga: pip install 'pdf2md[images]'"
+
 
 @dataclass(frozen=True)
 class ExtractedImage:
@@ -43,15 +45,13 @@ def extract_pdf_images(
 
     try:
         pymupdf: Any = importlib.import_module("pymupdf")
-    except ImportError as exc:
-        raise RuntimeError(
-            "Ekstrakcja obrazów wymaga PyMuPDF. Zainstaluj extra `pymupdf` albo `engines-core`."
-        ) from exc
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(_IMAGES_EXTRA_HINT) from exc
 
     try:
         pil_image: Any = importlib.import_module("PIL.Image")
-    except ImportError as exc:
-        raise RuntimeError("Ekstrakcja obrazów wymaga Pillow.") from exc
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(_IMAGES_EXTRA_HINT) from exc
 
     destination = Path(output_dir)
     extracted_images: list[ExtractedImage] = []

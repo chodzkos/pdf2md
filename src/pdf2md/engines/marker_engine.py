@@ -90,7 +90,9 @@ class MarkerEngine(ConversionEngine):
             rendered = converter(str(path))
             markdown, _, images = text_from_rendered(rendered)
             marker_output_path = Path(str(output_path)) if output_path else path.with_suffix(".md")
-            self._save_inline_images(images, marker_output_path, convert_if_not_rgb)
+            markdown = self._save_inline_images(
+                images, marker_output_path, convert_if_not_rgb, str(markdown)
+            )
             pages = self._converted_page_count(converter, path, pymupdf)
         except Exception:
             logger.exception(f"Marker nie zdołał przekonwertować pliku: {path}")
@@ -192,22 +194,38 @@ class MarkerEngine(ConversionEngine):
         images: object,
         output_path: Path,
         convert_if_not_rgb: Any,
-    ) -> None:
-        """Zapisuje obrazy Markera pod ścieżkami użytymi już w Markdown."""
-        if not isinstance(images, dict) or not images:
-            return
+        markdown: str,
+    ) -> str:
+        """Zapisuje obrazy Markera jako prawdziwe PNG i przepisuje referencje w Markdown.
 
+        Marker nazywa obrazy z rozszerzeniem ``.jpeg``, ale koduje je jako PNG — plik
+        „.jpeg" z treścią PNG (``file`` pokazuje „PNG image data"). Zapisujemy pod nazwą
+        z suffixem ``.png`` (zgodnym z faktycznym formatem) i podmieniamy każdą referencję
+        w Markdownie, żeby plik i referencja się zgadzały. Zwraca zaktualizowany Markdown.
+        """
+        if not isinstance(images, dict) or not images:
+            return markdown
+
+        renames: dict[str, str] = {}
         saved = 0
         for img_name, img in images.items():
             if not isinstance(img_name, str):
                 continue
-            image_path = self._inline_image_path(output_path, img_name)
+            # Zachowaj strukturę podkatalogów, zmień wyłącznie suffix. as_posix() — referencje
+            # w Markdownie zawsze z ukośnikiem, także na Windows.
+            png_name = Path(img_name).with_suffix(".png").as_posix()
+            image_path = self._inline_image_path(output_path, png_name)
             image_path.parent.mkdir(parents=True, exist_ok=True)
             converted = convert_if_not_rgb(img)
             converted.save(image_path, format="PNG")
             saved += 1
+            if png_name != img_name:
+                renames[img_name] = png_name
         if saved:
             logger.info(f"Zapisano obrazy Markera: {saved} plik(ów)")
+        for old_name, new_name in renames.items():
+            markdown = markdown.replace(old_name, new_name)
+        return markdown
 
     def _inline_image_path(self, output_path: Path, img_name: str) -> Path:
         image_path = Path(img_name)

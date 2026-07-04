@@ -674,7 +674,7 @@ def convert(
             try:
                 output_path = output_paths[path]
                 engine_options: dict[str, object] = {}
-                if selected_engine.name.lower() == "marker":
+                if selected_engine.name.lower() in {"docling", "marker"}:
                     engine_options["output_path"] = str(output_path)
                 result = converter.convert(
                     str(path),

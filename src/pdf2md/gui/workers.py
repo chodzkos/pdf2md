@@ -9,6 +9,11 @@ from PySide6.QtCore import QThread, Signal
 
 from pdf2md.core.config import get_settings
 from pdf2md.core.converter import ConversionError, Converter
+from pdf2md.core.image_extraction import (
+    append_image_references,
+    extract_pdf_images,
+    image_output_dir,
+)
 from pdf2md.core.registry import engine_registry, llm_registry
 from pdf2md.engines.base import ConversionCancelled, ConversionEngine
 from pdf2md.engines.vlm_base import VLMEngine
@@ -27,6 +32,10 @@ def _model_field_for_provider(provider_name: str) -> str | None:
     if "gemini" in name or "google" in name:
         return "gemini_model"
     return None
+
+
+def _has_in_place_images(engine_name: str) -> bool:
+    return engine_name.strip().lower() in {"docling", "marker"}
 
 
 class ConversionWorker(QThread):
@@ -49,6 +58,7 @@ class ConversionWorker(QThread):
         language: str = "pol+eng",
         docling_device: str | None = None,
         scan_profile: str = "",
+        extract_images: bool = False,
     ) -> None:
         super().__init__()
         settings = get_settings()
@@ -61,6 +71,7 @@ class ConversionWorker(QThread):
         self._language = language
         self._scan_profile = scan_profile
         self._docling_device = docling_device or settings.docling_device
+        self._extract_images = extract_images
 
     def cancel(self) -> None:
         """Prosi o kooperatywne przerwanie — sprawdzane między stronami i plikami."""
@@ -152,6 +163,12 @@ class ConversionWorker(QThread):
                     engine_kwargs=engine_kwargs,
                     engine_options=engine_options,
                 )
+                if self._should_extract_images(engine):
+                    result.markdown = self._extract_images_for_output(
+                        pdf_path,
+                        result.markdown,
+                        out_path,
+                    )
                 elapsed = time.monotonic() - file_start
                 self.progress.emit(filename, 100)
                 self.file_done.emit(pdf_path, out_path or "", elapsed)
@@ -176,6 +193,32 @@ class ConversionWorker(QThread):
             self.cancelled.emit(success, errors, total_elapsed)
         else:
             self.all_done.emit(success, errors, total_elapsed)
+
+    def _should_extract_images(self, engine: ConversionEngine) -> bool:
+        return self._extract_images and not _has_in_place_images(engine.name)
+
+    def _extract_images_for_output(
+        self,
+        pdf_path: str,
+        markdown: str,
+        out_path: str | None,
+    ) -> str:
+        output_path = (
+            Path(out_path)
+            if out_path
+            else Path(self._output_dir or Path(pdf_path).parent) / f"{Path(pdf_path).stem}.md"
+        )
+        images = extract_pdf_images(
+            pdf_path,
+            image_output_dir(output_path),
+            min_size=100,
+        )
+        updated_markdown = append_image_references(markdown, images, output_path)
+        if out_path:
+            output_file = Path(out_path)
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+            output_file.write_text(updated_markdown, encoding="utf-8")
+        return updated_markdown
 
     def _release_after_cancel(self, engine: ConversionEngine, llm: LLMProvider | None) -> None:
         """Po anulowaniu zwalnia zasoby: VRAM silnika VLM + wyładowanie modelu Ollamy."""

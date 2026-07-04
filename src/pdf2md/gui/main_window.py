@@ -18,6 +18,7 @@ from loguru import logger
 from PySide6.QtCore import QSize, QUrl
 from PySide6.QtGui import QDesktopServices, QIcon
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QFrame,
     QHBoxLayout,
@@ -70,6 +71,11 @@ _FILE_LIST_TEXTS = FileListTexts(
     filter_supported="PDF ({pattern})",
 )
 
+_EXTRACT_IMAGES_TOOLTIP = (
+    "Dla silników OCR (Surya, olmOCR, PaddleOCR). Marker i Docling osadzają obrazy automatycznie."
+)
+_EXTRACT_IMAGES_IN_PLACE_TOOLTIP = "Marker/Docling osadzają obrazy in-place — ekstrakcja zbędna."
+
 
 def _files_count_label(count: int) -> str:
     """Licznik plików z polskimi formami mnogimi (pdf2md nie ma gettext)."""
@@ -110,6 +116,10 @@ def _resolve_epub_backend(preferred_backend: str) -> tuple[str | None, str | Non
         f"Używam dostępnego backendu: {_epub_backend_label(fallback)}."
     )
     return fallback, message
+
+
+def _has_in_place_images(engine_name: str) -> bool:
+    return engine_name.strip().lower() in {"docling", "marker"}
 
 
 class MainWindow(QMainWindow):
@@ -165,6 +175,13 @@ class MainWindow(QMainWindow):
         self._engine_selector = EngineSelectorWidget()
         self._engine_selector.set_engine_name(get_settings().default_engine)
         root.addWidget(self._engine_selector)
+
+        # --- Opcje konwersji per-sesja ---
+        self._extract_images = QCheckBox("Ekstrahuj obrazy z PDF")
+        self._extract_images.setChecked(False)
+        self._extract_images.setToolTip(_EXTRACT_IMAGES_TOOLTIP)
+        self._sync_extract_images_enabled(self._engine_selector.get_engine_name())
+        root.addWidget(self._extract_images)
 
         # --- Profil skanowania (widoczny tylko dla silnika Scan Pipeline) ---
         self._profile_selector = ProfileSelectorWidget()
@@ -298,6 +315,14 @@ class MainWindow(QMainWindow):
 
     def _on_engine_changed(self, engine_name: str) -> None:
         self._profile_selector.setVisible(self._is_scan_engine(engine_name))
+        self._sync_extract_images_enabled(engine_name)
+
+    def _sync_extract_images_enabled(self, engine_name: str) -> None:
+        in_place = _has_in_place_images(engine_name)
+        self._extract_images.setEnabled(not in_place)
+        self._extract_images.setToolTip(
+            _EXTRACT_IMAGES_IN_PLACE_TOOLTIP if in_place else _EXTRACT_IMAGES_TOOLTIP
+        )
 
     def _open_settings(self) -> None:
         dialog = SettingsDialog(self)
@@ -371,6 +396,7 @@ class MainWindow(QMainWindow):
             llm_model=llm_model,
             language=language,
             scan_profile=scan_profile,
+            extract_images=self._extract_images.isChecked(),
         )
         self._worker.progress.connect(self._on_progress)
         self._worker.file_done.connect(self._on_file_done)

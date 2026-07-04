@@ -112,6 +112,18 @@ class TestConverter:
 
         engine.convert.assert_called_once_with(str(pdf), output_path=str(out))
 
+    def test_convert_passes_output_path_to_docling(self, tmp_path: Path) -> None:
+        """Docling dostaje output_path, żeby zapisać Markdown z artefaktami."""
+        pdf = tmp_path / "doc.pdf"
+        pdf.write_bytes(b"fake pdf")
+        out = tmp_path / "output.md"
+        engine = _make_engine(markdown="# treść")
+        engine.name = "Docling"
+
+        Converter().convert(str(pdf), engine, output_path=str(out))
+
+        engine.convert.assert_called_once_with(str(pdf), output_path=str(out))
+
     def test_convert_raises_when_file_not_found(self) -> None:
         """convert() rzuca ConversionError gdy plik nie istnieje."""
         engine = _make_engine()

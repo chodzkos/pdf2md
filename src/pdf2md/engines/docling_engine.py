@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import importlib.metadata
+import os
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -62,12 +63,13 @@ class DoclingEngine(ConversionEngine):
             )
 
         path = Path(pdf_path)
+        output_path = kwargs.pop("output_path", None)
         try:
             converter = self._build_converter(device=str(device), kwargs=kwargs)
             convert_kwargs = self._extract_convert_kwargs(kwargs)
             logger.info(f"Konwertuję {path} przez Docling")
             result = converter.convert(str(path), **convert_kwargs)
-            markdown = result.document.export_to_markdown()
+            markdown = self._export_markdown(result.document, output_path)
             pages = self._page_count(result, path)
         except Exception:
             logger.exception(f"Docling nie zdołał przekonwertować pliku: {path}")
@@ -93,6 +95,8 @@ class DoclingEngine(ConversionEngine):
         )
 
         pipeline_options = pipeline_options_module.PdfPipelineOptions()
+        pipeline_options.generate_picture_images = True
+        pipeline_options.images_scale = 2.0
         pipeline_options.accelerator_options = accelerator_module.AcceleratorOptions(
             device=resolved_device,
             num_threads=threads,
@@ -132,6 +136,33 @@ class DoclingEngine(ConversionEngine):
             if key in self._CONVERT_KWARGS:
                 convert_kwargs[key] = kwargs.pop(key)
         return convert_kwargs
+
+    def _export_markdown(self, document: Any, output_path: object) -> str:
+        if output_path in (None, ""):
+            return str(document.export_to_markdown())
+
+        output = Path(str(output_path))
+        output.parent.mkdir(parents=True, exist_ok=True)
+        image_ref_mode_module: Any = importlib.import_module("docling_core.types.doc.base")
+        artifacts_dir = Path(f"{output.stem}_artifacts")
+        document.save_as_markdown(
+            output,
+            artifacts_dir=artifacts_dir,
+            image_mode=image_ref_mode_module.ImageRefMode.REFERENCED,
+        )
+        markdown = output.read_text(encoding="utf-8")
+        return self._make_artifact_refs_relative(markdown, output.parent)
+
+    def _make_artifact_refs_relative(self, markdown: str, output_dir: Path) -> str:
+        resolved = output_dir.resolve()
+        prefixes = {
+            f"{resolved.as_posix()}/",
+            f"{resolved!s}{os.sep}",
+        }
+        normalized = markdown
+        for prefix in prefixes:
+            normalized = normalized.replace(prefix, "")
+        return normalized
 
     def _coerce_positive_int(self, value: object, default: int) -> int:
         try:

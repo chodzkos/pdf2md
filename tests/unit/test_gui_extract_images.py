@@ -128,6 +128,31 @@ def test_worker_skips_extract_images_for_in_place_engines(
     assert not errors
 
 
+def test_worker_skips_extract_images_for_image_inputs(
+    qapp: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    image = tmp_path / "doc.png"
+    image.write_bytes(b"png")
+
+    def fail_extract(*args: object, **kwargs: object) -> list[ExtractedImage]:
+        raise AssertionError("extract_pdf_images should not be called for image inputs")
+
+    monkeypatch.setattr("pdf2md.gui.workers.extract_pdf_images", fail_extract)
+    worker = ConversionWorker(
+        files=[str(image)],
+        engine_name="FakeOCR",
+        output_dir=str(tmp_path / "out"),
+        extract_images=True,
+    )
+    errors: list[tuple[str, str]] = []
+    worker.file_error.connect(lambda path, error: errors.append((path, error)))
+
+    engine = SimpleNamespace(name="Surya", supports_ocr=True)
+    worker._convert_all(_FakeConverter(), engine, None)
+
+    assert not errors
+
+
 def test_worker_reports_extract_images_error(
     qapp: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

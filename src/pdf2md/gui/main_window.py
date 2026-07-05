@@ -36,6 +36,7 @@ from PySide6.QtWidgets import (
 )
 
 from pdf2md.core.config import get_settings
+from pdf2md.core.input_types import SUPPORTED_INPUT_EXTENSIONS
 from pdf2md.detection.dependencies import check_calibre
 from pdf2md.exporters import build_epub_exporter
 from pdf2md.gui.help_window import HELP_TITLE, help_tabs
@@ -61,14 +62,14 @@ _FILE_LIST_TEXTS = FileListTexts(
     folder="Folder",
     remove="Usuń",
     clear="Wyczyść",
-    tooltip_files="Dodaj pliki PDF przez okno wyboru",
-    tooltip_folder="Dodaj pliki PDF z wybranego folderu",
+    tooltip_files="Dodaj pliki PDF lub obrazy przez okno wyboru",
+    tooltip_folder="Dodaj pliki PDF lub obrazy z wybranego folderu",
     tooltip_remove="Usuń zaznaczone pozycje z listy",
     tooltip_clear="Usuń wszystkie pozycje z listy",
-    list_tooltip="Lista plików — przeciągnij pliki PDF tutaj lub użyj przycisków powyżej",
-    dialog_add_files="Dodaj pliki PDF",
+    list_tooltip="Lista plików — przeciągnij PDF/JPG/PNG/TIFF tutaj lub użyj przycisków powyżej",
+    dialog_add_files="Dodaj pliki PDF lub obrazy",
     dialog_add_folder="Dodaj folder",
-    filter_supported="PDF ({pattern})",
+    filter_supported="PDF i obrazy ({pattern})",
 )
 
 _EXTRACT_IMAGES_TOOLTIP = (
@@ -162,7 +163,7 @@ class MainWindow(QMainWindow):
         # --- Lista plików (kitowy FileList: własny toolbar +Pliki/+Folder/Usuń/Wyczyść,
         #     licznik, D&D z rekursją folderów) ---
         self._file_list = FileList(
-            extensions={".pdf"},
+            extensions=set(SUPPORTED_INPUT_EXTENSIONS),
             texts=_FILE_LIST_TEXTS,
             count_label=_files_count_label,
         )

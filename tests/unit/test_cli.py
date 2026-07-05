@@ -281,6 +281,52 @@ def test_convert_runs_engine_and_exports_result(
     assert kwargs["engine_kwargs"] == {"lang": "pol+eng"}
 
 
+def test_convert_accepts_image_input(
+    cli_test_env: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pil_image = pytest.importorskip("PIL.Image")
+    image = cli_test_env / "skan.png"
+    pil_image.new("RGB", (400, 160), "white").save(image, format="PNG")
+    output_dir = cli_test_env / "out"
+    fake_engine = SimpleNamespace(
+        name="FakeOCR",
+        supports_ocr=True,
+        is_available=lambda: True,
+    )
+
+    class FakeConverter:
+        def convert(self, *args: object, **kwargs: object) -> ConversionResult:
+            return ConversionResult(markdown="tekst z obrazu", engine_used="FakeOCR", pages=1)
+
+    def fake_export(markdown: str, output_path: Path, epub_backend: str = "pandoc") -> Path:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(markdown, encoding="utf-8")
+        return output_path
+
+    monkeypatch.setattr("pdf2md.cli.main._select_engine", lambda name: fake_engine)
+    monkeypatch.setattr("pdf2md.cli.main.Converter", FakeConverter)
+    monkeypatch.setattr("pdf2md.cli.main._export_result", fake_export)
+
+    result = CliRunner().invoke(
+        cli,
+        ["convert", str(image), "--engine", "fake", "--output-dir", str(output_dir)],
+    )
+
+    assert result.exit_code == 0
+    assert (output_dir / "skan.md").read_text(encoding="utf-8") == "tekst z obrazu"
+
+
+def test_convert_rejects_unsupported_input(cli_test_env: Path) -> None:
+    text = cli_test_env / "notatka.txt"
+    text.write_text("tekst", encoding="utf-8")
+
+    result = CliRunner().invoke(cli, ["convert", str(text)])
+
+    assert result.exit_code != 0
+    assert "Nieobsługiwany format wejściowy" in result.output
+
+
 def test_convert_extract_images_adds_markdown_references(
     cli_test_env: Path,
     monkeypatch: pytest.MonkeyPatch,

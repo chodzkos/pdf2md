@@ -4,6 +4,7 @@
 
 ### Dodane
 
+- Presety konwersji (silnik/język/LLM) jako nazwane profile — `convert --profile`.
 - OCR zdjęć dokumentów (JPG/PNG/TIFF), w tym wielostronicowy TIFF — to samo wejście co skany PDF.
 - Historia konwersji (SQLite) + komenda `pdf2md history` (filtr po silniku, eksport CSV).
 - Ekstrakcja obrazów z PDF (`--extract-images`, wymaga extra `[images]`) z referencjami w Markdown i filtrem rozmiaru.

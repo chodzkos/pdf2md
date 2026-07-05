@@ -1,0 +1,3 @@
+name: artykul-naukowy
+conversion: {engine: mineru, lang: eng, llm: none, llm_mode: none}
+output: {markdown: true, epub: false, epub_backend: pandoc}

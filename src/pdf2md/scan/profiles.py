@@ -83,11 +83,44 @@ class Output(_Strict):
         return normalized
 
 
+class ConversionPreset(_Strict):
+    """Ustawienia zwykłego `pdf2md convert` zapisane w profilu YAML."""
+
+    engine: str | None = None
+    lang: str | None = None
+    llm: str | None = None
+    llm_model: str | None = None
+    llm_mode: str | None = None
+
+    @field_validator("llm")
+    @classmethod
+    def validate_llm(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.lower().strip()
+        if normalized not in {"none", "ollama", "claude", "openai", "gemini"}:
+            raise ValueError("llm musi mieć wartość: none, ollama, claude, openai albo gemini")
+        return normalized
+
+    @field_validator("llm_mode")
+    @classmethod
+    def validate_llm_mode(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.lower().strip()
+        if normalized not in {"none", "whole_document", "by_page", "by_chunk", "by_heading"}:
+            raise ValueError(
+                "llm_mode musi mieć wartość: none, whole_document, by_page, by_chunk albo by_heading"
+            )
+        return normalized
+
+
 class Profile(_Strict):
-    """Pełna konfiguracja przebiegu skanowania."""
+    """Pełna konfiguracja profilu: scan pipeline oraz opcjonalnie zwykły convert."""
 
     name: str
     dpi: int = 400
+    conversion: ConversionPreset = ConversionPreset()
     preprocess: Preprocess = Preprocess()
     layout: Layout | None = None
     ocr: Ocr = Ocr()

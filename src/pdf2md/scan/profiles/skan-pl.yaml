@@ -1,0 +1,5 @@
+name: skan-pl
+conversion: {engine: marker, lang: pol, llm: claude, llm_mode: whole_document}
+ocr: {engine: marker, gpu: false}
+llm_cleanup: {enabled: true, provider: claude, chunk: page}
+output: {markdown: true, epub: false, epub_backend: pandoc}

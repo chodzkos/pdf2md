@@ -8,6 +8,7 @@ import pytest
 
 from pdf2md.scan import profiles
 from pdf2md.scan.profiles import (
+    ConversionPreset,
     Profile,
     ProfileError,
     list_profiles,
@@ -37,7 +38,21 @@ def test_load_builtin_profile(name: str, dpi: int, ocr: str) -> None:
 def test_list_profiles_includes_builtins() -> None:
     """list_profiles zawiera trzy wbudowane profile."""
     names = list_profiles()
-    assert {"fast", "balanced", "premium"} <= set(names)
+    assert {"fast", "balanced", "premium", "artykul-naukowy", "skan-pl"} <= set(names)
+
+
+def test_load_builtin_conversion_presets() -> None:
+    """Wbudowane profile mogą zawierać ustawienia zwykłego `convert`."""
+    article = load_profile("artykul-naukowy")
+    assert article.conversion.engine == "mineru"
+    assert article.conversion.lang == "eng"
+    assert article.conversion.llm == "none"
+
+    scan_pl = load_profile("skan-pl")
+    assert scan_pl.conversion.engine == "marker"
+    assert scan_pl.conversion.lang == "pol"
+    assert scan_pl.conversion.llm == "claude"
+    assert scan_pl.conversion.llm_mode == "whole_document"
 
 
 def test_balanced_dewarp_auto_and_premium_compare() -> None:
@@ -91,6 +106,14 @@ def test_invalid_epub_backend_in_profile_raises(tmp_path: Path) -> None:
         load_profile(str(bad))
 
 
+def test_invalid_conversion_llm_in_profile_raises(tmp_path: Path) -> None:
+    """Nieznany dostawca LLM w presecie konwersji jest odrzucany."""
+    bad = tmp_path / "bad-conversion.yaml"
+    bad.write_text("name: zly\nconversion: {llm: watson}\n", encoding="utf-8")
+    with pytest.raises(ProfileError, match="llm"):
+        load_profile(str(bad))
+
+
 def test_save_custom_profile_roundtrip(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Zapisany profil użytkownika pojawia się na liście i daje się wczytać po nazwie."""
     monkeypatch.setattr(profiles, "_USER_PROFILES_DIR", tmp_path / "profiles")
@@ -117,6 +140,34 @@ def test_epub_backend_persists_in_custom_profile(
 
     assert "epub_backend: calibre" in Path(path).read_text(encoding="utf-8")
     assert load_profile("epub-calibre").output.epub_backend == "calibre"
+
+
+def test_conversion_preset_persists_in_custom_profile(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ustawienia convert zapisane w profilu użytkownika wracają po reloadzie."""
+    monkeypatch.setattr(profiles, "_USER_PROFILES_DIR", tmp_path / "profiles")
+    profile = Profile(
+        name="preset-konwersji",
+        conversion=ConversionPreset(
+            engine="marker",
+            lang="pol",
+            llm="claude",
+            llm_model="claude-sonnet",
+            llm_mode="by_page",
+        ),
+    )
+
+    path = save_custom_profile(profile, "preset-konwersji")
+
+    yaml_text = Path(path).read_text(encoding="utf-8")
+    assert "conversion:" in yaml_text
+    reloaded = load_profile("preset-konwersji")
+    assert reloaded.conversion.engine == "marker"
+    assert reloaded.conversion.lang == "pol"
+    assert reloaded.conversion.llm == "claude"
+    assert reloaded.conversion.llm_model == "claude-sonnet"
+    assert reloaded.conversion.llm_mode == "by_page"
 
 
 def test_user_profile_overrides_builtin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

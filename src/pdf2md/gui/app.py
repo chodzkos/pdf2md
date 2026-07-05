@@ -13,6 +13,7 @@ from PySide6.QtWidgets import QApplication
 
 import pdf2md.engines  # rejestruje silniki w engine_registry
 import pdf2md.llm  # noqa: F401  # rejestruje dostawców LLM w llm_registry
+from pdf2md.core.input_types import is_supported_input
 from pdf2md.gui.main_window import MainWindow
 from pdf2md.gui.theme_bridge import SettingsMapping
 from pdf2md.utils.logging import setup_logging
@@ -52,13 +53,13 @@ def main() -> None:
     """Uruchamia aplikację graficzną pdf2md."""
     args = sys.argv[1:]
     if "--help" in args or "-h" in args:
-        print("Usage: pdf2md-gui [PDF ...]")
+        print("Usage: pdf2md-gui [PDF/obraz ...]")
         print()
-        print("Uruchamia graficzny konwerter PDF do Markdown.")
-        print("Podane pliki PDF zostaną dodane do listy konwersji.")
+        print("Uruchamia graficzny konwerter PDF/obrazów do Markdown.")
+        print("Podane pliki PDF/JPG/PNG/TIFF zostaną dodane do listy konwersji.")
         return
 
-    initial_files = [arg for arg in args if arg.lower().endswith(".pdf")]
+    initial_files = [arg for arg in args if is_supported_input(arg)]
 
     setup_logging()
     app = QApplication(sys.argv)

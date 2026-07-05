@@ -15,6 +15,7 @@ from pdf2md.core.image_extraction import (
     extract_pdf_images,
     image_output_dir,
 )
+from pdf2md.core.input_types import is_image_input
 from pdf2md.core.registry import engine_registry, llm_registry
 from pdf2md.engines.base import ConversionCancelled, ConversionEngine
 from pdf2md.engines.vlm_base import VLMEngine
@@ -175,7 +176,7 @@ class ConversionWorker(QThread):
                     engine_options=engine_options,
                     record_history=False,
                 )
-                if self._should_extract_images(engine):
+                if self._should_extract_images(engine, pdf_path):
                     result.markdown = self._extract_images_for_output(
                         pdf_path,
                         result.markdown,
@@ -233,8 +234,12 @@ class ConversionWorker(QThread):
         else:
             self.all_done.emit(success, errors, total_elapsed)
 
-    def _should_extract_images(self, engine: ConversionEngine) -> bool:
-        return self._extract_images and not _has_in_place_images(engine.name)
+    def _should_extract_images(self, engine: ConversionEngine, input_path: str) -> bool:
+        return (
+            self._extract_images
+            and not _has_in_place_images(engine.name)
+            and not is_image_input(input_path)
+        )
 
     def _extract_images_for_output(
         self,

@@ -4,6 +4,7 @@
 
 ### Dodane
 
+- OCR zdjęć dokumentów (JPG/PNG/TIFF), w tym wielostronicowy TIFF — to samo wejście co skany PDF.
 - Historia konwersji (SQLite) + komenda `pdf2md history` (filtr po silniku, eksport CSV).
 - Ekstrakcja obrazów z PDF (`--extract-images`, wymaga extra `[images]`) z referencjami w Markdown i filtrem rozmiaru.
 - **Calibre jako opcjonalny backend eksportu EPUB** (`ebook-convert`), z detekcją w `doctor` i fallbackiem na Pandoc. Wybór backendu przez `[conversion].epub_backend` (`pandoc` domyślnie / `calibre`) lub flagę `convert --epub-backend`; gdy wybrano `calibre`, a `ebook-convert` jest poza PATH, eksport wraca do Pandoca.

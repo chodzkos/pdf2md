@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import tempfile
 import time
+from contextlib import ExitStack
 from pathlib import Path
 
 from loguru import logger
 
 from pdf2md.core import history as conversion_history
+from pdf2md.core.image_input import image_to_preprocessed_pdf
+from pdf2md.core.input_types import is_image_input, is_supported_input
 from pdf2md.engines.base import ConversionEngine, ConversionResult
 from pdf2md.llm.base import LLMProvider
 
@@ -53,15 +57,36 @@ class Converter:
             path = Path(pdf_path)
             if not path.exists():
                 raise ConversionError(f"Plik nie istnieje: {pdf_path}")
+            if not is_supported_input(path):
+                raise ConversionError(
+                    "Nieobsługiwany format wejściowy. Obsługiwane: PDF, JPG, PNG, TIFF."
+                )
+            input_is_image = is_image_input(path)
+            if input_is_image and not engine.supports_ocr:
+                raise ConversionError(
+                    f"Wejście obrazowe wymaga silnika OCR, a '{engine.name}' go nie obsługuje."
+                )
             if not engine.is_available():
                 raise ConversionError(f"Silnik '{engine.name}' nie jest dostępny")
 
             logger.info(f"Konwertuję: {path.name} (silnik: {engine.name})")
-            options = {**(engine_kwargs or {}), **(engine_options or {})}
-            if output_path is not None and engine.name.lower() in {"docling", "marker"}:
-                options.setdefault("output_path", output_path)
-            result = engine.convert(pdf_path, **options)
+            with ExitStack() as stack:
+                effective_path = str(path)
+                if input_is_image:
+                    tmp_dir = stack.enter_context(tempfile.TemporaryDirectory(prefix="pdf2md_img_"))
+                    effective_path = str(image_to_preprocessed_pdf(path, tmp_dir))
+                    logger.info(
+                        f"Obraz wejściowy przygotowany jako tymczasowy PDF: {effective_path}"
+                    )
+
+                options = {**(engine_kwargs or {}), **(engine_options or {})}
+                if output_path is not None and engine.name.lower() in {"docling", "marker"}:
+                    options.setdefault("output_path", output_path)
+                result = engine.convert(effective_path, **options)
             result.conversion_time = time.monotonic() - start
+            if input_is_image:
+                result.metadata.setdefault("source", str(path))
+                result.metadata["input_type"] = "image"
 
             if llm is not None:
                 logger.info(f"Post-processing LLM: {llm.name}")

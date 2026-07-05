@@ -29,6 +29,7 @@ from pdf2md.core.image_extraction import (
     extract_pdf_images,
     image_output_dir,
 )
+from pdf2md.core.input_types import is_image_input, is_supported_input
 from pdf2md.core.registry import engine_registry, llm_registry
 from pdf2md.detection.dependencies import check_all
 from pdf2md.detection.hardware import HardwareInfo, detect_hardware, is_compute_cap_too_old
@@ -287,6 +288,21 @@ def _select_engine(engine_name: str) -> ConversionEngine:
             f"Nieznany silnik: {engine_name}. Zarejestrowane silniki: {available}"
         )
     return engine
+
+
+def _validate_input_formats(paths: list[Path]) -> None:
+    for path in paths:
+        if not is_supported_input(path):
+            raise click.ClickException(
+                f"Nieobsługiwany format wejściowy: {path}. Obsługiwane: PDF, JPG, PNG, TIFF."
+            )
+
+
+def _image_page_count(path: Path) -> int:
+    from PIL import Image, ImageSequence
+
+    with Image.open(path) as image:
+        return sum(1 for _ in ImageSequence.Iterator(image))
 
 
 def _select_llm(llm_name: str, llm_model: str | None, settings: Settings) -> LLMProvider | None:
@@ -560,12 +576,16 @@ def _print_dry_run(
 ) -> None:
     deps = check_all()
     for path in files:
-        pdf_info = detect_pdf_type(str(path))
         table = Table(title=f"Plan konwersji: {path}")
         table.add_column("Pole")
         table.add_column("Wartość")
-        table.add_row("Typ PDF", str(pdf_info["type"]))
-        table.add_row("Strony", str(pdf_info["pages"]))
+        if is_image_input(path):
+            table.add_row("Typ wejścia", "obraz")
+            table.add_row("Strony/klatki", str(_image_page_count(path)))
+        else:
+            pdf_info = detect_pdf_type(str(path))
+            table.add_row("Typ PDF", str(pdf_info["type"]))
+            table.add_row("Strony", str(pdf_info["pages"]))
         table.add_row("Silnik", engine.name)
         table.add_row("Silnik dostępny", "tak" if engine.is_available() else "nie")
         table.add_row("LLM", llm_name)
@@ -673,11 +693,17 @@ def convert(
     missing = [str(path) for path in input_files if not path.exists()]
     if missing:
         raise click.ClickException(f"Plik nie istnieje: {missing[0]}")
+    _validate_input_formats(input_files)
 
     output_paths = _resolve_output_paths(input_files, output, output_dir)
     if dry_run:
         _print_dry_run(input_files, output_paths, selected_engine, llm_name)
         return
+
+    if any(is_image_input(path) for path in input_files) and not selected_engine.supports_ocr:
+        raise click.ClickException(
+            f"Wejście obrazowe wymaga silnika OCR, a '{selected_engine.name}' go nie obsługuje."
+        )
 
     if not selected_engine.is_available():
         raise click.ClickException(f"Silnik nie jest dostępny: {selected_engine.name}")
@@ -714,7 +740,7 @@ def convert(
                     engine_options=engine_options,
                     record_history=False,
                 )
-                if extract_images:
+                if extract_images and not is_image_input(path):
                     images = extract_pdf_images(
                         path,
                         image_output_dir(output_path),

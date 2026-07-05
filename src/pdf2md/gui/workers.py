@@ -7,6 +7,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal
 
+from pdf2md.core import history as conversion_history
 from pdf2md.core.config import get_settings
 from pdf2md.core.converter import ConversionError, Converter
 from pdf2md.core.image_extraction import (
@@ -81,15 +82,25 @@ class ConversionWorker(QThread):
         """Iteruje po plikach, konwertuje każdy i emituje sygnały."""
         converter = Converter()
         engine = engine_registry.get_by_name(self._engine_name)
-        if engine is None:
-            for f in self._files:
-                self.file_error.emit(f, f"Silnik '{self._engine_name}' nie jest zarejestrowany.")
-            self.all_done.emit(0, len(self._files), 0.0)
-            return
-
         llm = None
         if self._llm_name not in ("none", ""):
             llm = llm_registry.get_by_name(self._llm_name)
+
+        if engine is None:
+            for f in self._files:
+                message = f"Silnik '{self._engine_name}' nie jest zarejestrowany."
+                self._record_history(
+                    pdf_path=f,
+                    engine_name=self._engine_name,
+                    llm=llm,
+                    output_path=self._default_output_path(f),
+                    status="error",
+                    duration_s=0.0,
+                    error_msg=message,
+                )
+                self.file_error.emit(f, message)
+            self.all_done.emit(0, len(self._files), 0.0)
+            return
 
         # Override modelu per-uruchomienie: ma pierwszeństwo nad config.<provider>_model,
         # ale NIE jest utrwalany (nie kasuje domyślnego ustawionego w GUI). Provider czyta
@@ -134,10 +145,10 @@ class ConversionWorker(QThread):
 
             filename = Path(pdf_path).name
             self.progress.emit(filename, 0)
+            stem = Path(pdf_path).stem
+            out_path = str(Path(self._output_dir) / f"{stem}.md") if self._output_dir else None
+            file_start = time.monotonic()
             try:
-                stem = Path(pdf_path).stem
-                out_path = str(Path(self._output_dir) / f"{stem}.md") if self._output_dir else None
-                file_start = time.monotonic()
                 engine_kwargs: dict[str, object] = {}
                 if engine.supports_ocr:
                     engine_kwargs["lang"] = self._language
@@ -162,6 +173,7 @@ class ConversionWorker(QThread):
                     llm_mode=self._llm_mode,
                     engine_kwargs=engine_kwargs,
                     engine_options=engine_options,
+                    record_history=False,
                 )
                 if self._should_extract_images(engine):
                     result.markdown = self._extract_images_for_output(
@@ -170,15 +182,42 @@ class ConversionWorker(QThread):
                         out_path,
                     )
                 elapsed = time.monotonic() - file_start
+                history_output = self._history_output_path(result, out_path)
+                self._record_history(
+                    pdf_path=pdf_path,
+                    engine_name=engine.name,
+                    llm=llm,
+                    output_path=history_output,
+                    status="ok",
+                    duration_s=elapsed,
+                )
                 self.progress.emit(filename, 100)
                 self.file_done.emit(pdf_path, out_path or "", elapsed)
                 success += 1
                 _ = result
             except ConversionCancelled:
                 # Bieżący plik NIE jest kompletny — nie liczony jako sukces.
+                self._record_history(
+                    pdf_path=pdf_path,
+                    engine_name=engine.name,
+                    llm=llm,
+                    output_path=out_path,
+                    status="error",
+                    duration_s=time.monotonic() - file_start,
+                    error_msg="Konwersja anulowana",
+                )
                 was_cancelled = True
                 break
             except (ConversionError, RuntimeError, OSError) as exc:
+                self._record_history(
+                    pdf_path=pdf_path,
+                    engine_name=engine.name,
+                    llm=llm,
+                    output_path=out_path,
+                    status="error",
+                    duration_s=time.monotonic() - file_start,
+                    error_msg=str(exc),
+                )
                 self.progress.emit(filename, 0)
                 self.file_error.emit(pdf_path, str(exc))
                 errors += 1
@@ -219,6 +258,43 @@ class ConversionWorker(QThread):
             output_file.parent.mkdir(parents=True, exist_ok=True)
             output_file.write_text(updated_markdown, encoding="utf-8")
         return updated_markdown
+
+    def _default_output_path(self, pdf_path: str) -> str | None:
+        if not self._output_dir:
+            return None
+        return str(Path(self._output_dir) / f"{Path(pdf_path).stem}.md")
+
+    def _history_output_path(self, result: object, out_path: str | None) -> str | None:
+        if out_path:
+            return out_path
+        metadata = getattr(result, "metadata", {})
+        if isinstance(metadata, dict):
+            book_md_path = metadata.get("book_md_path")
+            if book_md_path:
+                return str(book_md_path)
+        return self._output_dir or None
+
+    def _record_history(
+        self,
+        *,
+        pdf_path: str,
+        engine_name: str,
+        llm: LLMProvider | None,
+        output_path: str | None,
+        status: conversion_history.HistoryStatus,
+        duration_s: float,
+        error_msg: str | None = None,
+    ) -> None:
+        conversion_history.record_safely(
+            input_path=pdf_path,
+            engine=engine_name,
+            llm_provider=llm.name if llm is not None else "none",
+            llm_mode=self._llm_mode,
+            output_path=output_path,
+            status=status,
+            duration_s=duration_s,
+            error_msg=error_msg,
+        )
 
     def _release_after_cancel(self, engine: ConversionEngine, llm: LLMProvider | None) -> None:
         """Po anulowaniu zwalnia zasoby: VRAM silnika VLM + wyładowanie modelu Ollamy."""

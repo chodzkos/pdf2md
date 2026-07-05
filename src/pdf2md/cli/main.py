@@ -21,6 +21,7 @@ from rich.table import Table
 
 from pdf2md import __version__
 from pdf2md.core import config as config_module
+from pdf2md.core import history as conversion_history
 from pdf2md.core.config import Settings, get_settings, save_settings
 from pdf2md.core.converter import ConversionError, Converter
 from pdf2md.core.image_extraction import (
@@ -204,6 +205,29 @@ def _package_installed(package_name: str) -> bool:
     except importlib.metadata.PackageNotFoundError:
         return False
     return True
+
+
+def _record_history_safely(
+    *,
+    input_path: str | Path,
+    engine: str,
+    llm_provider: LLMProvider | None,
+    llm_mode: str,
+    output_path: str | Path | None,
+    status: conversion_history.HistoryStatus,
+    duration_s: float,
+    error_msg: str | None = None,
+) -> None:
+    conversion_history.record_safely(
+        input_path=input_path,
+        engine=engine,
+        llm_provider=llm_provider.name if llm_provider is not None else "none",
+        llm_mode=llm_mode,
+        output_path=output_path,
+        status=status,
+        duration_s=duration_s,
+        error_msg=error_msg,
+    )
 
 
 def _catalog_entry_for_engine(engine_name: str) -> dict[str, object] | None:
@@ -675,8 +699,9 @@ def convert(
             engine_kwargs: dict[str, object] = {}
             if selected_engine.supports_ocr:
                 engine_kwargs["lang"] = lang
+            output_path = output_paths[path]
+            file_start = time.monotonic()
             try:
-                output_path = output_paths[path]
                 engine_options: dict[str, object] = {}
                 if selected_engine.name.lower() in {"docling", "marker"}:
                     engine_options["output_path"] = str(output_path)
@@ -687,6 +712,7 @@ def convert(
                     llm_mode=llm_mode,
                     engine_kwargs=engine_kwargs,
                     engine_options=engine_options,
+                    record_history=False,
                 )
                 if extract_images:
                     images = extract_pdf_images(
@@ -702,10 +728,29 @@ def convert(
                     if verbose:
                         console.print(f"[cyan]Obrazy:[/] wyciągnięto {len(images)}")
                 exported_path = _export_result(result.markdown, output_path, selected_epub_backend)
+                _record_history_safely(
+                    input_path=path,
+                    engine=selected_engine.name,
+                    llm_provider=llm_provider,
+                    llm_mode=llm_mode,
+                    output_path=exported_path,
+                    status="ok",
+                    duration_s=time.monotonic() - file_start,
+                )
                 converted += 1
                 if verbose:
                     console.print(f"[green]Zapisano:[/] {exported_path}")
             except (ConversionError, RuntimeError, OSError) as exc:
+                _record_history_safely(
+                    input_path=path,
+                    engine=selected_engine.name,
+                    llm_provider=llm_provider,
+                    llm_mode=llm_mode,
+                    output_path=output_path,
+                    status="error",
+                    duration_s=time.monotonic() - file_start,
+                    error_msg=str(exc),
+                )
                 failures.append(f"{path}: {exc}")
                 console.print(f"[red]Błąd:[/] {path}: {exc}")
             finally:
@@ -767,6 +812,64 @@ def list_profiles_cmd() -> None:
     console.print(table)
 
 
+@cli.command("history")
+@click.option("--engine", "engine_filter", help="Filtruj po nazwie silnika.")
+@click.option("--limit", type=click.IntRange(min=1), default=20, show_default=True)
+@click.option(
+    "--csv",
+    "csv_path",
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Wyeksportuj historię do CSV.",
+)
+@click.option("--clear", "clear_history", is_flag=True, help="Wyczyść historię konwersji.")
+def history_cmd(
+    engine_filter: str | None,
+    limit: int,
+    csv_path: Path | None,
+    clear_history: bool,
+) -> None:
+    """Wyświetla historię konwersji."""
+    if clear_history:
+        if not click.confirm("Wyczyścić całą historię konwersji?"):
+            console.print("[yellow]Anulowano.[/]")
+            return
+        removed = conversion_history.clear()
+        console.print(f"[green]Wyczyszczono historię:[/] {removed} wpis(ów).")
+        return
+
+    if csv_path is not None:
+        exported = conversion_history.export_csv(csv_path, limit=limit, engine=engine_filter)
+        console.print(f"[green]Wyeksportowano historię:[/] {exported}")
+        return
+
+    entries = conversion_history.list_recent(limit=limit, engine=engine_filter)
+    table = Table(title="Historia konwersji")
+    table.add_column("ID", justify="right")
+    table.add_column("Czas")
+    table.add_column("Status")
+    table.add_column("Silnik")
+    table.add_column("LLM")
+    table.add_column("Tryb")
+    table.add_column("s", justify="right")
+    table.add_column("Wejście")
+    table.add_column("Wynik / błąd")
+
+    for entry in entries:
+        status = "[green]ok[/]" if entry.status == "ok" else "[red]error[/]"
+        table.add_row(
+            str(entry.id),
+            entry.ts,
+            status,
+            entry.engine,
+            entry.llm_provider,
+            entry.llm_mode,
+            f"{entry.duration_s:.2f}",
+            entry.input_path,
+            entry.output_path if entry.status == "ok" else entry.error_msg,
+        )
+    console.print(table)
+
+
 @cli.command()
 @click.argument("pdf")
 @click.option("--profile", "-p", default="balanced", show_default=True, help="Profil skanowania.")
@@ -801,13 +904,36 @@ def scan(pdf: str, profile: str, output_dir: str, keep_work: bool, verbose: bool
         )
 
     start = time.monotonic()
-    result = engine.convert(
-        str(pdf_path),
-        output_dir=output_dir,
-        profile=prof.model_dump(),
-        keep_work=keep_work,
-    )
+    try:
+        result = engine.convert(
+            str(pdf_path),
+            output_dir=output_dir,
+            profile=prof.model_dump(),
+            keep_work=keep_work,
+        )
+    except (RuntimeError, OSError, ConversionError) as exc:
+        _record_history_safely(
+            input_path=pdf_path,
+            engine=engine.name,
+            llm_provider=None,
+            llm_mode=f"scan:{prof.name}",
+            output_path=output_dir,
+            status="error",
+            duration_s=time.monotonic() - start,
+            error_msg=str(exc),
+        )
+        raise click.ClickException(str(exc)) from exc
+
     elapsed = time.monotonic() - start
+    _record_history_safely(
+        input_path=pdf_path,
+        engine=engine.name,
+        llm_provider=None,
+        llm_mode=f"scan:{prof.name}",
+        output_path=str(result.metadata.get("book_md_path") or output_dir),
+        status="ok",
+        duration_s=elapsed,
+    )
     console.print(
         Panel(
             f"Profil: {prof.name}\n"

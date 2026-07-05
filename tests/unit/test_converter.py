@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from pdf2md.core import history
 from pdf2md.core.converter import ConversionError, Converter
 from pdf2md.engines.base import ConversionEngine, ConversionResult
 from pdf2md.llm.base import LLMProvider, LLMResult
@@ -148,6 +149,36 @@ class TestConverter:
         result = Converter().convert(str(pdf), engine)
 
         assert result.conversion_time >= 0.0
+
+    def test_convert_records_history_on_success(self, tmp_path: Path) -> None:
+        """convert() zapisuje udaną konwersję w historii."""
+        pdf = tmp_path / "doc.pdf"
+        pdf.write_bytes(b"fake pdf")
+        out = tmp_path / "doc.md"
+        engine = _make_engine()
+
+        Converter().convert(str(pdf), engine, output_path=str(out))
+
+        entries = history.list_recent()
+        assert len(entries) == 1
+        assert entries[0].input_path == str(pdf)
+        assert entries[0].engine == "mock_engine"
+        assert entries[0].output_path == str(out)
+        assert entries[0].status == "ok"
+
+    def test_convert_records_history_on_error(self, tmp_path: Path) -> None:
+        """convert() zapisuje błąd konwersji w historii."""
+        pdf = tmp_path / "doc.pdf"
+        pdf.write_bytes(b"fake pdf")
+        engine = _make_engine(available=False)
+
+        with pytest.raises(ConversionError):
+            Converter().convert(str(pdf), engine)
+
+        entries = history.list_recent()
+        assert len(entries) == 1
+        assert entries[0].status == "error"
+        assert "nie jest dostępny" in entries[0].error_msg
 
     def test_convert_batch(self, tmp_path: Path) -> None:
         """convert_batch() przetwarza wszystkie pliki i zwraca wyniki."""

@@ -7,6 +7,7 @@ from pathlib import Path
 
 from loguru import logger
 
+from pdf2md.core import history as conversion_history
 from pdf2md.engines.base import ConversionEngine, ConversionResult
 from pdf2md.llm.base import LLMProvider
 
@@ -27,6 +28,7 @@ class Converter:
         llm_mode: str = "none",
         engine_kwargs: dict[str, object] | None = None,
         engine_options: dict[str, object] | None = None,
+        record_history: bool = True,
     ) -> ConversionResult:
         """Konwertuje jeden plik PDF do Markdown.
 
@@ -38,6 +40,7 @@ class Converter:
             llm_mode: Tryb post-processingu LLM.
             engine_kwargs: Opcje specyficzne dla silnika konwersji.
             engine_options: Opcje przekazywane bezpośrednio do silnika konwersji.
+            record_history: Czy zapisać wpis historii w tej warstwie.
 
         Returns:
             Wynik konwersji z Markdown i metadanymi.
@@ -45,33 +48,58 @@ class Converter:
         Raises:
             ConversionError: Plik nie istnieje lub silnik niedostępny.
         """
-        path = Path(pdf_path)
-        if not path.exists():
-            raise ConversionError(f"Plik nie istnieje: {pdf_path}")
-        if not engine.is_available():
-            raise ConversionError(f"Silnik '{engine.name}' nie jest dostępny")
-
-        logger.info(f"Konwertuję: {path.name} (silnik: {engine.name})")
         start = time.monotonic()
-        options = {**(engine_kwargs or {}), **(engine_options or {})}
-        if output_path is not None and engine.name.lower() in {"docling", "marker"}:
-            options.setdefault("output_path", output_path)
-        result = engine.convert(pdf_path, **options)
-        result.conversion_time = time.monotonic() - start
+        try:
+            path = Path(pdf_path)
+            if not path.exists():
+                raise ConversionError(f"Plik nie istnieje: {pdf_path}")
+            if not engine.is_available():
+                raise ConversionError(f"Silnik '{engine.name}' nie jest dostępny")
 
-        if llm is not None:
-            logger.info(f"Post-processing LLM: {llm.name}")
-            llm_result = llm.postprocess(result.markdown, mode=llm_mode)
-            result.markdown = llm_result.text
+            logger.info(f"Konwertuję: {path.name} (silnik: {engine.name})")
+            options = {**(engine_kwargs or {}), **(engine_options or {})}
+            if output_path is not None and engine.name.lower() in {"docling", "marker"}:
+                options.setdefault("output_path", output_path)
+            result = engine.convert(pdf_path, **options)
+            result.conversion_time = time.monotonic() - start
 
-        if output_path is not None:
-            out = Path(output_path)
-            out.parent.mkdir(parents=True, exist_ok=True)
-            out.write_text(result.markdown, encoding="utf-8")
-            logger.info(f"Zapisano: {out}")
+            if llm is not None:
+                logger.info(f"Post-processing LLM: {llm.name}")
+                llm_result = llm.postprocess(result.markdown, mode=llm_mode)
+                result.markdown = llm_result.text
 
-        logger.info(f"Gotowe: {path.name} — {result.pages} str., {result.conversion_time:.1f}s")
-        return result
+            if output_path is not None:
+                out = Path(output_path)
+                out.parent.mkdir(parents=True, exist_ok=True)
+                out.write_text(result.markdown, encoding="utf-8")
+                logger.info(f"Zapisano: {out}")
+
+            duration = time.monotonic() - start
+            if record_history:
+                self._record_history(
+                    pdf_path=pdf_path,
+                    engine=engine,
+                    llm=llm,
+                    llm_mode=llm_mode,
+                    output_path=output_path,
+                    status="ok",
+                    duration_s=duration,
+                )
+            logger.info(f"Gotowe: {path.name} — {result.pages} str., {result.conversion_time:.1f}s")
+            return result
+        except Exception as exc:
+            if record_history:
+                self._record_history(
+                    pdf_path=pdf_path,
+                    engine=engine,
+                    llm=llm,
+                    llm_mode=llm_mode,
+                    output_path=output_path,
+                    status="error",
+                    duration_s=time.monotonic() - start,
+                    error_msg=str(exc),
+                )
+            raise
 
     def convert_batch(
         self,
@@ -111,3 +139,26 @@ class Converter:
                 )
             results.append(result)
         return results
+
+    def _record_history(
+        self,
+        *,
+        pdf_path: str,
+        engine: ConversionEngine,
+        llm: LLMProvider | None,
+        llm_mode: str,
+        output_path: str | None,
+        status: conversion_history.HistoryStatus,
+        duration_s: float,
+        error_msg: str | None = None,
+    ) -> None:
+        conversion_history.record_safely(
+            input_path=pdf_path,
+            engine=engine.name,
+            llm_provider=llm.name if llm is not None else "none",
+            llm_mode=llm_mode,
+            output_path=output_path,
+            status=status,
+            duration_s=duration_s,
+            error_msg=error_msg,
+        )

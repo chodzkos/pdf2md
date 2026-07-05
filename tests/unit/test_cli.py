@@ -12,7 +12,7 @@ import pytest
 from click.testing import CliRunner
 
 from pdf2md.cli.main import cli
-from pdf2md.core import config
+from pdf2md.core import config, history
 from pdf2md.core.image_extraction import ExtractedImage
 from pdf2md.engines.base import ConversionResult
 
@@ -71,6 +71,67 @@ def test_list_llm_returns_zero(cli_test_env: Path) -> None:
     result = CliRunner().invoke(cli, ["list-llm"])
 
     assert result.exit_code == 0
+
+
+def test_history_command_lists_recent(cli_test_env: Path) -> None:
+    history.record(
+        input_path="plik.pdf",
+        engine="Marker",
+        output_path="plik.md",
+        status="ok",
+        duration_s=1.0,
+    )
+
+    result = CliRunner().invoke(cli, ["history"])
+
+    assert result.exit_code == 0
+    assert "Historia konwersji" in result.output
+    assert "Marker" in result.output
+    assert "plik.pdf" in result.output
+
+
+def test_history_command_exports_csv(cli_test_env: Path) -> None:
+    csv_path = cli_test_env / "history.csv"
+    history.record(
+        input_path="marker.pdf",
+        engine="Marker",
+        output_path="marker.md",
+        status="ok",
+        duration_s=1.0,
+    )
+    history.record(
+        input_path="docling.pdf",
+        engine="Docling",
+        output_path="docling.md",
+        status="ok",
+        duration_s=1.0,
+    )
+
+    result = CliRunner().invoke(
+        cli,
+        ["history", "--engine", "docling", "--csv", str(csv_path)],
+    )
+
+    assert result.exit_code == 0
+    exported = csv_path.read_text(encoding="utf-8")
+    assert "docling.pdf" in exported
+    assert "marker.pdf" not in exported
+
+
+def test_history_command_clear_requires_confirmation(cli_test_env: Path) -> None:
+    history.record(
+        input_path="plik.pdf",
+        engine="Marker",
+        output_path="plik.md",
+        status="ok",
+        duration_s=1.0,
+    )
+
+    result = CliRunner().invoke(cli, ["history", "--clear"], input="y\n")
+
+    assert result.exit_code == 0
+    assert "Wyczyszczono historię" in result.output
+    assert history.list_recent() == []
 
 
 def test_doctor_returns_zero(cli_test_env: Path) -> None:

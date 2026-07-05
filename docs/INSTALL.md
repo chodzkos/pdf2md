@@ -253,8 +253,8 @@ PaddleOCR-VL/Surya. Instaluj tylko, jeśli naprawdę potrzebujesz — i wtedy w 
 uv venv ~/.venvs/olmocr --python 3.12
 source ~/.venvs/olmocr/bin/activate
 uv pip install olmocr
-# olmocr NIE ciągnie torch/vllm — dołóż nightly-vLLM jak dla Paddle (7.3a):
-uv pip install -U vllm --pre --torch-backend=auto --extra-index-url https://wheels.vllm.ai/nightly
+# olmocr NIE ciągnie torch/vllm — dołóż stabilny vLLM jak dla Paddle (zob. ostrzeżenie w 7.3a):
+uv pip install "vllm==0.24.0" --torch-backend=auto
 # uruchomienie (na 24 GB; przy OOM zejdź do 0.80):
 VLLM_USE_FLASHINFER_SAMPLER=0 python -m olmocr.pipeline <workspace> --pdfs <plik> \
   --model allenai/olmOCR-2-7B-1025-FP8 --markdown \
@@ -262,7 +262,7 @@ VLLM_USE_FLASHINFER_SAMPLER=0 python -m olmocr.pipeline <workspace> --pdfs <plik
 deactivate
 ```
 > Gołe `vllm serve` z tymi flagami wstaje poprawnie. W trybie spawn-per-plik serwer-dziecko olmocr
-> potrafi nie wstać pod nightly-vLLM/transformers 5.x — dlatego produkcyjnie używaj trybu
+> potrafi nie wstać pod zmiennym stosem vLLM/transformers — dlatego produkcyjnie używaj trybu
 > `--server <url>` (pole `olmocr_server_url`): własny, raz wystartowany serwer.
 
 ### 7.3 — PaddleOCR-VL (izolowany venv + usługa HTTP)
@@ -271,7 +271,7 @@ PaddleOCR-VL działa jako **serwer**, a pdf2md gada z nim po HTTP (jak z Ollamą
 z silników Fazy 2 na Blackwellu — zrób go na końcu.
 
 > 🛑 **Kiedy odpuścić.** PaddleOCR-VL **dubluje** MinerU/vlm, który już działa na tym GPU. Na
-> premierowym Blackwellu z CUDA 13 jego stos vLLM nightly potrafi sypać się ścianą po ścianie
+> premierowym Blackwellu z CUDA 13 dawny stos vLLM nightly potrafił sypać się ścianą po ścianie
 > (libcudart, flashinfer JIT, frankenstein cu12/cu13). Próbuj **raz**; jeśli nie wejdzie gładko —
 > zaparkuj go i użyj MinerU/vlm albo Surya. Minimum „≥1 silnik VLM działa" spełnia **Surya**.
 
@@ -285,21 +285,27 @@ source ~/.venvs/paddleocr/bin/activate     # prompt MUSI pokazać (paddleocr)
 which python      # → ~/.venvs/paddleocr/bin/python
 ```
 
-**a) Stos VLM pod Blackwella — vLLM nightly z `--torch-backend=auto`**
+**a) Stos VLM pod Blackwella — stabilny vLLM 0.24.0 z `--torch-backend=auto`**
 
 **Nie wymuszaj ręcznie indeksu cu129** — w połączeniu z `--index-strategy unsafe-best-match` miesza
 to CUDA 12 i 13 i kończy się `ImportError: libcudart.so.13` (vLLM chce runtime CUDA 13, a wymuszony
 torch jest cu12.9). Niech uv sam dobierze backend:
 
 ```bash
-uv self update
-uv pip install -U vllm --pre --torch-backend=auto \
-  --extra-index-url https://wheels.vllm.ai/nightly
+uv pip install "vllm==0.24.0" --torch-backend=auto
 ```
 `--torch-backend=auto` dobiera właściwy indeks PyTorch (cu130 dla CUDA 13 na Blackwellu), więc nie
-ma rozjazdu cu12/cu13. Nightly ściąga też `flashinfer-cubin`, `cuda-toolkit`, `nvidia-cuda-nvcc`.
-Sam sampler flashinfera i tak JIT-uje i wykłada się na nvcc — dlatego serwer (krok b) uruchamiasz
-z `VLLM_USE_FLASHINFER_SAMPLER=0`.
+ma rozjazdu cu12/cu13. Stabilny vLLM 0.24.0 ma natywną obsługę PaddleOCR-VL-1.6 i działa pod WSL2.
+
+> ⚠️ Nie instaluj nightly (`--pre`) pod WSL2. Model Runner V2 (domyślny w nightly) wymaga UVA,
+> którego sterownik WSL2 nie wystawia → `RuntimeError: UVA is not available`. Nightly był konieczny
+> tylko na premierze Blackwella, zanim natywna obsługa PaddleOCR-VL weszła do stabilnych (~0.24).
+> Za stary vLLM też nie zadziała: 0.11 nie zna architektury i pada na `'mlp_AR'`. Przy naprawie
+> rozjazdu zależności zawsze pełny `--reinstall` (nie `--reinstall-package` — częściowa podmiana
+> zostawia `nvidia-nccl` niespójny z torch → `ImportError: undefined symbol: ncclDevCommDestroy`).
+> Działający zestaw: `uv pip install -r ~/.venvs/paddleocr/working-freeze.txt`. Podbicie wersji vLLM
+> w tym venv = świadoma decyzja z testem konwersji, nie rutynowe `-U` (gdy MRV2 stanie się domyślne
+> w stabilnych, mur UVA wróci).
 
 > Jeśli środowisko jest już zepsute mieszanką cu12/cu13 — **odtwórz venv od zera**:
 > `deactivate; rm -rf ~/.venvs/paddleocr; uv venv ~/.venvs/paddleocr --python 3.12; source ...`.
@@ -487,9 +493,11 @@ skopiuj cache `~/.cache/huggingface/`, ale to opcjonalne).
   sterownika w Ubuntu).
 - **PaddleOCR-VL `ModuleNotFoundError: paddle`** → do samego serwera VLM `paddle` nie jest potrzebny;
   serwuj `vllm serve PaddlePaddle/PaddleOCR-VL-1.6`. Paddle tylko w osobnym venv-kliencie (7.3c).
-- **PaddleOCR-VL `libcudart.so.13: cannot open`** → rozjazd cu12/cu13; instaluj vLLM z
-  `--torch-backend=auto` (NIE ręczny `--extra-index-url cu129 --index-strategy unsafe-best-match`);
-  jak venv zepsuty — odtwórz od zera.
+- **PaddleOCR-VL `libcudart.so.13: cannot open`** → rozjazd cu12/cu13; wróć do stabilnego pinu:
+  `uv pip install "vllm==0.24.0" --torch-backend=auto` (zob. ostrzeżenie w 7.3a). Nie używaj ręcznego
+  `--extra-index-url cu129 --index-strategy unsafe-best-match`; jak venv zepsuty — odtwórz od zera.
+- **PaddleOCR-VL `RuntimeError: UVA is not available`** → zainstalowałeś nightly/MRV2 pod WSL2;
+  wróć do zestawu z `~/.venvs/paddleocr/working-freeze.txt` (zob. 7.3a).
 - **PaddleOCR-VL sypie się ścianą po ścianie na Blackwellu** → udokumentowane bagno; odpuść i użyj
   MinerU/vlm (już działa) albo oficjalnego Dockera. Nie blokuj nim Etapu 12 (minimum = Surya).
 

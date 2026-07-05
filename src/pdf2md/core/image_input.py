@@ -61,14 +61,17 @@ def image_to_preprocessed_pdf(
 
 
 def _preprocess_frame(frame: Any, operations: Sequence[str]) -> Any:
+    from PIL import Image
+
+    rgb = frame.convert("RGB")
     try:
         import cv2
         import numpy as np
-        from PIL import Image
     except ModuleNotFoundError as exc:
-        raise RuntimeError(_IMAGE_OCR_DEPS_HINT) from exc
+        logger.warning(f"{_IMAGE_OCR_DEPS_HINT} — używam obrazu bez preprocessingu OpenCV")
+        _ = exc
+        return rgb
 
-    rgb = frame.convert("RGB")
     bgr = cv2.cvtColor(np.array(rgb), cv2.COLOR_RGB2BGR)
     processed = preprocess_page(bgr, list(operations))
     if getattr(processed, "ndim", 0) == 3:

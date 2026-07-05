@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -23,13 +24,8 @@ class _FakeImageOCREngine(ConversionEngine):
         return True
 
     def convert(self, pdf_path: str, **kwargs: object) -> ConversionResult:
-        pymupdf = pytest.importorskip("pymupdf")
         self.seen_path = pdf_path
-        doc = pymupdf.open(pdf_path)
-        try:
-            pages = len(doc)
-        finally:
-            doc.close()
+        pages = len(re.findall(rb"/Type\s*/Page\b", Path(pdf_path).read_bytes()))
         markdown = "\n\n---\n\n".join(f"tekst strony {index}" for index in range(1, pages + 1))
         return ConversionResult(markdown=markdown, engine_used=self.name, pages=pages)
 

@@ -12,6 +12,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import click
 from rich.console import Console
@@ -38,6 +39,9 @@ from pdf2md.engines.base import ConversionEngine
 from pdf2md.exporters import EPUB_BACKENDS, MarkdownExporter, build_epub_exporter
 from pdf2md.llm.base import LLMProvider
 from pdf2md.utils.logging import setup_logging
+
+if TYPE_CHECKING:
+    from pdf2md.scan.profiles import Profile
 
 console = Console()
 
@@ -288,6 +292,22 @@ def _select_engine(engine_name: str) -> ConversionEngine:
             f"Nieznany silnik: {engine_name}. Zarejestrowane silniki: {available}"
         )
     return engine
+
+
+def _load_conversion_profile(profile_name: str) -> Profile:
+    from pdf2md.scan.profiles import ProfileError, load_profile
+
+    try:
+        return load_profile(profile_name)
+    except ProfileError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+
+def _profile_value(profile: Profile | None, field_name: str) -> str | None:
+    if profile is None:
+        return None
+    value = getattr(profile.conversion, field_name)
+    return value if value not in (None, "") else None
 
 
 def _validate_input_formats(paths: list[Path]) -> None:
@@ -634,14 +654,24 @@ def cli(ctx: click.Context) -> None:
 @cli.command()
 @click.argument("files", nargs=-1, required=True)
 @click.option("--engine", "-e", help="Silnik konwersji, np. pymupdf4llm albo marker.")
+@click.option("--profile", "-p", "profile_name", help="Profil/preset konwersji YAML.")
 @click.option("--output", "-o", help="Plik wyjściowy .md/.epub albo katalog dla wielu plików.")
 @click.option("--output-dir", help="Katalog dla wyników batch.")
 @click.option(
-    "--llm", "llm_name", type=click.Choice(LLM_CHOICES), default="none", show_default=True
+    "--llm",
+    "llm_name",
+    type=click.Choice(LLM_CHOICES),
+    default=None,
+    help="Dostawca LLM (nadpisuje profil; domyślnie none).",
 )
 @click.option("--llm-model", help="Model LLM nadpisujący config tylko dla tego uruchomienia.")
-@click.option("--llm-mode", type=click.Choice(LLM_MODES), default="none", show_default=True)
-@click.option("--lang", default="pol+eng", show_default=True, help="Język OCR.")
+@click.option(
+    "--llm-mode",
+    type=click.Choice(LLM_MODES),
+    default=None,
+    help="Tryb post-processingu LLM (nadpisuje profil; domyślnie none).",
+)
+@click.option("--lang", default=None, help="Język OCR (nadpisuje profil; domyślnie pol+eng).")
 @click.option(
     "--epub-backend",
     type=click.Choice(EPUB_BACKENDS),
@@ -667,12 +697,13 @@ def convert(
     ctx: click.Context,
     files: tuple[str, ...],
     engine: str | None,
+    profile_name: str | None,
     output: str | None,
     output_dir: str | None,
-    llm_name: str,
+    llm_name: str | None,
     llm_model: str | None,
-    llm_mode: str,
-    lang: str,
+    llm_mode: str | None,
+    lang: str | None,
     epub_backend: str | None,
     extract_images: bool,
     image_min_size: int,
@@ -683,7 +714,12 @@ def convert(
     if verbose:
         setup_logging(verbose=True)
     settings: Settings = ctx.obj["settings"]
-    engine_name = engine or settings.default_engine
+    conversion_profile = _load_conversion_profile(profile_name) if profile_name else None
+    engine_name = engine or _profile_value(conversion_profile, "engine") or settings.default_engine
+    lang = lang or _profile_value(conversion_profile, "lang") or "pol+eng"
+    llm_name = llm_name or _profile_value(conversion_profile, "llm") or "none"
+    llm_model = llm_model or _profile_value(conversion_profile, "llm_model")
+    llm_mode = llm_mode or _profile_value(conversion_profile, "llm_mode") or "none"
     selected_epub_backend = epub_backend or settings.epub_backend
     selected_engine = _select_engine(engine_name)
     input_files = _expand_files(files)
@@ -811,30 +847,35 @@ def list_llm(ctx: click.Context) -> None:
 
 @cli.command("list-profiles")
 def list_profiles_cmd() -> None:
-    """Wyświetla dostępne profile skanowania (wbudowane + użytkownika)."""
+    """Wyświetla dostępne profile/presety (wbudowane + użytkownika)."""
     from pdf2md.scan.profiles import list_profiles, load_profile
 
-    table = Table(title="Profile skanowania")
+    table = Table(title="Profile i presety")
     table.add_column("Profil")
+    table.add_column("Convert")
+    table.add_column("Lang")
+    table.add_column("LLM")
     table.add_column("DPI")
     table.add_column("OCR")
-    table.add_column("LLM cleanup")
     table.add_column("EPUB")
     for name in list_profiles():
         try:
             profile = load_profile(name)
+            conversion = profile.conversion
             ocr = profile.ocr.engine or profile.ocr.primary or "—"
             llm = profile.llm_cleanup.model if profile.llm_cleanup.enabled else "—"
             table.add_row(
                 name,
+                conversion.engine or "—",
+                conversion.lang or "—",
+                conversion.llm or llm,
                 str(profile.dpi),
                 str(ocr),
-                str(llm),
                 "tak" if profile.output.epub else "nie",
             )
         except Exception as exc:
             # pokaż błędny profil w tabeli zamiast wywalać całą listę
-            table.add_row(name, "—", "—", "—", f"błąd: {exc}")
+            table.add_row(name, "—", "—", "—", "—", "—", f"błąd: {exc}")
     console.print(table)
 
 

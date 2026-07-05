@@ -281,6 +281,123 @@ def test_convert_runs_engine_and_exports_result(
     assert kwargs["engine_kwargs"] == {"lang": "pol+eng"}
 
 
+def test_convert_profile_applies_conversion_preset(
+    cli_test_env: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pdf = cli_test_env / "plik.pdf"
+    pdf.write_bytes(b"%PDF-1.7\n%%EOF\n")
+    profile = cli_test_env / "preset.yaml"
+    profile.write_text(
+        "name: preset\n"
+        "conversion: {engine: fake, lang: eng, llm: claude, "
+        "llm_model: sonnet, llm_mode: by_page}\n",
+        encoding="utf-8",
+    )
+    output_dir = cli_test_env / "out"
+    calls: dict[str, object] = {}
+    fake_engine = SimpleNamespace(
+        name="FakeEngine",
+        supports_ocr=True,
+        is_available=lambda: True,
+    )
+    fake_llm = SimpleNamespace(name="Claude")
+
+    class FakeConverter:
+        def convert(self, *args: object, **kwargs: object) -> ConversionResult:
+            calls["convert"] = (args, kwargs)
+            return ConversionResult(markdown="# wynik", engine_used="FakeEngine", pages=1)
+
+    def fake_export(markdown: str, output_path: Path, epub_backend: str = "pandoc") -> Path:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(markdown, encoding="utf-8")
+        return output_path
+
+    def fake_select_llm(name: str, model: str | None, settings: object) -> object:
+        calls["llm"] = (name, model)
+        return fake_llm
+
+    monkeypatch.setattr(
+        "pdf2md.cli.main._select_engine",
+        lambda name: calls.setdefault("engine", name) and fake_engine,
+    )
+    monkeypatch.setattr("pdf2md.cli.main._select_llm", fake_select_llm)
+    monkeypatch.setattr("pdf2md.cli.main.Converter", FakeConverter)
+    monkeypatch.setattr("pdf2md.cli.main._export_result", fake_export)
+
+    result = CliRunner().invoke(
+        cli,
+        ["convert", str(pdf), "--profile", str(profile), "--output-dir", str(output_dir)],
+    )
+
+    assert result.exit_code == 0
+    assert calls["engine"] == "fake"
+    assert calls["llm"] == ("claude", "sonnet")
+    args, kwargs = calls["convert"]
+    assert args == (str(pdf), fake_engine)
+    assert kwargs["llm"] is fake_llm
+    assert kwargs["llm_mode"] == "by_page"
+    assert kwargs["engine_kwargs"] == {"lang": "eng"}
+
+
+def test_convert_explicit_options_override_profile(
+    cli_test_env: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pdf = cli_test_env / "plik.pdf"
+    pdf.write_bytes(b"%PDF-1.7\n%%EOF\n")
+    profile = cli_test_env / "preset.yaml"
+    profile.write_text(
+        "name: preset\nconversion: {engine: fake, lang: eng, llm: none}\n",
+        encoding="utf-8",
+    )
+    output_dir = cli_test_env / "out"
+    calls: dict[str, object] = {}
+    fake_engine = SimpleNamespace(
+        name="OverrideEngine",
+        supports_ocr=True,
+        is_available=lambda: True,
+    )
+
+    class FakeConverter:
+        def convert(self, *args: object, **kwargs: object) -> ConversionResult:
+            calls["convert"] = (args, kwargs)
+            return ConversionResult(markdown="# wynik", engine_used="OverrideEngine", pages=1)
+
+    def fake_export(markdown: str, output_path: Path, epub_backend: str = "pandoc") -> Path:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(markdown, encoding="utf-8")
+        return output_path
+
+    monkeypatch.setattr(
+        "pdf2md.cli.main._select_engine",
+        lambda name: calls.setdefault("engine", name) and fake_engine,
+    )
+    monkeypatch.setattr("pdf2md.cli.main.Converter", FakeConverter)
+    monkeypatch.setattr("pdf2md.cli.main._export_result", fake_export)
+
+    result = CliRunner().invoke(
+        cli,
+        [
+            "convert",
+            str(pdf),
+            "--profile",
+            str(profile),
+            "--engine",
+            "override",
+            "--lang",
+            "pol",
+            "--output-dir",
+            str(output_dir),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert calls["engine"] == "override"
+    _args, kwargs = calls["convert"]
+    assert kwargs["engine_kwargs"] == {"lang": "pol"}
+
+
 def test_convert_accepts_image_input(
     cli_test_env: Path,
     monkeypatch: pytest.MonkeyPatch,

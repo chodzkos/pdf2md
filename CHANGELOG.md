@@ -4,6 +4,7 @@
 
 ### Dodane
 
+- Historia konwersji (SQLite) + komenda `pdf2md history` (filtr po silniku, eksport CSV).
 - Ekstrakcja obrazów z PDF (`--extract-images`, wymaga extra `[images]`) z referencjami w Markdown i filtrem rozmiaru.
 - **Calibre jako opcjonalny backend eksportu EPUB** (`ebook-convert`), z detekcją w `doctor` i fallbackiem na Pandoc. Wybór backendu przez `[conversion].epub_backend` (`pandoc` domyślnie / `calibre`) lub flagę `convert --epub-backend`; gdy wybrano `calibre`, a `ebook-convert` jest poza PATH, eksport wraca do Pandoca.
 - **`doctor`: gradacja sprzętowa** — rozróżnia stany GPU: karta zbyt stara na GPU (Pascal/Maxwell/Volta < sm_75 → tryb CPU, komunikat wprost, że aktualizacja sterownika nie pomoże — `compute_cap` ma pierwszeństwo przed wersją sterownika) vs za stary sterownik (CUDA < 13 → „zaktualizuj sterownik") vs brak PyTorch (zły venv → „zainstaluj zależności"; gdy przy braku torcha znana karta jest i tak za stara, doctor ostrzega, że instalacja torcha nic nie da); podpowiedź wykonalności per silnik pasuje do przyczyny (np. „karta za stara na GPU" zamiast mylącego „zaktualizuj sterownik"); nazwa i VRAM karty pokazywane z `nvidia-smi` także bez działającego CUDA (koniec pustego „Urządzenie: brak", gdy karta fizycznie jest). Wykonalność każdego silnika nadal względem wykrytego VRAM (✅ zmieści się / ⚠️ na granicy — do dostrojenia / ❌ za mało). Pomoc (zakładka „Instalacja silników") opisuje wymóg sterownika (jeden toolkit `+cu130`) i zależność „który silnik ruszy" od VRAM.

@@ -193,7 +193,10 @@ class ConversionWorker(QThread):
                     duration_s=elapsed,
                 )
                 self.progress.emit(filename, 100)
-                self.file_done.emit(pdf_path, out_path or "", elapsed)
+                done_output = history_output if "scan pipeline" in engine.name.lower() else out_path
+                if done_output and not Path(done_output).is_file():
+                    done_output = None
+                self.file_done.emit(pdf_path, done_output or "", elapsed)
                 success += 1
                 _ = result
             except ConversionCancelled:

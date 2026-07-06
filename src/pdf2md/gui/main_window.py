@@ -436,8 +436,10 @@ class MainWindow(QMainWindow):
     def _on_file_done(self, src: str, dst: str, elapsed: float) -> None:
         name = Path(src).name
         self._log_panel.log_info(f"✓ {name} → {dst}  ({elapsed:.1f}s)")
+        if not dst:
+            return
         output = Path(dst)
-        if output.exists():
+        if output.is_file():
             self._last_markdown_outputs.append(output)
             self._preview.setPlainText(output.read_text(encoding="utf-8"))
             self._tabs.setCurrentWidget(self._preview)

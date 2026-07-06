@@ -159,6 +159,21 @@ ENGINE_CATALOG: tuple[dict[str, object], ...] = (
 )
 
 
+def _is_windows_platform() -> bool:
+    return sys.platform == "win32"
+
+
+def _reconfigure_windows_stdio() -> None:
+    """Force UTF-8 stdio on Windows so Rich can print emoji under redirected output."""
+    if not _is_windows_platform():
+        return
+
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            reconfigure(encoding="utf-8", errors="replace")
+
+
 def _startup(verbose: bool = False) -> Settings:
     setup_logging(verbose=verbose)
     settings = get_settings()
@@ -647,6 +662,7 @@ def _detect_os_label() -> str:
 @click.pass_context
 def cli(ctx: click.Context) -> None:
     """Konwerter PDF do Markdown z obsługą wielu silników i modeli LLM."""
+    _reconfigure_windows_stdio()
     ctx.ensure_object(dict)
     ctx.obj["settings"] = _startup(verbose=False)
 

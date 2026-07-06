@@ -8,6 +8,20 @@ from pathlib import Path
 from loguru import logger
 
 
+def _is_windows_platform() -> bool:
+    return sys.platform == "win32"
+
+
+def _reconfigure_windows_stderr() -> None:
+    """Force UTF-8 stderr on Windows before loguru attaches its console sink."""
+    if not _is_windows_platform():
+        return
+
+    reconfigure = getattr(sys.stderr, "reconfigure", None)
+    if callable(reconfigure):
+        reconfigure(encoding="utf-8", errors="replace")
+
+
 def setup_logging(
     log_dir: Path | None = None,
     level: str = "INFO",
@@ -21,6 +35,7 @@ def setup_logging(
         verbose: Jeśli True, ustawia poziom DEBUG na konsoli.
     """
     logger.remove()  # usuń domyślny handler loguru
+    _reconfigure_windows_stderr()
 
     console_level = "DEBUG" if verbose else level
     logger.add(

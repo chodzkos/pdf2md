@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import importlib.metadata
+import io
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -166,6 +168,27 @@ def test_doctor_plain_via_env(cli_test_env: Path, monkeypatch: pytest.MonkeyPatc
 
     assert result.exit_code == 0
     assert "\x1b[" not in result.output
+
+
+def test_windows_stdio_reconfigure_handles_cp1250_streams(
+    cli_test_env: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from pdf2md.cli import main as cli_main
+
+    stdout = io.TextIOWrapper(io.BytesIO(), encoding="cp1250")
+    stderr = io.TextIOWrapper(io.BytesIO(), encoding="cp1250")
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(sys, "stdout", stdout)
+    monkeypatch.setattr(sys, "stderr", stderr)
+
+    cli_main._reconfigure_windows_stdio()
+
+    assert sys.stdout.encoding is not None
+    assert sys.stderr.encoding is not None
+    assert sys.stdout.encoding.lower().replace("-", "") == "utf8"
+    assert sys.stderr.encoding.lower().replace("-", "") == "utf8"
+    assert sys.stdout.errors == "replace"
+    assert sys.stderr.errors == "replace"
 
 
 def test_doctor_plain_sorts_ollama_models(

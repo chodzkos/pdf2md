@@ -21,6 +21,8 @@ _ENV_VARS_TO_CLEAR = (
     "LLM_MODE",
     "MINERU_BACKEND",
     "THEME",
+    "DEFAULT_OUTPUT_DIR",
+    "PADDLEOCR_VL_PROMPT",
 )
 
 
@@ -215,6 +217,45 @@ def test_save_settings_writes_config_atomically(isolated_config: Path) -> None:
     assert data["api_keys"]["openai_api_key"] == "open"
     assert data["api_keys"]["gemini_api_key"] == "gem"
     assert not list(isolated_config.parent.glob("*.tmp"))
+
+
+def test_save_settings_round_trips_windows_path(isolated_config: Path) -> None:
+    """Ścieżka Windows z backslashami jest zapisywana jako poprawny TOML."""
+    settings = get_settings()
+    settings.default_output_dir = r"C:\Users\test\Documents"
+
+    save_settings(settings)
+
+    config._settings_cache = None
+    assert get_settings().default_output_dir == r"C:\Users\test\Documents"
+
+
+def test_save_settings_round_trips_prompt_with_quote_and_newline(
+    isolated_config: Path,
+) -> None:
+    """Prompt z cudzysłowem i newline przechodzi pełny cykl save/load."""
+    settings = get_settings()
+    settings.paddleocr_vl_prompt = 'OCR "dokładny"\nZachowaj układ.'
+
+    save_settings(settings)
+
+    config._settings_cache = None
+    assert get_settings().paddleocr_vl_prompt == 'OCR "dokładny"\nZachowaj układ.'
+
+
+def test_get_settings_recovers_from_corrupt_config(isolated_config: Path) -> None:
+    """Uszkodzony TOML jest backupowany, a config wraca do wartości domyślnych."""
+    isolated_config.parent.mkdir(parents=True)
+    broken_content = '[conversion]\ndefault_output_dir = "C:\\Users"\n'
+    isolated_config.write_text(broken_content, encoding="utf-8")
+
+    settings = get_settings()
+
+    broken_files = list(isolated_config.parent.glob("config.toml.broken-*"))
+    assert len(broken_files) == 1
+    assert broken_files[0].read_text(encoding="utf-8") == broken_content
+    assert settings.default_output_dir == ""
+    assert tomllib.loads(isolated_config.read_text(encoding="utf-8"))
 
 
 def test_get_settings_returns_cached_instance(isolated_config: Path) -> None:

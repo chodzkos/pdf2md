@@ -6,13 +6,17 @@ Kolejność ładowania: config.toml → .env (jeśli istnieje) → cache.
 
 from __future__ import annotations
 
+import json
 import os
+import shutil
 import tempfile
 import tomllib
 from contextlib import suppress
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from loguru import logger
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
@@ -94,8 +98,26 @@ def _ensure_config_file() -> dict[str, Any]:
     _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     if not _CONFIG_FILE.exists():
         _CONFIG_FILE.write_text(_DEFAULT_TOML, encoding="utf-8")
-    with open(_CONFIG_FILE, "rb") as f:
-        return tomllib.load(f)
+    try:
+        with open(_CONFIG_FILE, "rb") as f:
+            return tomllib.load(f)
+    except tomllib.TOMLDecodeError:
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+        broken_path = _CONFIG_FILE.with_name(f"{_CONFIG_FILE.name}.broken-{timestamp}")
+        shutil.copy2(_CONFIG_FILE, broken_path)
+        logger.warning(
+            "Nieprawidłowy TOML w configu {}. Kopia uszkodzonego pliku: {}. "
+            "Odtwarzam domyślną konfigurację.",
+            _CONFIG_FILE,
+            broken_path,
+        )
+        _CONFIG_FILE.write_text(_DEFAULT_TOML, encoding="utf-8")
+        return tomllib.loads(_DEFAULT_TOML)
+
+
+def _toml_str(value: str) -> str:
+    """Zwraca string poprawnie zescapowany jako TOML basic string."""
+    return json.dumps(value, ensure_ascii=False)
 
 
 def _load_toml_flat() -> dict[str, Any]:
@@ -267,49 +289,57 @@ def save_settings(settings: Settings) -> None:
         "# Konfiguracja pdf2md\n",
         "\n[llm]\n",
         f"enabled = {str(settings.llm_enabled).lower()}\n",
-        f'provider = "{settings.llm_provider}"\n',
-        f'mode = "{settings.llm_mode}"\n',
-        f'anthropic_model = "{settings.anthropic_model}"\n',
-        f'openai_model = "{settings.openai_model}"\n',
-        f'gemini_model = "{settings.gemini_model}"\n',
-        f'ollama_model = "{settings.ollama_model}"\n',
-        f'ollama_url = "{settings.ollama_url}"\n',
+        f"provider = {_toml_str(settings.llm_provider)}\n",
+        f"mode = {_toml_str(settings.llm_mode)}\n",
+        f"anthropic_model = {_toml_str(settings.anthropic_model)}\n",
+        f"openai_model = {_toml_str(settings.openai_model)}\n",
+        f"gemini_model = {_toml_str(settings.gemini_model)}\n",
+        f"ollama_model = {_toml_str(settings.ollama_model)}\n",
+        f"ollama_url = {_toml_str(settings.ollama_url)}\n",
         "\n[conversion]\n",
-        f'default_engine = "{settings.default_engine}"\n',
-        f'default_output_dir = "{settings.default_output_dir}"\n',
-        f'default_language = "{settings.default_language}"\n',
-        f'epub_backend = "{settings.epub_backend}"\n',
+        f"default_engine = {_toml_str(settings.default_engine)}\n",
+        f"default_output_dir = {_toml_str(settings.default_output_dir)}\n",
+        f"default_language = {_toml_str(settings.default_language)}\n",
+        f"epub_backend = {_toml_str(settings.epub_backend)}\n",
         "\n[marker]\n",
-        f'marker_device = "{settings.marker_device}"\n',
+        f"marker_device = {_toml_str(settings.marker_device)}\n",
         f"marker_workers = {settings.marker_workers}\n",
         f"marker_max_pages = {settings.marker_max_pages}\n",
-        f'marker_torch_device = "{settings.marker_torch_device}"\n',
+        f"marker_torch_device = {_toml_str(settings.marker_torch_device)}\n",
         f"marker_recognition_batch_size = {settings.marker_recognition_batch_size}\n",
         f"marker_detector_batch_size = {settings.marker_detector_batch_size}\n",
         f"marker_layout_batch_size = {settings.marker_layout_batch_size}\n",
         f"marker_table_rec_batch_size = {settings.marker_table_rec_batch_size}\n",
         "\n[docling]\n",
-        f'docling_device = "{settings.docling_device}"\n',
+        f"docling_device = {_toml_str(settings.docling_device)}\n",
         "\n[mineru]\n",
-        f'mineru_backend = "{settings.mineru_backend}"\n',
+        f"mineru_backend = {_toml_str(settings.mineru_backend)}\n",
         "\n[olmocr]\n",
-        f'olmocr_python = "{settings.olmocr_python}"\n',
-        f'olmocr_model = "{settings.olmocr_model}"\n',
+        f"olmocr_python = {_toml_str(settings.olmocr_python)}\n",
+        f"olmocr_model = {_toml_str(settings.olmocr_model)}\n",
         f"olmocr_max_model_len = {settings.olmocr_max_model_len}\n",
         f"olmocr_gpu_memory_utilization = {settings.olmocr_gpu_memory_utilization}\n",
-        f'olmocr_server_url = "{settings.olmocr_server_url}"\n',
+        f"olmocr_server_url = {_toml_str(settings.olmocr_server_url)}\n",
         "\n[paddleocr_vl]\n",
-        f'paddleocr_vl_url = "{settings.paddleocr_vl_url}"\n',
-        f'paddleocr_vl_model = "{settings.paddleocr_vl_model}"\n',
-        f'paddleocr_vl_prompt = "{settings.paddleocr_vl_prompt}"\n',
+        f"paddleocr_vl_url = {_toml_str(settings.paddleocr_vl_url)}\n",
+        f"paddleocr_vl_model = {_toml_str(settings.paddleocr_vl_model)}\n",
+        f"paddleocr_vl_prompt = {_toml_str(settings.paddleocr_vl_prompt)}\n",
         f"paddleocr_vl_timeout = {settings.paddleocr_vl_timeout}\n",
         "\n[ui]\n",
-        f'theme = "{settings.theme}"\n',
+        f"theme = {_toml_str(settings.theme)}\n",
         "\n[api_keys]\n",
-        f'anthropic_api_key = "{settings.anthropic_api_key}"\n',
-        f'openai_api_key = "{settings.openai_api_key}"\n',
-        f'gemini_api_key = "{settings.gemini_api_key}"\n',
+        f"anthropic_api_key = {_toml_str(settings.anthropic_api_key)}\n",
+        f"openai_api_key = {_toml_str(settings.openai_api_key)}\n",
+        f"gemini_api_key = {_toml_str(settings.gemini_api_key)}\n",
     ]
+    content = "".join(lines)
+    try:
+        tomllib.loads(content)
+    except tomllib.TOMLDecodeError as exc:
+        raise RuntimeError(
+            "Wygenerowana konfiguracja TOML jest niepoprawna; zapis przerwany"
+        ) from exc
+
     fd, tmp_path = tempfile.mkstemp(
         prefix=f"{_CONFIG_FILE.name}.",
         suffix=".tmp",
@@ -318,7 +348,7 @@ def save_settings(settings: Settings) -> None:
     )
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as tmp_file:
-            tmp_file.write("".join(lines))
+            tmp_file.write(content)
         os.replace(tmp_path, _CONFIG_FILE)
     except Exception:
         with suppress(FileNotFoundError):

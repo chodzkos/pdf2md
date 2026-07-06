@@ -5,6 +5,7 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
+from loguru import logger
 from PySide6.QtCore import QThread, Signal
 
 from pdf2md.core import history as conversion_history
@@ -74,6 +75,10 @@ class ConversionWorker(QThread):
         self._scan_profile = scan_profile
         self._docling_device = docling_device or settings.docling_device
         self._extract_images = extract_images
+        self._success_count = 0
+        self._error_count = 0
+        self._run_started_at: float | None = None
+        self._completion_emitted = False
 
     def cancel(self) -> None:
         """Prosi o kooperatywne przerwanie — sprawdzane między stronami i plikami."""
@@ -81,6 +86,23 @@ class ConversionWorker(QThread):
 
     def run(self) -> None:
         """Iteruje po plikach, konwertuje każdy i emituje sygnały."""
+        self._run_started_at = time.monotonic()
+        self._success_count = 0
+        self._error_count = 0
+        self._completion_emitted = False
+        try:
+            self._run_impl()
+        except Exception:
+            logger.exception("Nieobsłużony wyjątek w workerze konwersji")
+            if not self._completion_emitted:
+                if self._success_count or self._error_count:
+                    elapsed = time.monotonic() - self._run_started_at
+                    self._emit_all_done(self._success_count, self._error_count, elapsed)
+                else:
+                    self._emit_all_done(0, len(self._files), 0.0)
+
+    def _run_impl(self) -> None:
+        """Wykonuje konwersję; run() opakowuje tę metodę w granicę bezpieczeństwa wątku."""
         converter = Converter()
         engine = engine_registry.get_by_name(self._engine_name)
         llm = None
@@ -100,7 +122,8 @@ class ConversionWorker(QThread):
                     error_msg=message,
                 )
                 self.file_error.emit(f, message)
-            self.all_done.emit(0, len(self._files), 0.0)
+            self._error_count = len(self._files)
+            self._emit_all_done(0, len(self._files), 0.0)
             return
 
         # Override modelu per-uruchomienie: ma pierwszeństwo nad config.<provider>_model,
@@ -131,6 +154,8 @@ class ConversionWorker(QThread):
         total_start = time.monotonic()
         success = 0
         errors = 0
+        self._success_count = 0
+        self._error_count = 0
         was_cancelled = False
 
         # Silniki wspierające anulowanie per-strona dostają callback should_cancel.
@@ -198,6 +223,7 @@ class ConversionWorker(QThread):
                     done_output = None
                 self.file_done.emit(pdf_path, done_output or "", elapsed)
                 success += 1
+                self._success_count = success
                 _ = result
             except ConversionCancelled:
                 # Bieżący plik NIE jest kompletny — nie liczony jako sukces.
@@ -225,6 +251,24 @@ class ConversionWorker(QThread):
                 self.progress.emit(filename, 0)
                 self.file_error.emit(pdf_path, str(exc))
                 errors += 1
+                self._error_count = errors
+            except Exception as exc:
+                # Granica wątku GUI: nieznany błąd pojedynczego silnika/pliku nie może
+                # zabić QThread bez file_error/all_done, bo wtedy UI zostaje zablokowane.
+                logger.exception("Nieobsłużony błąd konwersji pliku {}", pdf_path)
+                self._record_history(
+                    pdf_path=pdf_path,
+                    engine_name=engine.name,
+                    llm=llm,
+                    output_path=out_path,
+                    status="error",
+                    duration_s=time.monotonic() - file_start,
+                    error_msg=str(exc),
+                )
+                self.progress.emit(filename, 0)
+                self.file_error.emit(pdf_path, str(exc))
+                errors += 1
+                self._error_count = errors
 
             # Emituj łączny postęp między plikami
             overall = int((i + 1) / len(self._files) * 100)
@@ -233,9 +277,17 @@ class ConversionWorker(QThread):
         total_elapsed = time.monotonic() - total_start
         if was_cancelled:
             self._release_after_cancel(engine, llm)
-            self.cancelled.emit(success, errors, total_elapsed)
+            self._emit_cancelled(success, errors, total_elapsed)
         else:
-            self.all_done.emit(success, errors, total_elapsed)
+            self._emit_all_done(success, errors, total_elapsed)
+
+    def _emit_all_done(self, success: int, errors: int, elapsed: float) -> None:
+        self._completion_emitted = True
+        self.all_done.emit(success, errors, elapsed)
+
+    def _emit_cancelled(self, success: int, errors: int, elapsed: float) -> None:
+        self._completion_emitted = True
+        self.cancelled.emit(success, errors, elapsed)
 
     def _should_extract_images(self, engine: ConversionEngine, input_path: str) -> bool:
         return (

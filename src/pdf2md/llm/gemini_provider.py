@@ -9,8 +9,11 @@ from loguru import logger
 
 from pdf2md.core.config import get_settings
 from pdf2md.core.prompts import POST_PROCESSING_PROMPT
+from pdf2md.llm import SDK_PACKAGES, missing_sdk_message
 from pdf2md.llm.base import LLMProvider, LLMResult
 from pdf2md.llm.base_mixin import PostprocessMixin
+
+PROVIDER_KEY = "gemini"
 
 
 class GeminiProvider(PostprocessMixin, LLMProvider):
@@ -26,7 +29,7 @@ class GeminiProvider(PostprocessMixin, LLMProvider):
         if not get_settings().gemini_api_key:
             return False
         try:
-            importlib.metadata.version("google-genai")
+            importlib.metadata.version(SDK_PACKAGES[PROVIDER_KEY])
         except importlib.metadata.PackageNotFoundError:
             return False
         return True
@@ -36,9 +39,7 @@ class GeminiProvider(PostprocessMixin, LLMProvider):
             genai = importlib.import_module("google.genai")
             types = importlib.import_module("google.genai.types")
         except ImportError as exc:
-            raise RuntimeError(
-                "google-genai nie jest zainstalowany. Uruchom: uv sync --extra llm"
-            ) from exc
+            raise RuntimeError(missing_sdk_message(PROVIDER_KEY)) from exc
         settings = get_settings()
         model_name = settings.gemini_model or self.default_model
         client = genai.Client(api_key=settings.gemini_api_key)
@@ -69,9 +70,7 @@ class GeminiProvider(PostprocessMixin, LLMProvider):
             genai = importlib.import_module("google.genai")
             types = importlib.import_module("google.genai.types")
         except ImportError as exc:
-            raise RuntimeError(
-                "google-genai nie jest zainstalowany. Uruchom: uv sync --extra llm"
-            ) from exc
+            raise RuntimeError(missing_sdk_message(PROVIDER_KEY)) from exc
         settings = get_settings()
         model_name = settings.gemini_model or self.default_model
         client = genai.Client(api_key=settings.gemini_api_key)

@@ -27,6 +27,7 @@ from pdf2md.core.config import Settings, get_settings, save_settings
 from pdf2md.core.registry import engine_registry
 from pdf2md.detection.hardware import cuda_usable
 from pdf2md.gui.theming import follow_app_titlebar, themed_message_box
+from pdf2md.llm import sdk_package_for_provider
 
 
 class SettingsDialog(QDialog):
@@ -224,11 +225,7 @@ class SettingsDialog(QDialog):
             ).exec()
             return
 
-        package = {
-            "anthropic": "anthropic",
-            "openai": "openai",
-            "gemini": "google-generativeai",
-        }[provider]
+        package = sdk_package_for_provider(provider)
         try:
             importlib.metadata.version(package)
         except importlib.metadata.PackageNotFoundError:
@@ -244,7 +241,8 @@ class SettingsDialog(QDialog):
             self,
             QMessageBox.Icon.Information,
             "Test klucza",
-            "Klucz jest wpisany, a pakiet SDK dostępny.",
+            f"Klucz jest wpisany, a pakiet SDK ({package}) dostępny. "
+            "Uwaga: nie wykonano zapytania do API.",
         ).exec()
 
     def _fetch_ollama_models(self) -> list[str]:

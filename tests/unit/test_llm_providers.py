@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from pdf2md.llm import SDK_PACKAGES
 from pdf2md.llm.anthropic_provider import AnthropicProvider
 from pdf2md.llm.base import LLMResult
 from pdf2md.llm.gemini_provider import GeminiProvider
@@ -33,6 +34,49 @@ def _fake_settings(**kwargs: object) -> SimpleNamespace:
     }
     defaults.update(kwargs)
     return SimpleNamespace(**defaults)
+
+
+@pytest.mark.parametrize(
+    ("provider_key", "provider_cls", "settings_target", "settings_kwargs"),
+    [
+        (
+            "anthropic",
+            AnthropicProvider,
+            "pdf2md.llm.anthropic_provider.get_settings",
+            {"anthropic_api_key": "sk-test"},
+        ),
+        (
+            "openai",
+            OpenAIProvider,
+            "pdf2md.llm.openai_provider.get_settings",
+            {"openai_api_key": "sk-test"},
+        ),
+        (
+            "gemini",
+            GeminiProvider,
+            "pdf2md.llm.gemini_provider.get_settings",
+            {"gemini_api_key": "AIza-test"},
+        ),
+    ],
+)
+def test_sdk_package_map_matches_provider_is_available_checks(
+    provider_key: str,
+    provider_cls: type[AnthropicProvider] | type[OpenAIProvider] | type[GeminiProvider],
+    settings_target: str,
+    settings_kwargs: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    checked_packages: list[str] = []
+    monkeypatch.setattr(settings_target, lambda: _fake_settings(**settings_kwargs))
+
+    def fake_version(package: str) -> str:
+        checked_packages.append(package)
+        return "1.0.0"
+
+    monkeypatch.setattr(importlib.metadata, "version", fake_version)
+
+    assert provider_cls().is_available() is True
+    assert checked_packages == [SDK_PACKAGES[provider_key]]
 
 
 # ---------------------------------------------------------------------------

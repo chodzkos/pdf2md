@@ -37,6 +37,7 @@ from pdf2md.detection.hardware import HardwareInfo, detect_hardware, is_compute_
 from pdf2md.detection.pdf_type import detect_pdf_type
 from pdf2md.engines.base import ConversionEngine
 from pdf2md.exporters import EPUB_BACKENDS, MarkdownExporter, build_epub_exporter
+from pdf2md.llm import PROVIDER_MODEL_FIELDS, normalize_provider_key
 from pdf2md.llm.base import LLMProvider
 from pdf2md.utils.logging import setup_logging
 
@@ -198,23 +199,15 @@ def _find_engine(name: str) -> ConversionEngine | None:
 
 
 def _provider_key(provider: LLMProvider) -> str:
-    name = provider.name.lower()
-    if "ollama" in name:
-        return "ollama"
-    if "claude" in name or "anthropic" in name:
-        return "claude"
-    if "openai" in name or "gpt" in name:
-        return "openai"
-    if "gemini" in name or "google" in name:
-        return "gemini"
-    return _normalize_name(provider.name)
+    return normalize_provider_key(provider.name)
 
 
 def _find_provider(name: str) -> LLMProvider | None:
     if name == "none":
         return None
+    wanted = normalize_provider_key(name)
     for provider in llm_registry.get_all():
-        if _provider_key(provider) == name:
+        if _provider_key(provider) == wanted:
             return provider
     return None
 
@@ -348,12 +341,7 @@ def _select_llm(llm_name: str, llm_model: str | None, settings: Settings) -> LLM
         raise click.ClickException(f"Nieznany dostawca LLM: {llm_name}")
 
     if llm_model:
-        model_field = {
-            "ollama": "ollama_model",
-            "claude": "anthropic_model",
-            "openai": "openai_model",
-            "gemini": "gemini_model",
-        }[llm_name]
+        model_field = PROVIDER_MODEL_FIELDS[normalize_provider_key(llm_name)]
         setattr(settings, model_field, llm_model)
 
     if not provider.is_available():
@@ -570,7 +558,7 @@ def _print_engine_table(hw: HardwareInfo | None = None, out: Console | None = No
 def _llm_status(provider: LLMProvider, settings: Settings) -> str:
     key = _provider_key(provider)
     api_key = {
-        "claude": settings.anthropic_api_key,
+        "anthropic": settings.anthropic_api_key,
         "openai": settings.openai_api_key,
         "gemini": settings.gemini_api_key,
     }.get(key, "")
@@ -589,7 +577,7 @@ def _print_llm_table(settings: Settings) -> None:
 
     model_by_key = {
         "ollama": settings.ollama_model,
-        "claude": settings.anthropic_model,
+        "anthropic": settings.anthropic_model,
         "openai": settings.openai_model,
         "gemini": settings.gemini_model,
     }

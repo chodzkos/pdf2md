@@ -9,8 +9,11 @@ from loguru import logger
 
 from pdf2md.core.config import get_settings
 from pdf2md.core.prompts import POST_PROCESSING_PROMPT
+from pdf2md.llm import SDK_PACKAGES, missing_sdk_message
 from pdf2md.llm.base import LLMProvider, LLMResult
 from pdf2md.llm.base_mixin import PostprocessMixin
+
+PROVIDER_KEY = "openai"
 
 
 class OpenAIProvider(PostprocessMixin, LLMProvider):
@@ -26,13 +29,16 @@ class OpenAIProvider(PostprocessMixin, LLMProvider):
         if not get_settings().openai_api_key:
             return False
         try:
-            importlib.metadata.version("openai")
+            importlib.metadata.version(SDK_PACKAGES[PROVIDER_KEY])
         except importlib.metadata.PackageNotFoundError:
             return False
         return True
 
     def _call_llm(self, text: str, instructions: str) -> str:
-        openai = importlib.import_module("openai")
+        try:
+            openai = importlib.import_module("openai")
+        except ImportError as exc:
+            raise RuntimeError(missing_sdk_message(PROVIDER_KEY)) from exc
         settings = get_settings()
         model = settings.openai_model or self.default_model
         client = openai.OpenAI(api_key=settings.openai_api_key)
@@ -60,7 +66,10 @@ class OpenAIProvider(PostprocessMixin, LLMProvider):
 
     def correct(self, text: str, *, system_prompt: str, temperature: float = 0.0) -> str:
         """Korekta: system=system_prompt, user=text, bez POST_PROCESSING_PROMPT."""
-        openai = importlib.import_module("openai")
+        try:
+            openai = importlib.import_module("openai")
+        except ImportError as exc:
+            raise RuntimeError(missing_sdk_message(PROVIDER_KEY)) from exc
         settings = get_settings()
         model = settings.openai_model or self.default_model
         client = openai.OpenAI(api_key=settings.openai_api_key)

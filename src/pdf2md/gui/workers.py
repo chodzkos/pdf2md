@@ -20,21 +20,13 @@ from pdf2md.core.input_types import is_image_input
 from pdf2md.core.registry import engine_registry, llm_registry
 from pdf2md.engines.base import ConversionCancelled, ConversionEngine
 from pdf2md.engines.vlm_base import VLMEngine
+from pdf2md.llm import PROVIDER_MODEL_FIELDS, normalize_provider_key
 from pdf2md.llm.base import LLMProvider
 
 
 def _model_field_for_provider(provider_name: str) -> str | None:
     """Mapuje nazwę dostawcy na pole modelu w Settings (dla override per-uruchomienie)."""
-    name = provider_name.lower()
-    if "ollama" in name:
-        return "ollama_model"
-    if "claude" in name or "anthropic" in name:
-        return "anthropic_model"
-    if "openai" in name or "gpt" in name:
-        return "openai_model"
-    if "gemini" in name or "google" in name:
-        return "gemini_model"
-    return None
+    return PROVIDER_MODEL_FIELDS.get(normalize_provider_key(provider_name))
 
 
 def _has_in_place_images(engine_name: str) -> bool:

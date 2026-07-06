@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -57,6 +58,11 @@ class _FakeVLMEngine(VLMEngine):
     def _ocr_page(self, image_path: str) -> str:
         self.pages_done += 1
         return "tekst strony"
+
+
+class _ValueErrorConverter:
+    def convert(self, *args: object, **kwargs: object) -> object:
+        raise ValueError("silnik wybuchł")
 
 
 def _multipage_pdf(tmp_path: Path) -> Path:
@@ -124,4 +130,31 @@ def test_no_cancel_completes_normally(
 
     assert engine.pages_done == 3  # wszystkie strony
     assert done and done[0][0] == 1  # 1 ukończony plik
+    assert not cancelled
+
+
+def test_unexpected_engine_error_emits_file_error_and_all_done(
+    qapp: QApplication,
+    tmp_path: Path,
+) -> None:
+    """Nieoczekiwany wyjątek silnika nie może zgubić końcowego sygnału workera."""
+    pdf = tmp_path / "broken.pdf"
+    pdf.write_bytes(b"%PDF-1.7\n")
+    worker = ConversionWorker(
+        files=[str(pdf)], engine_name="BrokenEngine", output_dir=str(tmp_path / "out")
+    )
+    engine = SimpleNamespace(name="BrokenEngine", supports_ocr=False)
+
+    errors: list[tuple[str, str]] = []
+    done: list[tuple[int, int, float]] = []
+    cancelled: list[tuple[int, int, float]] = []
+    worker.file_error.connect(lambda path, error: errors.append((path, error)))
+    worker.all_done.connect(lambda s, e, t: done.append((s, e, t)))
+    worker.cancelled.connect(lambda s, e, t: cancelled.append((s, e, t)))
+
+    worker._convert_all(_ValueErrorConverter(), engine, None)
+
+    assert errors == [(str(pdf), "silnik wybuchł")]
+    assert done and done[0][0] == 0
+    assert done[0][1] == 1
     assert not cancelled

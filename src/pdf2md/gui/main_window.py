@@ -16,7 +16,7 @@ from chodzkos_gui_kit.qt.widgets import (
 )
 from loguru import logger
 from PySide6.QtCore import QSize, QUrl
-from PySide6.QtGui import QDesktopServices, QIcon
+from PySide6.QtGui import QCloseEvent, QDesktopServices, QIcon
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -307,6 +307,28 @@ class MainWindow(QMainWindow):
         """Po zmianie motywu przemaluj log wg nowej palety (re-render robi kit LogView)."""
         self._log_panel.set_theme(current_palette())
 
+    def closeEvent(self, event: QCloseEvent) -> None:
+        """Zamyka okno dopiero po kooperatywnym zatrzymaniu workera."""
+        worker = self._worker
+        if worker is None or not worker.isRunning():
+            event.accept()
+            return
+
+        self._log_panel.log_warning("Zamykanie — przerywam konwersję…")
+        worker.cancel()
+        if worker.wait(15000):
+            self._worker = None
+            event.accept()
+            return
+
+        event.ignore()
+        themed_message_box(
+            self,
+            QMessageBox.Icon.Warning,
+            "Konwersja w toku",
+            "Nie udało się przerwać konwersji w 15 sekund. Spróbuj ponownie za chwilę.",
+        ).exec()
+
     # ------------------------------------------------------------------
     # Sloty przycisków
     # ------------------------------------------------------------------
@@ -355,6 +377,11 @@ class MainWindow(QMainWindow):
         QDesktopServices.openUrl(QUrl("https://github.com/chodzkos/pdf2md"))
 
     def _on_convert(self) -> None:
+        if self._worker is not None and self._worker.isRunning():
+            self._log_panel.log_warning("Konwersja już trwa — poczekaj na zakończenie.")
+            return
+        self._worker = None
+
         # kit FileList.files() zwraca list[Path]; worker oczekuje str.
         files = [str(path) for path in self._file_list.files()]
         if not files:
@@ -417,6 +444,7 @@ class MainWindow(QMainWindow):
 
     def _on_cancelled(self, success: int, errors: int, total: float) -> None:
         """Konwersja anulowana — UI wraca do spoczynku, ukończone pliki zostają."""
+        self._finish_worker()
         self._btn_convert.setEnabled(True)
         self._btn_cancel.setEnabled(False)
         self._progress.setValue(0)
@@ -449,6 +477,7 @@ class MainWindow(QMainWindow):
         self._log_panel.log_error(f"✗ {name}: {message}")
 
     def _on_all_done(self, success: int, errors: int, total: float) -> None:
+        self._finish_worker()
         self._btn_convert.setEnabled(True)
         self._btn_cancel.setEnabled(False)
         self._progress.setValue(100)
@@ -461,6 +490,9 @@ class MainWindow(QMainWindow):
             )
 
         self._show_done_message(success, errors, total)
+
+    def _finish_worker(self) -> None:
+        self._worker = None
 
     def _show_done_message(self, success: int, errors: int, total: float) -> None:
         message = QMessageBox(self)

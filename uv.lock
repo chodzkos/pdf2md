@@ -259,12 +259,12 @@ wheels = [
 [[package]]
 name = "chodzkos-detection"
 version = "0.1.1"
-source = { git = "https://github.com/chodzkos/chodzkos-detection?rev=v0.1.1#48cf49e906abb2f876814370ff9d8476ae020054" }
+source = { git = "https://github.com/chodzkos/chodzkos-detection?rev=48cf49e906abb2f876814370ff9d8476ae020054#48cf49e906abb2f876814370ff9d8476ae020054" }
 
 [[package]]
 name = "chodzkos-gui-kit"
 version = "0.5.0"
-source = { git = "https://github.com/chodzkos/gui-kit?rev=v0.5.0#b6037cf448d3bca67bedaaaa8d9f3ef236b96803" }
+source = { git = "https://github.com/chodzkos/gui-kit?rev=09938082b2b5d2250fb1adfb2fd238a8199366ec#09938082b2b5d2250fb1adfb2fd238a8199366ec" }
 dependencies = [
     { name = "platformdirs" },
 ]
@@ -1881,8 +1881,8 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "anthropic", marker = "extra == 'llm'", specifier = ">=0.29" },
-    { name = "chodzkos-detection", git = "https://github.com/chodzkos/chodzkos-detection?rev=v0.1.1" },
-    { name = "chodzkos-gui-kit", extras = ["qt"], git = "https://github.com/chodzkos/gui-kit?rev=v0.5.0" },
+    { name = "chodzkos-detection", git = "https://github.com/chodzkos/chodzkos-detection?rev=48cf49e906abb2f876814370ff9d8476ae020054" },
+    { name = "chodzkos-gui-kit", extras = ["qt"], git = "https://github.com/chodzkos/gui-kit?rev=09938082b2b5d2250fb1adfb2fd238a8199366ec" },
     { name = "click", specifier = ">=8.1" },
     { name = "docling", marker = "extra == 'docling'", specifier = ">=2.0" },
     { name = "docling", marker = "extra == 'engines-core'", specifier = ">=2.0" },

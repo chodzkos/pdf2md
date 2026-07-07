@@ -1,0 +1,21 @@
+version: 2
+
+# UWAGA: Dependabot NIE obsługuje pinów git (rev = <SHA>) w [tool.uv.sources].
+# Wewnętrzne zależności chodzkos-gui-kit i chodzkos-detection podbijamy RĘCZNIE
+# (nowy SHA + komentarz z wersją tagu w pyproject.toml). Poniższe ekosystemy
+# pokrywają tylko zależności z PyPI oraz akcje GitHub (piny SHA akcji Dependabot
+# podbija sam, zachowując komentarz z wersją).
+updates:
+  # Zależności Pythona zarządzane przez uv (pyproject.toml + uv.lock).
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  # Akcje w workflowach GitHub Actions — Dependabot podbija piny SHA
+  # zachowując komentarz z wersją (np. # v4.2.2).
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

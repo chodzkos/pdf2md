@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import copy
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from typing import Self
 
 # Dozwolone tryby przetwarzania przez LLM
 LLM_MODES = frozenset({"none", "whole_document", "by_page", "by_chunk", "by_heading"})
@@ -25,6 +27,35 @@ class LLMProvider(ABC):
     description: str
     requires_api_key: bool
     default_model: str  # bezpieczny fallback, nadpisywany przez Settings
+
+    #: Model wymuszony na czas jednego uruchomienia (override). Ustawiany WYŁĄCZNIE przez
+    #: ``bind_model`` na płytkiej kopii — nigdy nie mutujemy współdzielonego singletona z
+    #: rejestru ani globalnego ``Settings``. ``None`` → model bierzemy z konfiguracji/fallbacku.
+    model_override: str | None = None
+
+    def bind_model(self, model: str | None) -> Self:
+        """Zwraca dostawcę z modelem wymuszonym per-uruchomienie.
+
+        Bez ``model`` zwraca ``self``. Z modelem zwraca **płytką kopię** z ustawionym
+        ``model_override`` — dzięki temu wołający (worker/CLI) przekazuje override jawnie,
+        bez mutacji współdzielonej między wątkami (singleton w rejestrze / ``Settings``).
+        """
+        if not model:
+            return self
+        bound = copy.copy(self)
+        bound.model_override = model
+        return bound
+
+    def _settings_model(self) -> str | None:
+        """Model z konfiguracji dla tego dostawcy (nadpisywane per-provider).
+
+        ``None``/pusty → ``_resolve_model`` spadnie na ``default_model``.
+        """
+        return None
+
+    def _resolve_model(self) -> str:
+        """Model do użycia w tej kolejności: override per-run → konfiguracja → wbudowany fallback."""
+        return self.model_override or self._settings_model() or self.default_model
 
     @abstractmethod
     def is_available(self) -> bool:

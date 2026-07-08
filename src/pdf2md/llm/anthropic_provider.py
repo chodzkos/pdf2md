@@ -34,14 +34,16 @@ class AnthropicProvider(PostprocessMixin, LLMProvider):
             return False
         return True
 
+    def _settings_model(self) -> str | None:
+        return get_settings().anthropic_model
+
     def _call_llm(self, text: str, instructions: str) -> str:
         try:
             anthropic = importlib.import_module("anthropic")
         except ImportError as exc:
             raise RuntimeError(missing_sdk_message(PROVIDER_KEY)) from exc
-        settings = get_settings()
-        model = settings.anthropic_model or self.default_model
-        client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        model = self._resolve_model()
+        client = anthropic.Anthropic(api_key=get_settings().anthropic_api_key)
         user_content = f"{instructions}\n\n{text}" if instructions else text
         message = client.messages.create(
             model=model,
@@ -57,8 +59,7 @@ class AnthropicProvider(PostprocessMixin, LLMProvider):
         mode: str = "whole_document",
         instructions: str = "",
     ) -> LLMResult:
-        settings = get_settings()
-        model = settings.anthropic_model or self.default_model
+        model = self._resolve_model()
         logger.info(f"Anthropic post-processing: model={model}, mode={mode}")
         processed = self._postprocess_chunks(markdown, mode, instructions)
         return LLMResult(text=processed, provider_used=self.name)
@@ -69,9 +70,8 @@ class AnthropicProvider(PostprocessMixin, LLMProvider):
             anthropic = importlib.import_module("anthropic")
         except ImportError as exc:
             raise RuntimeError(missing_sdk_message(PROVIDER_KEY)) from exc
-        settings = get_settings()
-        model = settings.anthropic_model or self.default_model
-        client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        model = self._resolve_model()
+        client = anthropic.Anthropic(api_key=get_settings().anthropic_api_key)
         message = client.messages.create(
             model=model,
             max_tokens=8192,

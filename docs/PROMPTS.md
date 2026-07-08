@@ -55,6 +55,9 @@ Skonfiguruj dla narzędzia "uv" z:
   (engines-core) przypina pillow<11 — konflikt nie do rozwiązania w jednym środowisku.
   MinerU jest wołany przez CLI (subprocess), więc instaluje się go IZOLOWANIE:
   uv tool install mineru --with mineru[all]  (poza projektem, nie jako dependency)
+  ℹ️ AKTUALIZACJA (po v1.0): cap `pillow<11` został świadomie nadpisany — `[tool.uv]
+  override-dependencies = ["pillow>=12.2"]` (łata CVE, zweryfikowana na GPU). MinerU zostaje
+  izolowany, ale z powodu ciężkiego stosu vLLM/flashinfer, nie pillow. Zob. CHANGELOG / PROJEKT.md.
 - entry points:
     pdf2md = "pdf2md.cli.main:cli"
     pdf2md-gui = "pdf2md.gui.app:main"
@@ -770,6 +773,8 @@ Klasa MinerUEngine:
 MinerU jest instalowany IZOLOWANIE (uv tool install mineru --with mineru[all]), NIE jako pip
 dependency — bo wymaga pillow>=11, a Marker przypina pillow<11. Adapter woła jego CLI przez subprocess.
 W MinerU 2.x+ komenda nazywa się "mineru" (stare "magic-pdf" to wersje 1.x — nieaktualne).
+ℹ️ AKTUALIZACJA (po v1.0): cap `pillow<11` nadpisany przez `[tool.uv] override-dependencies =
+["pillow>=12.2"]` (łata CVE) — powód izolacji MinerU to teraz ciężki stos vLLM/flashinfer, nie pillow.
 - is_available(): użyj shutil.which("mineru") — zwraca ścieżkę lub None.
   WAŻNE: na Windows subprocess.run(["mineru", ...]) bez .exe/.cmd rzuca FileNotFoundError;
   shutil.which() poprawnie lokalizuje binarkę z rozszerzeniem. Zwróć True jeśli which != None.

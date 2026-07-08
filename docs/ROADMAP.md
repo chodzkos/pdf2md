@@ -425,6 +425,7 @@ Dodanie **Docling** jako trzeciego silnika rdzeniowego (stabilnego, do v1.0), or
   uv tool install mineru --with mineru[all]
   mineru --help           # weryfikacja (CLI nazywa się "mineru", nie "magic-pdf")
   ```
+  > ℹ️ AKTUALIZACJA (po v1.0): cap `pillow<11` nadpisany przez `[tool.uv] override-dependencies = ["pillow>=12.2"]` (łata CVE, zweryfikowana na GPU). MinerU zostaje izolowany z powodu ciężkiego stosu vLLM/flashinfer, nie pillow. Zob. CHANGELOG / docs/PROJEKT.md.
 - [ ] Testujesz każdy silnik na `test_scan.pdf`
 - [ ] Pull Request → scal
 

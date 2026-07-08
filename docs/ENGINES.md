@@ -97,8 +97,10 @@ jezykami CJK.
 uv tool install mineru --with mineru[all]
 ```
 
-MinerU jest instalowany izolowanie, poza srodowiskiem projektu, bo wymaga `pillow>=11`,
-a Marker przypina `pillow<11`. Po instalacji sprawdz, czy `mineru` jest widoczne w `PATH`.
+MinerU jest instalowany izolowanie, poza srodowiskiem projektu — ze wzgledu na ciezki,
+kolidujacy stos vLLM/flashinfer/nvcc i wlasny torch/transformers, nie z powodu pillow
+(wspolne srodowisko pracuje na `pillow>=12.2` po override — zob. PROJEKT.md; MinerU dziala
+w osobnym env). Po instalacji sprawdz, czy `mineru` jest widoczne w `PATH`.
 Stara komenda `magic-pdf` dotyczy wersji 1.x i nie jest uzywana przez adapter.
 
 **Backend:** konfigurowalne przez `mineru.mineru_backend` w `config.toml`:

@@ -43,6 +43,13 @@
 - Polskie etykiety standardowych elementów Qt: przyciski `OK/Anuluj/Zastosuj` w oknie ustawień oraz opisy/przyciski/tooltips nienatywnego `QFileDialog` (fallback przy rozjeździe motywu) — przez załadowanie tłumaczeń Qt (`QTranslator`: `qtbase_pl`, `qt_pl`) przy starcie GUI. Brak `.qm` w danej dystrybucji loguje ostrzeżenie zamiast cichego pominięcia.
 - Wszystkie okna komunikatów (`QMessageBox`: O programie, zapis ustawień, test klucza, brak plików, eksport EPUB, podsumowanie konwersji, zapis profilu) mają belkę tytułu podążającą za motywem **aplikacji** zamiast systemu — helper `themed_message_box`/`attach_dark_titlebar` (natywny uchwyt + `follow_app_titlebar` przed pokazaniem). Koniec jasnych belek przy stałym ciemnym motywie aplikacji na jasnym systemie.
 
+### Bezpieczeństwo
+
+- **Łańcuch dostaw utwardzony.** Wewnętrzne zależności git (`chodzkos-gui-kit`, `chodzkos-detection`) przypięte do pełnych 40-znakowych SHA commitów zamiast ruchomych tagów (tag jest mutowalny, SHA nie; komentarz z wersją nad każdym pinem). Wszystkie akcje w `ci.yml` przypięte do SHA z komentarzem wersji. Dodany `.github/dependabot.yml` (ekosystemy `uv` i `github-actions`, tygodniowo) — piny git podbijamy **ręcznie**, bo Dependabot ich nie obsługuje.
+- **Audyt zależności w CI** — krok `pip-audit` (jeden wariant matrycy: Ubuntu + Python 3.12) po `uv sync`, z wykluczeniem zależności git+URL (`chodzkos-gui-kit`/`chodzkos-detection` — brak wersji na PyPI, pip-audit nie umie ich audytować).
+- **Pillow podbite do `>=12.2`** (łaty CVE-2026-25990/40192/42310/42311 + PYSEC-2026-165 w parserze obrazów karmionym obrazami z dowolnych PDF-ów). marker-pdf i surya-ocr deklarują `pillow<11`, ale cap jest **przeterminowany** — nadpisany przez `[tool.uv] override-dependencies = ["pillow>=12.2"]` zamiast maskowania CVE. Zweryfikowane empirycznie na GPU (RTX 5090): pełny pytest, konwersja Markerem, **Surya recognition/detection na `cuda`**, ekstrakcja obrazów + `PIL.verify()` — wszystko na pillow 12.2. **Uwaga:** override zdejmuje *wszystkie* ograniczenia na pillow (także `<13` od doclinga) — przy każdym podbiciu marker/surya/docling trzeba to zweryfikować ponownie (docelowo zawęzić do `pillow>=12.2,<13`).
+- **`pydantic-settings` podbite do `>=2.14.2`** (GHSA-4xgf-cpjx-pc3j).
+
 ## v1.0.0
 
 ### Dodane

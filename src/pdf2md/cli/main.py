@@ -37,7 +37,7 @@ from pdf2md.detection.hardware import HardwareInfo, detect_hardware, is_compute_
 from pdf2md.detection.pdf_type import detect_pdf_type
 from pdf2md.engines.base import ConversionEngine
 from pdf2md.exporters import EPUB_BACKENDS, MarkdownExporter, build_epub_exporter
-from pdf2md.llm import PROVIDER_MODEL_FIELDS, normalize_provider_key
+from pdf2md.llm import normalize_provider_key
 from pdf2md.llm.base import LLMProvider
 from pdf2md.utils.logging import setup_logging
 
@@ -333,20 +333,18 @@ def _image_page_count(path: Path) -> int:
         return sum(1 for _ in ImageSequence.Iterator(image))
 
 
-def _select_llm(llm_name: str, llm_model: str | None, settings: Settings) -> LLMProvider | None:
+def _select_llm(llm_name: str, llm_model: str | None) -> LLMProvider | None:
     provider = _find_provider(llm_name)
     if provider is None:
         if llm_name == "none":
             return None
         raise click.ClickException(f"Nieznany dostawca LLM: {llm_name}")
 
-    if llm_model:
-        model_field = PROVIDER_MODEL_FIELDS[normalize_provider_key(llm_name)]
-        setattr(settings, model_field, llm_model)
-
     if not provider.is_available():
         raise click.ClickException(f"Dostawca LLM nie jest gotowy: {provider.name}")
-    return provider
+    # Override modelu per-uruchomienie: jawnie związany z providerem (bind_model),
+    # bez utrwalania w Settings/config.toml (spójna ścieżka z GUI).
+    return provider.bind_model(llm_model)
 
 
 def _mask_secret(secret: str) -> str:
@@ -748,7 +746,7 @@ def convert(
     if not selected_engine.is_available():
         raise click.ClickException(f"Silnik nie jest dostępny: {selected_engine.name}")
 
-    llm_provider = _select_llm(llm_name, llm_model, settings)
+    llm_provider = _select_llm(llm_name, llm_model)
     converter = Converter()
     total_start = time.monotonic()
     converted = 0

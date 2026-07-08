@@ -34,15 +34,17 @@ class GeminiProvider(PostprocessMixin, LLMProvider):
             return False
         return True
 
+    def _settings_model(self) -> str | None:
+        return get_settings().gemini_model
+
     def _call_llm(self, text: str, instructions: str) -> str:
         try:
             genai = importlib.import_module("google.genai")
             types = importlib.import_module("google.genai.types")
         except ImportError as exc:
             raise RuntimeError(missing_sdk_message(PROVIDER_KEY)) from exc
-        settings = get_settings()
-        model_name = settings.gemini_model or self.default_model
-        client = genai.Client(api_key=settings.gemini_api_key)
+        model_name = self._resolve_model()
+        client = genai.Client(api_key=get_settings().gemini_api_key)
         user_content = f"{instructions}\n\n{text}" if instructions else text
         contents = f"{POST_PROCESSING_PROMPT}\n\n{user_content}"
         resp = client.models.generate_content(
@@ -58,8 +60,7 @@ class GeminiProvider(PostprocessMixin, LLMProvider):
         mode: str = "whole_document",
         instructions: str = "",
     ) -> LLMResult:
-        settings = get_settings()
-        model = settings.gemini_model or self.default_model
+        model = self._resolve_model()
         logger.info(f"Gemini post-processing: model={model}, mode={mode}")
         processed = self._postprocess_chunks(markdown, mode, instructions)
         return LLMResult(text=processed, provider_used=self.name)
@@ -71,9 +72,8 @@ class GeminiProvider(PostprocessMixin, LLMProvider):
             types = importlib.import_module("google.genai.types")
         except ImportError as exc:
             raise RuntimeError(missing_sdk_message(PROVIDER_KEY)) from exc
-        settings = get_settings()
-        model_name = settings.gemini_model or self.default_model
-        client = genai.Client(api_key=settings.gemini_api_key)
+        model_name = self._resolve_model()
+        client = genai.Client(api_key=get_settings().gemini_api_key)
         resp = client.models.generate_content(
             model=model_name,
             contents=text,

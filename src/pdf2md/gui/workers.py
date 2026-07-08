@@ -20,13 +20,7 @@ from pdf2md.core.input_types import is_image_input
 from pdf2md.core.registry import engine_registry, llm_registry
 from pdf2md.engines.base import ConversionCancelled, ConversionEngine
 from pdf2md.engines.vlm_base import VLMEngine
-from pdf2md.llm import PROVIDER_MODEL_FIELDS, normalize_provider_key
 from pdf2md.llm.base import LLMProvider
-
-
-def _model_field_for_provider(provider_name: str) -> str | None:
-    """Mapuje nazwę dostawcy na pole modelu w Settings (dla override per-uruchomienie)."""
-    return PROVIDER_MODEL_FIELDS.get(normalize_provider_key(provider_name))
 
 
 def _has_in_place_images(engine_name: str) -> bool:
@@ -100,6 +94,11 @@ class ConversionWorker(QThread):
         llm = None
         if self._llm_name not in ("none", ""):
             llm = llm_registry.get_by_name(self._llm_name)
+            # Override modelu per-uruchomienie: jawnie związany z providerem (płytka kopia
+            # przez bind_model), a nie utrwalany mutacją współdzielonego Settings/singletona.
+            # bez self._llm_model bind_model zwraca providera bez zmian.
+            if llm is not None:
+                llm = llm.bind_model(self._llm_model)
 
         if engine is None:
             for f in self._files:
@@ -118,24 +117,7 @@ class ConversionWorker(QThread):
             self._emit_all_done(0, len(self._files), 0.0)
             return
 
-        # Override modelu per-uruchomienie: ma pierwszeństwo nad config.<provider>_model,
-        # ale NIE jest utrwalany (nie kasuje domyślnego ustawionego w GUI). Provider czyta
-        # model leniwie z get_settings(), więc nadpisujemy singleton na czas przebiegu.
-        settings = get_settings()
-        override_field = (
-            _model_field_for_provider(self._llm_name)
-            if (llm is not None and self._llm_model)
-            else None
-        )
-        original_model = getattr(settings, override_field) if override_field else None
-        if override_field:
-            setattr(settings, override_field, self._llm_model)
-
-        try:
-            self._convert_all(converter, engine, llm)
-        finally:
-            if override_field:
-                setattr(settings, override_field, original_model)
+        self._convert_all(converter, engine, llm)
 
     def _convert_all(
         self,

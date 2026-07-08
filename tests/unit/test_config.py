@@ -288,3 +288,29 @@ def test_marker_settings_are_validated(field_name: str, value: object, message: 
 
     with pytest.raises(ValueError, match=message):
         Settings(**data)
+
+
+def test_per_run_model_override_does_not_mutate_settings(isolated_config: Path) -> None:
+    """Przebieg z override modelu (bind_model) NIE zmienia get_settings().ollama_model.
+
+    Regresja: dawniej worker nadpisywał <provider>_model na globalnym singletonie i
+    przywracał w finally — zapis Ustawień w trakcie konwersji utrwalał tymczasowy override.
+    """
+    import json
+    from unittest.mock import MagicMock, patch
+
+    from pdf2md.llm.ollama_provider import OllamaProvider
+
+    before = get_settings().ollama_model
+
+    mock_resp = MagicMock()
+    mock_resp.read.return_value = json.dumps({"response": "ok"}).encode()
+    mock_resp.__enter__ = lambda s: s
+    mock_resp.__exit__ = MagicMock(return_value=False)
+
+    bound = OllamaProvider().bind_model("tymczasowy-model")
+    with patch("pdf2md.llm.ollama_provider.urllib.request.urlopen", return_value=mock_resp):
+        bound.postprocess("tekst", mode="whole_document")
+
+    assert bound.model_override == "tymczasowy-model"
+    assert get_settings().ollama_model == before  # override nie przeciekł do configu

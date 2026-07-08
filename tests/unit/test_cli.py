@@ -336,7 +336,7 @@ def test_convert_profile_applies_conversion_preset(
         output_path.write_text(markdown, encoding="utf-8")
         return output_path
 
-    def fake_select_llm(name: str, model: str | None, settings: object) -> object:
+    def fake_select_llm(name: str, model: str | None) -> object:
         calls["llm"] = (name, model)
         return fake_llm
 
@@ -617,34 +617,11 @@ def test_cli_helper_functions(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -
     assert cli_main._package_installed("missing") is False
 
 
-def test_select_llm_sets_model_and_requires_availability(
-    cli_test_env: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from pdf2md.cli import main as cli_main
-    from pdf2md.core.config import Settings
-
-    provider = SimpleNamespace(
-        name="OpenAI",
-        requires_api_key=True,
-        default_model="gpt",
-        description="",
-        is_available=lambda: True,
-    )
-    settings = Settings()
-    monkeypatch.setattr(cli_main, "_find_provider", lambda name: provider)
-    selected = cli_main._select_llm("openai", "gpt-test", settings)
-
-    assert selected is provider
-    assert settings.openai_model == "gpt-test"
-
-
 def test_select_llm_errors_for_unavailable_provider(
     cli_test_env: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from pdf2md.cli import main as cli_main
-    from pdf2md.core.config import Settings
 
     provider = SimpleNamespace(
         name="OpenAI",
@@ -656,30 +633,29 @@ def test_select_llm_errors_for_unavailable_provider(
     monkeypatch.setattr(cli_main, "_find_provider", lambda name: provider)
 
     with pytest.raises(click.ClickException, match="Dostawca LLM nie jest gotowy"):
-        cli_main._select_llm("openai", None, Settings())
+        cli_main._select_llm("openai", None)
 
 
 def test_select_llm_override_sets_run_model_without_persisting(
+    cli_test_env: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """--llm-model nadpisuje model TYLKO dla tego uruchomienia (nie utrwala configu)."""
+    """--llm-model nadpisuje model TYLKO dla tego uruchomienia (bind_model, nie utrwala configu)."""
     from pdf2md.cli import main as cli_main
-    from pdf2md.core.config import Settings
+    from pdf2md.core.config import get_settings
+    from pdf2md.llm.ollama_provider import OllamaProvider
 
-    provider = SimpleNamespace(
-        name="Ollama (lokalny)",
-        requires_api_key=False,
-        default_model="qwen2.5:14b",
-        description="",
-        is_available=lambda: True,
-    )
+    provider = OllamaProvider()
     monkeypatch.setattr(cli_main, "_find_provider", lambda name: provider)
+    monkeypatch.setattr(provider, "is_available", lambda: True)
     saved: list[object] = []
     monkeypatch.setattr(cli_main, "save_settings", lambda s: saved.append(s), raising=False)
 
-    settings = Settings(ollama_model="domyslny-z-gui")
-    result = cli_main._select_llm("ollama", "override-na-run", settings)
+    before = get_settings().ollama_model
+    result = cli_main._select_llm("ollama", "override-na-run")
 
-    assert result is provider
-    assert settings.ollama_model == "override-na-run"  # override wygrywa dla tego uruchomienia
+    assert result is not None
+    assert result.model_override == "override-na-run"  # override wygrywa dla tego uruchomienia
+    assert provider.model_override is None  # singleton z rejestru nietknięty
+    assert get_settings().ollama_model == before  # config bez zmian
     assert saved == []  # nic nie utrwalono na stałe

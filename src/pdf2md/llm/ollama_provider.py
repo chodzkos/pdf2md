@@ -44,8 +44,11 @@ class OllamaProvider(PostprocessMixin, LLMProvider):
             or "http://localhost:11434"
         )
 
+    def _settings_model(self) -> str | None:
+        return get_settings().ollama_model
+
     def _call_llm(self, text: str, instructions: str) -> str:
-        model = get_settings().ollama_model or self.default_model
+        model = self._resolve_model()
         prompt = (
             f"{POST_PROCESSING_PROMPT}\n\n{instructions}\n\n{text}"
             if instructions
@@ -68,7 +71,7 @@ class OllamaProvider(PostprocessMixin, LLMProvider):
         mode: str = "whole_document",
         instructions: str = "",
     ) -> LLMResult:
-        model = get_settings().ollama_model or self.default_model
+        model = self._resolve_model()
         logger.info(f"Ollama post-processing: model={model}, mode={mode}")
         processed = self._postprocess_chunks(markdown, mode, instructions)
         return LLMResult(text=processed, provider_used=self.name)
@@ -79,7 +82,7 @@ class OllamaProvider(PostprocessMixin, LLMProvider):
         ``think=False`` na poziomie głównym body wyłącza rozumowanie (qwen3 ma je domyślnie
         ON) — przy korekcie nie chcemy „ulepszania"/parafrazy. W options działać nie będzie.
         """
-        model = get_settings().ollama_model or self.default_model
+        model = self._resolve_model()
         payload = json.dumps(
             {
                 "model": model,

@@ -169,6 +169,38 @@ class TestOllamaProvider:
 
         assert captured["data"]["model"] == OllamaProvider.default_model  # type: ignore[index]
 
+    def test_bind_model_override_beats_settings(self) -> None:
+        captured: dict[str, object] = {}
+        response_body = json.dumps({"response": "ok"}).encode()
+
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = response_body
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        def fake_urlopen(req: object, **kwargs: object) -> object:
+            captured["data"] = json.loads(req.data.decode())  # type: ignore[attr-defined]
+            return mock_resp
+
+        base = OllamaProvider()
+        bound = base.bind_model("qwen3:32b")
+        fake_settings = _fake_settings(ollama_model="llama3:8b")
+        with (
+            patch("pdf2md.llm.ollama_provider.urllib.request.urlopen", side_effect=fake_urlopen),
+            patch("pdf2md.llm.ollama_provider.get_settings", return_value=fake_settings),
+        ):
+            bound.postprocess("tekst", mode="whole_document")
+
+        # override per-run ma pierwszeństwo nad ollama_model z configu
+        assert captured["data"]["model"] == "qwen3:32b"  # type: ignore[index]
+        assert base.model_override is None  # oryginał (singleton z rejestru) nietknięty
+
+    def test_bind_model_without_model_returns_same_instance(self) -> None:
+        provider = OllamaProvider()
+        assert provider.bind_model(None) is provider
+        assert provider.bind_model("") is provider
+        assert provider.model_override is None
+
     def test_postprocess_by_chunk_calls_llm_multiple_times(self) -> None:
         call_count = 0
         response_body = json.dumps({"response": "chunk ok"}).encode()

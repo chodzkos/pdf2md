@@ -34,14 +34,16 @@ class OpenAIProvider(PostprocessMixin, LLMProvider):
             return False
         return True
 
+    def _settings_model(self) -> str | None:
+        return get_settings().openai_model
+
     def _call_llm(self, text: str, instructions: str) -> str:
         try:
             openai = importlib.import_module("openai")
         except ImportError as exc:
             raise RuntimeError(missing_sdk_message(PROVIDER_KEY)) from exc
-        settings = get_settings()
-        model = settings.openai_model or self.default_model
-        client = openai.OpenAI(api_key=settings.openai_api_key)
+        model = self._resolve_model()
+        client = openai.OpenAI(api_key=get_settings().openai_api_key)
         user_content = f"{instructions}\n\n{text}" if instructions else text
         response = client.chat.completions.create(
             model=model,
@@ -58,8 +60,7 @@ class OpenAIProvider(PostprocessMixin, LLMProvider):
         mode: str = "whole_document",
         instructions: str = "",
     ) -> LLMResult:
-        settings = get_settings()
-        model = settings.openai_model or self.default_model
+        model = self._resolve_model()
         logger.info(f"OpenAI post-processing: model={model}, mode={mode}")
         processed = self._postprocess_chunks(markdown, mode, instructions)
         return LLMResult(text=processed, provider_used=self.name)
@@ -70,9 +71,8 @@ class OpenAIProvider(PostprocessMixin, LLMProvider):
             openai = importlib.import_module("openai")
         except ImportError as exc:
             raise RuntimeError(missing_sdk_message(PROVIDER_KEY)) from exc
-        settings = get_settings()
-        model = settings.openai_model or self.default_model
-        client = openai.OpenAI(api_key=settings.openai_api_key)
+        model = self._resolve_model()
+        client = openai.OpenAI(api_key=get_settings().openai_api_key)
         response = client.chat.completions.create(
             model=model,
             temperature=temperature,

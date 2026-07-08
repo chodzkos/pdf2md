@@ -24,13 +24,14 @@ classifiers = [
 ]
 
 dependencies = [
-    # pydantic-settings>=2.14.2: GHSA-4xgf-cpjx-pc3j (naprawione w 2.14.2).
+    # security floor: CVE fix (pip-audit) — GHSA-4xgf-cpjx-pc3j (naprawione w 2.14.2).
     "pydantic-settings>=2.14.2",
     "loguru>=0.7",
     "rich>=13.7",
     "click>=8.1",
     "PySide6>=6.7",
-    # Pillow>=12.2: CVE-2026-25990/40192/42310/42311 + PYSEC-2026-165 (naprawione do 12.2.0).
+    # security floor: CVE fix (pip-audit) — CVE-2026-25990/40192/42310/42311 + PYSEC-2026-165
+    # (naprawione do 12.2.0). Cap pillow<11 z marker-pdf/surya-ocr nadpisany w [tool.uv] niżej.
     "Pillow>=12.2",
     "pyyaml>=6.0",
     "chodzkos-gui-kit[qt]",
@@ -175,6 +176,12 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "if __name__ == .__main__.:",
 ]
+
+[tool.uv]
+# marker-pdf i surya-ocr pinują pillow<11; CI (engines-smoke) i testy lokalne przechodzą
+# na 12.2 — override zamiast 5x ignore-vuln na niezałatane CVE w parserze obrazów.
+# Weryfikować przy każdym podbiciu marker/surya.
+override-dependencies = ["pillow>=12.2"]
 
 [tool.uv.sources]
 # Piny SHA zamiast tagów: tag jest mutowalny (można go przesunąć), SHA nie.

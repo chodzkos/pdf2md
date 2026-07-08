@@ -77,8 +77,8 @@ Projekt celuje docelowo w mocny sprzęt (RTX 5090 Laptop 24 GB / 128 GB RAM), al
 > **⚠️ Uwaga licencyjna (ważna dla dystrybucji).** Sam kod pdf2md Squeezer jest MIT, ale kilka silników ma licencje copyleft (Marker — GPL, MinerU **i PyMuPDF/PyMuPDF4LLM** — AGPL). Dlatego **główny kanał dystrybucji v1.0 to pakiet pip/uv**: publikujesz wyłącznie swój kod MIT, a silniki copyleft instaluje sam użytkownik u siebie (`uv pip install ...`) — to nie jest dystrybucja tych pakietów przez Ciebie. Problem pojawiłby się dopiero przy **wkompilowaniu silnika copyleft w jedno frozen binary** — wtedy dystrybucja binarki musiałaby respektować GPL/AGPL. Stąd: frozen binary dopiero w Etapie 10b (po Fazie 2), bundlujące **wyłącznie własny silnik MIT** (F02: pdfplumber/pdfminer.six/Tesseract — permisywne) i żadnego copyleft. Dotyczy to też przyszłego camelot (F02): sam camelot jest MIT, ale jego historyczna zależność Ghostscript to AGPL — w aktualnych wersjach camelota domyślny backend to pdfium (BSD), więc używaj pdfium i nie instaluj Ghostscriptu.
 
 > **⚙️ Dwie kategorie silników — ważne dla instalacji i konfliktów zależności.**
-> - **Importowane w procesie** (PyMuPDF4LLM, Marker, Docling) — żyją we wspólnym środowisku projektu (`uv add ...`) i **nawzajem ograniczają zależności**. Stąd realne konflikty: Marker przypina `pillow<11` (nic w środowisku nie może wymagać `pillow>=11`); Marker/Docling vs pdf-craft kłócą się o wersję `transformers` (zob. macierz zgodności).
-> - **Wołane przez CLI/subprocess** (MinerU) — instalowane **izolowanie** przez `uv tool install mineru --with mineru[all]`, w osobnym środowisku. Ich zależności (np. `pillow>=11` w MinerU) **nie kolidują** z głównym środowiskiem. Adapter znajduje komendę przez `shutil.which("mineru")`. **MinerU nie jest zależnością pip projektu.** (CLI nazywa się `mineru` w wersji 2.x+; `magic-pdf` to przestarzała komenda 1.x.)
+> - **Importowane w procesie** (PyMuPDF4LLM, Marker, Docling) — żyją we wspólnym środowisku projektu (`uv add ...`) i **nawzajem ograniczają zależności**. Stąd realne konflikty: Marker/Docling vs pdf-craft kłócą się o wersję `transformers` (zob. macierz zgodności). Marker/surya deklarują też `pillow<11`, ale ten cap jest **przeterminowany** — projekt nadpisuje go do `pillow>=12.2` przez `[tool.uv] override-dependencies` (łata CVE parsera obrazów; empirycznie potwierdzone na GPU, że Surya/Marker działają na 12.2 — zob. „Override pillow" w „Kluczowych wnioskach").
+> - **Wołane przez CLI/subprocess** (MinerU) — instalowane **izolowanie** przez `uv tool install mineru --with mineru[all]`, w osobnym środowisku. Powód izolacji to **ciężki, kolidujący stos MinerU** (vLLM/flashinfer/nvcc, własny torch/transformers), **nie** pillow — od czasu override wspólne środowisko i tak pracuje na `pillow>=12.2` (`pillow>=11` MinerU nie byłoby już samo w sobie konfliktem). Adapter znajduje komendę przez `shutil.which("mineru")`. **MinerU nie jest zależnością pip projektu.** (CLI nazywa się `mineru` w wersji 2.x+; `magic-pdf` to przestarzała komenda 1.x.)
 
 #### Macierz zgodności silników (zweryfikowana empirycznie, czerwiec 2026)
 
@@ -108,6 +108,15 @@ engines-core = [
 ```
 > Górne ograniczenie `<5` jest świadome: linia `transformers 5.x` reorganizuje moduły (m.in. przeniesienie `ALL_ATTENTION_FUNCTIONS`) i potrafi zepsuć surya/Docling. Zdejmij je dopiero, gdy biblioteki ogłoszą wsparcie 5.x. Nie dodawaj własnego pinu `opencv-python-headless` — koliduje z dokładnym `==4.11.0.86` od surya 0.17.x.
 
+
+- **Override pillow (`>=12.2`).** marker-pdf i surya-ocr deklarują `pillow<11`, ale najnowsze wydania (marker-pdf 1.10.2, surya-ocr 0.20.0) wciąż trzymają ten cap mimo że realnie działają na pillow 12 — potwierdzone empirycznie na GPU (Surya recognition/detection + Marker + `--extract-images`/`PIL.verify()` na pillow 12.2). Cap nadpisany w `pyproject.toml`:
+
+  ```toml
+  [tool.uv]
+  override-dependencies = ["pillow>=12.2"]
+  ```
+
+  Powód: wciągnięcie łat CVE (CVE-2026-25990/40192/42310/42311, PYSEC-2026-165) w parserze obrazów — lepsze niż downgrade do pillow 10.x + `pip-audit --ignore-vuln` na niezałatane podatności. **Uwaga:** override zdejmuje *wszystkie* ograniczenia na pillow, także `<13` od doclinga — przy każdym podbiciu marker/surya/docling zweryfikuj ponownie (docelowo zawęź do `pillow>=12.2,<13`).
 
 - **pdf-craft wzajemnie wyklucza się z Markerem — USUNIĘTY z projektu.** pdf-craft (przez DeepSeek-OCR → `doc-page-extractor`) wymaga `transformers<4.48` (`LlamaFlashAttention2`), a Marker 1.10.x ciągnie surya 0.17.1 z `transformers>=4.56.1` — przepaść jeszcze większa niż samo `≥4.48`. Nie istnieje wspólna wersja. pdf-craft jest też redundantny (skany obsługują Marker i MinerU). **Wyrzucony z pyproject całkowicie.**
   - **Pułapka, która nas kosztowała kilka rund:** pdf-craft był zadeklarowany w **dwóch** extra naraz — w samodzielnej grupie `"pdf-craft"` **oraz** w `engines-optional = ["pdf-craft>=0.1"]`. uv rozwiązuje **wszystkie** extra do jednego spójnego locka, więc nawet niezainstalowany pdf-craft blokował resolucję marker-pdf 1.10.x. Usunięcie go z jednej grupy nie wystarczało — trzeba było wyczyścić **obie**. Wniosek: porzucając opcjonalny silnik, usuń jego deklarację ze **wszystkich** extra (i z `engines/__init__.py`), nie tylko z jednej.

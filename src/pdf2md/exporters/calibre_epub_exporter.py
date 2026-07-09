@@ -7,6 +7,7 @@ import tempfile
 from pathlib import Path
 
 from pdf2md.detection.dependencies import check_calibre
+from pdf2md.utils.subprocess_flags import NO_WINDOW_FLAGS
 
 
 class CalibreEpubExporter:
@@ -39,6 +40,7 @@ class CalibreEpubExporter:
                 check=True,
                 capture_output=True,
                 text=True,
+                creationflags=NO_WINDOW_FLAGS,
             )
         finally:
             tmp_path.unlink(missing_ok=True)

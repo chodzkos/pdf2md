@@ -14,6 +14,7 @@ from loguru import logger
 
 from pdf2md.core.config import get_settings
 from pdf2md.engines.base import ConversionEngine, ConversionResult
+from pdf2md.utils.subprocess_flags import NO_WINDOW_FLAGS
 
 
 class MinerUEngine(ConversionEngine):
@@ -49,7 +50,14 @@ class MinerUEngine(ConversionEngine):
         env = {**os.environ, "VLLM_USE_FLASHINFER_SAMPLER": "0"} if backend != "pipeline" else None
         logger.info(f"Konwertuję {path} przez MinerU (backend={backend}): {' '.join(command)}")
         try:
-            subprocess.run(command, check=True, capture_output=True, text=True, env=env)
+            subprocess.run(
+                command,
+                check=True,
+                capture_output=True,
+                text=True,
+                env=env,
+                creationflags=NO_WINDOW_FLAGS,
+            )
             markdown_path = self._find_markdown(work_dir)
             markdown = markdown_path.read_text(encoding="utf-8")
             pages = self._page_count(path)

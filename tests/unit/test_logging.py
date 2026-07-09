@@ -38,3 +38,41 @@ def test_setup_logging_configures_console_and_file(
     assert fake_logger.add_calls[1][0][0] == tmp_path / "pdf2md.log"
     assert fake_logger.add_calls[1][1]["level"] == "DEBUG"
     assert tmp_path.exists()
+
+
+def test_setup_logging_to_file_adds_gui_log(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Tryb GUI (`to_file=True`) dodaje sink do ~/.config/pdf2md/logs/gui.log (rotacja 5 MB)."""
+    fake_logger = _FakeLogger()
+    monkeypatch.setattr(logging_module, "logger", fake_logger)
+    monkeypatch.setattr(logging_module.Path, "home", lambda: tmp_path)
+
+    logging_module.setup_logging(log_dir=tmp_path, to_file=True)
+
+    gui_log = tmp_path / ".config" / "pdf2md" / "logs" / "gui.log"
+    gui_call = next(
+        (c for c in fake_logger.add_calls if c[0] and c[0][0] == gui_log),
+        None,
+    )
+    assert gui_call is not None
+    assert gui_log.parent.exists()
+    assert gui_call[1]["rotation"] == "5 MB"
+    assert gui_call[1]["level"] == "INFO"
+
+
+def test_setup_logging_survives_missing_stderr(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """gui-script/pythonw: sys.stderr==None nie może wywalić setup_logging (brak sinku stderr)."""
+    fake_logger = _FakeLogger()
+    monkeypatch.setattr(logging_module, "logger", fake_logger)
+    monkeypatch.setattr(logging_module.sys, "stderr", None)
+
+    logging_module.setup_logging(log_dir=tmp_path)  # nie rzuca
+
+    # Żaden add nie dostał None jako celu (sink stderr pominięty); plikowy sink jest.
+    assert all(not (c[0] and c[0][0] is None) for c in fake_logger.add_calls)
+    assert any(c[0] and c[0][0] == tmp_path / "pdf2md.log" for c in fake_logger.add_calls)

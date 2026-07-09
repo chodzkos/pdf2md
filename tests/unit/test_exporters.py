@@ -47,6 +47,7 @@ def test_pandoc_epub_exporter_runs_pandoc_and_removes_temp_file(
         check: bool,
         capture_output: bool,
         text: bool,
+        creationflags: int = 0,
     ) -> subprocess.CompletedProcess[str]:
         calls.append(command)
         temp_paths.append(Path(command[1]))
@@ -87,6 +88,7 @@ def test_pandoc_epub_exporter_puts_temp_in_source_dir(
         check: bool,
         capture_output: bool,
         text: bool,
+        creationflags: int = 0,
     ) -> subprocess.CompletedProcess[str]:
         calls.append(command)
         temp_paths.append(Path(command[1]))
@@ -133,6 +135,7 @@ def test_calibre_epub_exporter_runs_ebook_convert_and_removes_temp_file(
         check: bool,
         capture_output: bool,
         text: bool,
+        creationflags: int = 0,
     ) -> subprocess.CompletedProcess[str]:
         calls.append(command)
         temp_paths.append(Path(command[1]))

@@ -29,6 +29,8 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
 
+from pdf2md.utils.subprocess_flags import NO_WINDOW_FLAGS
+
 # pdf2md instaluje torcha w wariancie +cu130 → do GPU potrzebny sterownik z CUDA 13.
 REQUIRED_CUDA_MAJOR = 13
 # Minimum architektury dla buildu +cu130 — Turing (sm_75). Niżej (Pascal/Volta) = brak kerneli.
@@ -135,6 +137,7 @@ def _smi_query(fields: list[str]) -> str | None:
             capture_output=True,
             text=True,
             timeout=5,
+            creationflags=NO_WINDOW_FLAGS,
         )
     except Exception:
         return None
@@ -147,7 +150,13 @@ def _smi_query(fields: list[str]) -> str | None:
 def _read_driver_cuda() -> str:
     """Najwyższe CUDA sterownika z nagłówka gołego ``nvidia-smi`` (puste, gdy nieznane)."""
     try:
-        plain = subprocess.run(["nvidia-smi"], capture_output=True, text=True, timeout=5)
+        plain = subprocess.run(
+            ["nvidia-smi"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            creationflags=NO_WINDOW_FLAGS,
+        )
         match = re.search(r"CUDA Version:\s*([0-9]+)\.([0-9]+)", plain.stdout or "")
         if match:
             return f"{match.group(1)}.{match.group(2)}"

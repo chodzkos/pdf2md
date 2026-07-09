@@ -28,6 +28,7 @@ from loguru import logger
 from pdf2md.core.config import get_settings
 from pdf2md.engines.base import ConversionResult
 from pdf2md.engines.vlm_base import VLMEngine
+from pdf2md.utils.subprocess_flags import NO_WINDOW_FLAGS
 
 #: Domyślna ścieżka izolowanego venv olmOCR (konwencja z INSTALL.md 7.2).
 _DEFAULT_VENV_PYTHON = Path.home() / ".venvs" / "olmocr" / "bin" / "python"
@@ -124,7 +125,12 @@ class OlmOCREngine(VLMEngine):
         logger.info(f"olmOCR (venv izolowany): {' '.join(command)}")
         try:
             self._process = subprocess.Popen(
-                command, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+                command,
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                creationflags=NO_WINDOW_FLAGS,
             )
             stdout, stderr = self._process.communicate()
             returncode = self._process.returncode

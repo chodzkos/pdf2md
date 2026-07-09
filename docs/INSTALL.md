@@ -458,6 +458,9 @@ skopiuj cache `~/.cache/huggingface/`, ale to opcjonalne).
 
 - **Przeciąganie plików do okna nie działa** → nie uruchamiaj GUI jako administrator (UIPI blokuje
   drag-and-drop z Eksploratora). Odpalaj `pdf2md-gui` ze zwykłego terminala.
+- **GUI nie otwiera okna konsoli — gdzie są logi?** → to celowe (`pdf2md-gui` jest gui-scriptem, bez
+  konsoli). Diagnostyka trafia do `~/.config/pdf2md/logs/gui.log` (rotacja 5 MB). Dołącz ten plik
+  do zgłoszenia problemu z GUI.
 - **`command not found` przy `pdf2md`/`marker_single`** → pod `uv` programy projektu nie trafiają
   do PATH. Wołaj przez `uv run pdf2md ...` albo aktywuj venv (`.venv\Scripts\activate`).
 - **GPU: `torch …+cpu` / `CUDA ❌` mimo karty** → lock nieświeży; `uv lock --upgrade-package torch

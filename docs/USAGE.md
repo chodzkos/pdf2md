@@ -56,6 +56,10 @@ Menu `Plik -> Ustawienia` albo skrot `Ctrl+,` otwiera wspolny dialog ustawien.
 
 `Docling device` przyjmuje `auto`, `cpu` albo `cuda`. Tryb `auto` uzywa wspolnego smoke testu CUDA, wiec stare lub niekompatybilne GPU nie powinno powodowac crasha silnika.
 
+### Diagnostyka GUI (log)
+
+Na Windows `pdf2md-gui` jest gui-scriptem (exe bez okna konsoli), wiec komunikaty nie ida na stdout. Diagnostyke znajdziesz w pliku logu: `~/.config/pdf2md/logs/gui.log` (rotacja 5 MB, poziom INFO). Na wszystkich platformach dziala tez zakladka `Log` w oknie. Gdy zglaszasz problem z GUI, dolacz `gui.log`.
+
 ## CLI reference
 
 Glowne polecenie:

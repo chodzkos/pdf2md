@@ -595,6 +595,57 @@ def test_config_set_rejects_invalid_theme(cli_test_env: Path) -> None:
     assert "auto, light albo dark" in result.output
 
 
+def test_select_llm_unknown_provider_lists_known() -> None:
+    """Nieznany dostawca (np. z profilu) → ClickException z listą znanych, nie goły KeyError."""
+    from pdf2md.cli.main import _select_llm
+
+    with pytest.raises(click.ClickException) as exc_info:
+        _select_llm("bogus-provider", None)
+
+    message = str(exc_info.value)
+    assert "Nieznany dostawca LLM" in message
+    assert "ollama" in message  # z jednej wspólnej mapy PROVIDER_ALIASES
+    assert "claude" in message
+
+
+def test_history_csv_without_limit_exports_all(
+    cli_test_env: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`history --csv` bez --limit eksportuje CAŁOŚĆ (limit=None), nie domyślne 20 z widoku."""
+    captured: dict[str, object] = {}
+
+    def fake_export(path: Path, *, limit: int | None = None, engine: str | None = None) -> Path:
+        captured["limit"] = limit
+        return path
+
+    monkeypatch.setattr(history, "export_csv", fake_export)
+
+    result = CliRunner().invoke(cli, ["history", "--csv", str(cli_test_env / "h.csv")])
+
+    assert result.exit_code == 0
+    assert captured["limit"] is None
+
+
+def test_history_csv_with_explicit_limit(
+    cli_test_env: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`history --csv --limit 5` przekazuje jawny limit do eksportu."""
+    captured: dict[str, object] = {}
+
+    def fake_export(path: Path, *, limit: int | None = None, engine: str | None = None) -> Path:
+        captured["limit"] = limit
+        return path
+
+    monkeypatch.setattr(history, "export_csv", fake_export)
+
+    result = CliRunner().invoke(
+        cli, ["history", "--csv", str(cli_test_env / "h.csv"), "--limit", "5"]
+    )
+
+    assert result.exit_code == 0
+    assert captured["limit"] == 5
+
+
 def test_config_edit_uses_editor(
     cli_test_env: Path,
     monkeypatch: pytest.MonkeyPatch,

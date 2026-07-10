@@ -1,6 +1,6 @@
 # Konfiguracja pdf2md
 
-Źródłem prawdy jest plik `~/.config/pdf2md/config.toml`. Plik tworzony jest automatycznie przy pierwszym uruchomieniu z wartościami domyślnymi. Plik `.env` w katalogu roboczym jest traktowany jako override deweloperski i nadpisuje wartości TOML oraz domyślne ustawienia.
+Źródłem prawdy jest plik `~/.config/pdf2md/config.toml`. Plik tworzony jest automatycznie przy pierwszym uruchomieniu z wartościami domyślnymi. Plik `.env` w katalogu roboczym jest override **deweloperskim** i jest ładowany **tylko w trybie dev** — gdy ustawisz zmienną `PDF2MD_DEV=1`. Produkcyjnie `.env` jest **ignorowany** (żeby cudzy `.env` w katalogu uruchomienia nie nadpisał po cichu ustawień, np. kluczy API czy providera LLM). Fakt załadowania lub pominięcia `.env` jest logowany na poziomie INFO wraz z pełną ścieżką.
 
 Edytuj konfigurację przez CLI:
 

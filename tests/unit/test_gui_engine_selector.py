@@ -18,6 +18,7 @@ from PySide6.QtGui import QStandardItemModel
 from PySide6.QtWidgets import QApplication
 
 import pdf2md.engines  # noqa: F401 - rejestruje silniki w engine_registry
+from pdf2md.core.engine_catalog import hint_for_engine
 from pdf2md.gui.widgets.engine_selector import EngineSelectorWidget
 
 pytestmark = pytest.mark.gui
@@ -60,7 +61,10 @@ def test_apply_availability_greys_unavailable_and_selects_available(qapp: QAppli
         model = widget._combo.model()
         assert isinstance(model, QStandardItemModel)
         assert model.item(0).isEnabled() is False
-        assert "uv sync" in widget._combo.itemData(0, 3)  # hint instalacji
+        # Tooltip niedostępnego niesie hint PER-SILNIK z katalogu (nie sztywne „uv sync").
+        expected_hint = hint_for_engine(names[0])
+        assert expected_hint is not None
+        assert expected_hint in widget._combo.itemData(0, 3)
         assert widget._combo.currentText() == names[1]  # domyślny → pierwszy dostępny
     finally:
         widget.deleteLater()

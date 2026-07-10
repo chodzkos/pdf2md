@@ -12,10 +12,11 @@ from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
 from PySide6.QtGui import QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QWidget
 
+from pdf2md.core.engine_catalog import hint_for_engine
 from pdf2md.core.registry import engine_registry
 
 _CHECKING_HINT = "sprawdzam dostępność…"
-_UNAVAILABLE_HINT = "Niezainstalowany. Jak zainstalować: uv sync --extra engines-core"
+_FALLBACK_HINT = "uv sync --extra engines-core"
 _TOOLTIP_ROLE = 3  # Qt.ItemDataRole.ToolTipRole
 
 
@@ -100,7 +101,10 @@ class EngineSelectorWidget(QWidget):
             if availability[name]:
                 tooltip = description
             else:
-                tooltip = f"{_UNAVAILABLE_HINT}\n{description}"
+                # Hint per-silnik z katalogu (np. „uruchom serwer vLLM" dla PaddleOCR-VL),
+                # zamiast sztywnego „uv sync", które dla silników-usług było mylące.
+                hint = hint_for_engine(name) or _FALLBACK_HINT
+                tooltip = f"Niedostępny. Instalacja/uruchomienie: {hint}\n{description}"
                 if isinstance(model, QStandardItemModel):
                     item: QStandardItem | None = model.item(idx)
                     if item is not None:

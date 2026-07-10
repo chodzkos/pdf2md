@@ -26,6 +26,7 @@ from pdf2md.core import config as config_module
 from pdf2md.core import history as conversion_history
 from pdf2md.core.config import Settings, get_settings, save_settings
 from pdf2md.core.converter import ConversionError, Converter
+from pdf2md.core.engine_catalog import ENGINE_CATALOG
 from pdf2md.core.image_extraction import (
     append_image_references,
     extract_pdf_images,
@@ -38,7 +39,7 @@ from pdf2md.detection.hardware import HardwareInfo, detect_hardware, is_compute_
 from pdf2md.detection.pdf_type import detect_pdf_type
 from pdf2md.engines.base import ConversionEngine
 from pdf2md.exporters import EPUB_BACKENDS, MarkdownExporter, build_epub_exporter
-from pdf2md.llm import normalize_provider_key
+from pdf2md.llm import PROVIDER_ALIASES, normalize_provider_key
 from pdf2md.llm.base import LLMProvider
 from pdf2md.utils.logging import setup_logging
 
@@ -49,119 +50,6 @@ console = Console()
 
 LLM_CHOICES = ("none", "ollama", "claude", "openai", "gemini")
 LLM_MODES = ("none", "whole_document", "by_page", "by_chunk", "by_heading")
-
-ENGINE_CATALOG: tuple[dict[str, object], ...] = (
-    {
-        "key": "pymupdf4llm",
-        "name": "PyMuPDF4LLM",
-        "package": "pymupdf4llm",
-        "scope": "Core",
-        "ocr": False,
-        "llm": False,
-        "license": "AGPL/kom.",
-        "hint": "uv pip install pymupdf4llm",
-        "min_vram_gb": 0,  # CPU — zawsze wykonalny
-        "description": "Szybki ekstraktor tekstu z natywnych PDF-ów.",
-    },
-    {
-        "key": "marker",
-        "name": "Marker",
-        "package": "marker-pdf",
-        "scope": "Core",
-        "ocr": True,
-        "llm": True,
-        "license": "GPL",
-        "hint": "uv pip install marker-pdf",
-        "min_vram_gb": 4,  # przybliżone; działa też na CPU (wolno)
-        "description": "Uniwersalny konwerter z OCR i trybem LLM.",
-    },
-    {
-        "key": "docling",
-        "name": "Docling",
-        "package": "docling",
-        "scope": "Core",
-        "ocr": True,
-        "llm": False,
-        "license": "MIT",
-        "hint": "uv pip install docling",
-        "min_vram_gb": 2,  # przybliżone; działa też na CPU (wolno)
-        "description": "Enterprise parser dokumentów, tabele, RAG.",
-    },
-    {
-        "key": "mineru",
-        "name": "MinerU",
-        "package": "mineru",
-        "scope": "Opc.",
-        "ocr": True,
-        "llm": False,
-        "linux_only_local": True,  # lokalny proces vLLM — tylko Linux/WSL
-        "license": "AGPL",
-        "hint": "uv tool install mineru --with mineru[all]",
-        "min_vram_gb": 6,  # backend pipeline; backend vlm ~12 GB (cięższy)
-        "description": "Dokumenty naukowe, layout, CJK. Backend pipeline (lekki) lub vlm (~12 GB).",
-    },
-    {
-        "key": "olmocr",
-        "name": "olmOCR",
-        "package": "olmocr",
-        "scope": "Opc.",
-        "ocr": True,
-        "llm": False,
-        "gpu": True,
-        "linux_only_local": True,  # tryb spawn: lokalny proces vLLM — tylko Linux/WSL
-        # Gdy olmocr_server_url ustawiony → silnik-usługa (klient serwera, bez lokalnego GPU).
-        "server_url_setting": "olmocr_server_url",
-        "license": "Apache-2.0",
-        "hint": "pip install olmocr (osobne środowisko + CUDA)",
-        "min_vram_gb": 24,  # zmierzone: 9.5 GB model + 9.3 GB KV-cache + grafy CUDA
-        "description": "VLM 7B do skanów: czysty Markdown, równania, tabele.",
-    },
-    {
-        "key": "paddleocr-vl",
-        "name": "PaddleOCR-VL",
-        "package": "paddleocr",
-        "scope": "Opc.",
-        "ocr": True,
-        "llm": False,
-        "gpu": True,
-        # Klient HTTP serwera vLLM — wykonalny też z Windows, gdy serwer stoi (WSL2).
-        "server_backed": True,
-        "license": "Apache-2.0",
-        "hint": (
-            "Uruchom serwer: VLLM_USE_FLASHINFER_SAMPLER=0 vllm serve "
-            "PaddlePaddle/PaddleOCR-VL-1.6 --trust-remote-code --no-enable-prefix-caching "
-            "(zob. INSTALL.md 7.3)"
-        ),
-        "min_vram_gb": 12,  # przybliżone (serwowany VLM)
-        "description": "Serwer VLM (OpenAI-compatible): wielojęzyczny parser dokumentów.",
-    },
-    {
-        "key": "surya",
-        "name": "Surya",
-        "package": "surya-ocr",
-        "scope": "Opc.",
-        "ocr": True,
-        "llm": False,
-        "gpu": True,
-        "license": "GPL/komercyjna",
-        "hint": "uv pip install surya-ocr",
-        "min_vram_gb": 6,  # przybliżone
-        "description": "Layout + OCR + reading order, kontrola/fallback.",
-    },
-    {
-        "key": "scan-pipeline",
-        "name": "Scan Pipeline (premium)",
-        "package": "surya-ocr",
-        "scope": "Opc.",
-        "ocr": True,
-        "llm": True,
-        "gpu": True,
-        "license": "różne (zależnie od silnika OCR)",
-        "hint": "uv pip install surya-ocr ebooklib (+ GPU); zob. INSTALL.md",
-        "min_vram_gb": 6,  # przybliżone (domyślnie Surya)
-        "description": "Skan książki → VLM-OCR, korekta LLM, składanie, EPUB/Markdown.",
-    },
-)
 
 
 def _is_windows_platform() -> bool:
@@ -342,7 +230,10 @@ def _select_llm(llm_name: str, llm_model: str | None) -> LLMProvider | None:
     if provider is None:
         if llm_name == "none":
             return None
-        raise click.ClickException(f"Nieznany dostawca LLM: {llm_name}")
+        # Znane nazwy/aliasy z jednej wspólnej mapy (pdf2md.llm) — bez gołego KeyError,
+        # zwłaszcza gdy nazwa providera przychodzi z profilu (nie z click.Choice --llm).
+        known = ", ".join(sorted(PROVIDER_ALIASES))
+        raise click.ClickException(f"Nieznany dostawca LLM: {llm_name}. Znane: none, {known}.")
 
     if not provider.is_available():
         raise click.ClickException(f"Dostawca LLM nie jest gotowy: {provider.name}")
@@ -930,7 +821,12 @@ def list_profiles_cmd() -> None:
 
 @cli.command("history")
 @click.option("--engine", "engine_filter", help="Filtruj po nazwie silnika.")
-@click.option("--limit", type=click.IntRange(min=1), default=20, show_default=True)
+@click.option(
+    "--limit",
+    type=click.IntRange(min=1),
+    default=None,
+    help="Ile wpisów pokazać (domyślnie 20). Bez --limit eksport --csv obejmuje CAŁOŚĆ.",
+)
 @click.option(
     "--csv",
     "csv_path",
@@ -940,7 +836,7 @@ def list_profiles_cmd() -> None:
 @click.option("--clear", "clear_history", is_flag=True, help="Wyczyść historię konwersji.")
 def history_cmd(
     engine_filter: str | None,
-    limit: int,
+    limit: int | None,
     csv_path: Path | None,
     clear_history: bool,
 ) -> None:
@@ -954,11 +850,15 @@ def history_cmd(
         return
 
     if csv_path is not None:
+        # Eksport: bez jawnego --limit bierzemy CAŁOŚĆ (limit=None), a nie domyślne 20 z widoku.
         exported = conversion_history.export_csv(csv_path, limit=limit, engine=engine_filter)
         console.print(f"[green]Wyeksportowano historię:[/] {exported}")
         return
 
-    entries = conversion_history.list_recent(limit=limit, engine=engine_filter)
+    # Widok tabeli: brak --limit → domyślne 20 (czytelny, krótki listing).
+    entries = conversion_history.list_recent(
+        limit=limit if limit is not None else 20, engine=engine_filter
+    )
     table = Table(title="Historia konwersji")
     table.add_column("ID", justify="right")
     table.add_column("Czas")

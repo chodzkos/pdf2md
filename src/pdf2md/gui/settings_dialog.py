@@ -7,6 +7,7 @@ import json
 import urllib.request
 
 from chodzkos_gui_kit.qt.dialogs import pick_dir
+from pydantic import ValidationError
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QCursor
 from PySide6.QtWidgets import (
@@ -227,17 +228,38 @@ class SettingsDialog(QDialog):
     def _cuda_available(self) -> bool:
         return cuda_usable()
 
-    def _apply(self) -> None:
-        self._settings = self._settings_from_fields()
+    def _commit_settings(self) -> bool:
+        """Buduje i zapisuje Settings; przy ValidationError pokazuje komunikat i zwraca False.
+
+        Pułapka na przyszłość: dziś combos ograniczają wejście, ale gdyby pojawiło się pole
+        walidowane spoza dozwolonego zbioru, użytkownik dostanie czytelny komunikat zamiast
+        niewyłapanego wyjątku (i okno nie zamknie się z niezapisanymi danymi).
+        """
+        try:
+            self._settings = self._settings_from_fields()
+        except ValidationError as exc:
+            first = exc.errors()[0]
+            loc = first.get("loc")
+            field = str(loc[0]) if loc else "?"
+            themed_message_box(
+                self,
+                QMessageBox.Icon.Warning,
+                "Ustawienia",
+                f"Nieprawidłowa wartość dla „{field}”: {first['msg']}",
+            ).exec()
+            return False
         save_settings(self._settings)
-        themed_message_box(
-            self, QMessageBox.Icon.Information, "Ustawienia", "Zapisano ustawienia."
-        ).exec()
+        return True
+
+    def _apply(self) -> None:
+        if self._commit_settings():
+            themed_message_box(
+                self, QMessageBox.Icon.Information, "Ustawienia", "Zapisano ustawienia."
+            ).exec()
 
     def _on_ok(self) -> None:
-        self._settings = self._settings_from_fields()
-        save_settings(self._settings)
-        self.accept()
+        if self._commit_settings():
+            self.accept()
 
     def _browse_default_output_dir(self) -> None:
         directory = pick_dir(

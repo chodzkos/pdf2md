@@ -98,6 +98,15 @@ class VLMEngine(ConversionEngine):
         """Wykonuje OCR jednej strony (obrazu) i zwraca Markdown. Podklasa implementuje."""
         raise NotImplementedError
 
+    def ocr_page(self, image_path: str) -> str:
+        """Publiczny kontrakt OCR jednej strony (obrazu) → Markdown.
+
+        Deleguje do ``_ocr_page`` (punkt rozszerzenia nadpisywany w podklasach). Stabilna,
+        publiczna nazwa dla wołających spoza silnika (np. ``scan/rerun.py``), zamiast sięgania
+        po prywatne ``_ocr_page``.
+        """
+        return self._ocr_page(image_path)
+
     # ------------------------------------------------------------------
     # Konwersja
     # ------------------------------------------------------------------

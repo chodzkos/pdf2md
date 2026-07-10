@@ -153,7 +153,8 @@ def test_dotenv_overrides_toml_values(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """.env działa jako deweloperski override wartości z config.toml."""
+    """.env działa jako deweloperski override wartości z config.toml — tylko w trybie dev."""
+    monkeypatch.setenv("PDF2MD_DEV", "1")  # .env ładowany wyłącznie w trybie dev
     isolated_config.parent.mkdir(parents=True)
     isolated_config.write_text(
         """
@@ -178,6 +179,35 @@ LLM_PROVIDER=ollama
 
     assert settings.openai_api_key == "from-dotenv"
     assert settings.llm_provider == "ollama"
+
+
+def test_dotenv_ignored_without_dev_mode(
+    isolated_config: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Bez PDF2MD_DEV cudzy .env w CWD jest ignorowany — wartości z config.toml zostają."""
+    monkeypatch.delenv("PDF2MD_DEV", raising=False)
+    isolated_config.parent.mkdir(parents=True)
+    isolated_config.write_text(
+        """
+[llm]
+provider = "none"
+
+[api_keys]
+openai_api_key = "from-toml"
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / ".env").write_text(
+        "OPENAI_API_KEY=from-dotenv\nLLM_PROVIDER=ollama\n", encoding="utf-8"
+    )
+    monkeypatch.chdir(tmp_path)
+
+    settings = get_settings()
+
+    assert settings.openai_api_key == "from-toml"  # .env NIE nadpisał
+    assert settings.llm_provider == "none"
 
 
 def test_save_settings_writes_config_atomically(isolated_config: Path) -> None:

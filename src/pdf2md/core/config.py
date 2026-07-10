@@ -1,7 +1,8 @@
 """Konfiguracja aplikacji — źródłem prawdy jest ~/.config/pdf2md/config.toml.
 
-Plik .env służy wyłącznie jako override deweloperski i nadpisuje wartości z TOML.
-Kolejność ładowania: config.toml → .env (jeśli istnieje) → cache.
+Plik .env służy wyłącznie jako override DEWELOPERSKI i jest ładowany tylko w trybie dev
+(`PDF2MD_DEV=1`) — produkcyjnie ignorowany, żeby cudzy .env w katalogu uruchomienia nie
+nadpisał po cichu ustawień. Kolejność ładowania: config.toml → .env (tylko dev) → cache.
 """
 
 from __future__ import annotations
@@ -146,7 +147,8 @@ class Settings(BaseSettings):
     """Ustawienia aplikacji — wspólne dla CLI i GUI (żadnego osobnego QSettings)."""
 
     model_config = SettingsConfigDict(
-        # .env nadpisuje wartości z TOML (tylko do developmentu)
+        # .env ładowane tylko w trybie dev — ścieżkę wybiera _resolve_env_file() i podaje
+        # jako _env_file przy tworzeniu Settings (produkcyjnie None → .env ignorowany).
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
@@ -272,12 +274,36 @@ class Settings(BaseSettings):
 _settings_cache: Settings | None = None
 
 
+def _resolve_env_file() -> str | None:
+    """Ścieżka pliku `.env` do załadowania albo None.
+
+    `.env` to override DEWELOPERSKI. Produkcyjnie jest ignorowany, żeby cudzy `.env` w katalogu
+    uruchomienia nie nadpisał po cichu ustawień (np. kluczy API, providera LLM). Ładujemy go
+    tylko w trybie dev (`PDF2MD_DEV=1`), logując pełną ścieżkę; gdy `.env` istnieje, a trybu dev
+    nie ma — logujemy, że został pominięty.
+    """
+    env_path = Path(".env").resolve()
+    if not env_path.is_file():
+        return None
+    if os.environ.get("PDF2MD_DEV", "").strip().lower() in {"1", "true", "yes", "on"}:
+        logger.info("Tryb dev (PDF2MD_DEV=1): ładuję override z {}", env_path)
+        return str(env_path)
+    logger.info(
+        "Pomijam {} — produkcyjnie .env jest ignorowany (ustaw PDF2MD_DEV=1, aby załadować "
+        "override deweloperski).",
+        env_path,
+    )
+    return None
+
+
 def get_settings() -> Settings:
-    """Zwraca singleton ustawień (TOML → .env override → cache)."""
+    """Zwraca singleton ustawień (TOML → .env override tylko w trybie dev → cache)."""
     global _settings_cache
     if _settings_cache is None:
         toml_values = _load_toml_flat()
-        _settings_cache = Settings(**toml_values)
+        # _env_file to udokumentowany kwarg pydantic-settings (override ścieżki .env), którego
+        # wygenerowany przez plugin __init__ nie widzi w sygnaturze → type: ignore[call-arg].
+        _settings_cache = Settings(**toml_values, _env_file=_resolve_env_file())  # type: ignore[call-arg]
     return _settings_cache
 
 

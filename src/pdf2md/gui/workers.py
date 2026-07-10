@@ -202,7 +202,6 @@ class ConversionWorker(QThread):
                 self.file_done.emit(pdf_path, done_output or "", elapsed)
                 success += 1
                 self._success_count = success
-                _ = result
             except ConversionCancelled:
                 # Bieżący plik NIE jest kompletny — nie liczony jako sukces.
                 self._record_history(

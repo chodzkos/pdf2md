@@ -13,6 +13,7 @@ from PySide6.QtWidgets import QApplication
 
 import pdf2md.engines  # rejestruje silniki w engine_registry
 import pdf2md.llm  # noqa: F401  # rejestruje dostawców LLM w llm_registry
+from pdf2md import __version__
 from pdf2md.core.input_types import is_supported_input
 from pdf2md.gui.main_window import MainWindow
 from pdf2md.gui.theme_bridge import SettingsMapping
@@ -72,7 +73,7 @@ def main() -> None:
     setup_logging(to_file=True)
     app = QApplication(sys.argv)
     app.setApplicationName("pdf2md")
-    app.setApplicationVersion("1.0.0")
+    app.setApplicationVersion(__version__)
     icon_path = Path(__file__).resolve().parent / "assets" / "icon.svg"
     app.setWindowIcon(QIcon(str(icon_path)))
 

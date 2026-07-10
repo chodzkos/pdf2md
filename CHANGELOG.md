@@ -39,6 +39,7 @@
 
 ### Naprawione
 
+- **Historia (SQLite): deterministyczne zamykanie połączeń.** `record`/`clear`/`_fetch_entries` używały `with _connect() as conn:` — kontekst `sqlite3.Connection` commituje transakcję, ale **nie zamyka** połączenia (uchwyt pliku `history.db` wisiał do GC → na Windows blokada pliku). Teraz `with closing(_connect()) as conn, conn:` — zewnętrzny `closing` zamyka połączenie deterministycznie, wewnętrzny `conn` trzyma transakcję. Zachowanie zapytań bez zmian.
 - **EPUB gubił obrazy inline** (oba backendy, GUI i CLI) — eksportery tworzyły temp `.md` w `/tmp` (`%TEMP%`), a Pandoc/Calibre szukają względnych referencji `![](obraz.png)` **obok pliku wejściowego**, gdzie obrazów nie było → EPUB bez obrazów, bez błędu. `export()` przyjmuje teraz `source_dir` i tworzy temp obok obrazów (fallback: katalog wyniku, nigdy gołe `/tmp`); Pandoc dodatkowo dostaje `--resource-path=<source_dir>` jako drugą linię obrony. GUI wskazuje katalog pliku `.md`, CLI katalog wyniku.
 
 - **`doctor` nie pokazuje mylącego hintu instalacji pod Windows** dla silników vLLM (MinerU / olmOCR / PaddleOCR-VL) — oznaczone jako wymagające Linux/WSL (status „❌ Niedostępny (wymaga Linux/WSL)" + uwaga, bez komendy instalacji, która i tak by nie zadziałała). Na Linux/WSL bez zmian (status „Niezainstalowany" + hint). Surya/Marker (GPU pod Windows) nietknięte.

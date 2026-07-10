@@ -7,7 +7,8 @@ import json
 import urllib.request
 
 from chodzkos_gui_kit.qt.dialogs import pick_dir
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtGui import QCursor
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -30,6 +31,33 @@ from pdf2md.gui.theming import follow_app_titlebar, themed_message_box
 from pdf2md.llm import sdk_package_for_provider
 
 
+def _fetch_ollama_models(url: str) -> list[str]:
+    """Pobiera listę modeli z {url}/api/tags. Po cichu zwraca [] przy błędzie.
+
+    Funkcja modułowa (bez self) — bezpieczna do wywołania w wątku roboczym.
+    """
+    base = (url.strip() or "http://localhost:11434").rstrip("/")
+    try:
+        with urllib.request.urlopen(f"{base}/api/tags", timeout=3) as response:
+            data = json.loads(response.read())
+    except Exception:
+        return []
+    return [str(model.get("name", "")) for model in data.get("models", []) if model.get("name")]
+
+
+class _OllamaModelsFetcher(QThread):
+    """Pobiera modele Ollamy w osobnym wątku — sonda HTTP nie blokuje wątku UI."""
+
+    fetched = Signal(list)  # list[str] nazw modeli
+
+    def __init__(self, url: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._url = url
+
+    def run(self) -> None:
+        self.fetched.emit(_fetch_ollama_models(self._url))
+
+
 class SettingsDialog(QDialog):
     """Okno ustawień aplikacji korzystające z core/config.py."""
 
@@ -38,6 +66,7 @@ class SettingsDialog(QDialog):
         self.setWindowTitle("Ustawienia")
         self.setMinimumSize(560, 420)
         self._settings = get_settings()
+        self._models_fetcher: _OllamaModelsFetcher | None = None
         self._build_ui()
         self._load_settings()
         self._titlebar = follow_app_titlebar(self)
@@ -124,10 +153,10 @@ class SettingsDialog(QDialog):
         url_row.addWidget(QLabel("URL:"))
         self._ollama_url = QLineEdit()
         self._ollama_url.setPlaceholderText("http://localhost:11434")
-        detect = QPushButton("Wykryj modele")
-        detect.clicked.connect(self._detect_ollama_models)
+        self._detect_button = QPushButton("Wykryj modele")
+        self._detect_button.clicked.connect(self._detect_ollama_models)
         url_row.addWidget(self._ollama_url)
-        url_row.addWidget(detect)
+        url_row.addWidget(self._detect_button)
         layout.addLayout(url_row)
 
         model_row = QHBoxLayout()
@@ -160,7 +189,8 @@ class SettingsDialog(QDialog):
         self._default_output_dir.setText(self._settings.default_output_dir)
         self._default_language.setText(self._settings.default_language)
         self._ollama_url.setText(self._settings.ollama_url)
-        self._populate_ollama_models(self._fetch_ollama_models())
+        # Bez requestu HTTP przy otwarciu dialogu — wstaw tylko bieżący model z configu.
+        # Pełną listę użytkownik pobiera przyciskiem „Wykryj modele" (w wątku).
         self._select_ollama_model(self._settings.ollama_model)
         self._set_combo_value(self._docling_device, self._settings.docling_device)
 
@@ -245,16 +275,6 @@ class SettingsDialog(QDialog):
             "Uwaga: nie wykonano zapytania do API.",
         ).exec()
 
-    def _fetch_ollama_models(self) -> list[str]:
-        """Pobiera listę modeli z /api/tags. Po cichu zwraca [] przy błędzie (do _load_settings)."""
-        url = (self._ollama_url.text().strip() or "http://localhost:11434").rstrip("/")
-        try:
-            with urllib.request.urlopen(f"{url}/api/tags", timeout=3) as response:
-                data = json.loads(response.read())
-        except Exception:
-            return []
-        return [str(model.get("name", "")) for model in data.get("models", []) if model.get("name")]
-
     def _populate_ollama_models(self, models: list[str]) -> None:
         """Wypełnia dropdown modelami, zachowując bieżąco wybrany model."""
         current = self._ollama_model.currentText().strip()
@@ -274,7 +294,21 @@ class SettingsDialog(QDialog):
         self._ollama_model.setCurrentIndex(index)
 
     def _detect_ollama_models(self) -> None:
-        models = self._fetch_ollama_models()
+        """Pobiera modele w wątku (sonda HTTP poza wątkiem UI) z kursorem busy na przycisku."""
+        if self._models_fetcher is not None and self._models_fetcher.isRunning():
+            return
+        url = self._ollama_url.text().strip() or "http://localhost:11434"
+        self._detect_button.setEnabled(False)
+        self._detect_button.setCursor(QCursor(Qt.CursorShape.BusyCursor))
+        fetcher = _OllamaModelsFetcher(url, self)
+        fetcher.fetched.connect(self._on_models_fetched)
+        self._models_fetcher = fetcher
+        fetcher.start()
+
+    def _on_models_fetched(self, models: list[str]) -> None:
+        """Slot w wątku UI: przywraca przycisk i wypełnia listę (albo ostrzega)."""
+        self._detect_button.setEnabled(True)
+        self._detect_button.unsetCursor()
         if not models:
             themed_message_box(
                 self,
@@ -283,4 +317,6 @@ class SettingsDialog(QDialog):
                 "Nie udało się pobrać modeli z Ollamy. Sprawdź URL i czy serwer działa.",
             ).exec()
             return
+        # Po „Wykryj modele" zaznacz w combo model z configu, jeśli jest na liście.
         self._populate_ollama_models(models)
+        self._select_ollama_model(self._settings.ollama_model)

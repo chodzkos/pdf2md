@@ -60,19 +60,42 @@ def _mock_ollama_tags(monkeypatch: pytest.MonkeyPatch, models: list[str]) -> Non
     monkeypatch.setattr(sd.urllib.request, "urlopen", lambda url, timeout=None: _Resp())
 
 
-def test_dropdown_lists_models_and_preselects_current(
+def test_construction_does_not_fetch_models_over_http(
     qapp: QApplication, isolated_config: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Dropdown wypełnia się modelami z /api/tags i preselekcjonuje bieżący config.ollama_model."""
-    _mock_ollama_tags(monkeypatch, ["modelA", "qwen3:14b", "modelB"])
+    """Konstrukcja dialogu NIE robi requestu HTTP — dropdown ma tylko bieżący model z configu."""
+
+    def forbidden(url: object, timeout: object = None) -> object:
+        raise AssertionError("brak requestu HTTP oczekiwany przy konstrukcji dialogu")
+
+    monkeypatch.setattr(sd.urllib.request, "urlopen", forbidden)
 
     dialog = SettingsDialog()
     try:
         items = [dialog._ollama_model.itemText(i) for i in range(dialog._ollama_model.count())]
+        # tylko model z configu (qwen3:14b) — bez listy pobieranej z serwera
+        assert items == ["qwen3:14b"]
+        assert dialog._ollama_model.currentText() == "qwen3:14b"
+    finally:
+        dialog.deleteLater()
+
+
+def test_detect_populates_models_and_reselects_current(
+    qapp: QApplication, isolated_config: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Slot po wątku „Wykryj modele" wypełnia listę i re-zaznacza model z configu; przycisk wraca."""
+    _mock_ollama_tags(monkeypatch, ["modelA", "qwen3:14b", "modelB"])
+
+    dialog = SettingsDialog()
+    try:
+        # Symulujemy zakończenie wątku pobierania — wynik _fetch_ollama_models trafia do slotu.
+        dialog._on_models_fetched(sd._fetch_ollama_models(dialog._ollama_url.text()))
+
+        items = [dialog._ollama_model.itemText(i) for i in range(dialog._ollama_model.count())]
         assert "modelA" in items
         assert "modelB" in items
-        # domyślny model z configu (qwen3:14b) jest preselektowany
         assert dialog._ollama_model.currentText() == "qwen3:14b"
+        assert dialog._detect_button.isEnabled() is True
     finally:
         dialog.deleteLater()
 

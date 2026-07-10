@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
+import urllib.error
 import urllib.request
+from contextlib import suppress
+from typing import Any
 
 from loguru import logger
 
@@ -47,6 +50,30 @@ class OllamaProvider(PostprocessMixin, LLMProvider):
     def _settings_model(self) -> str | None:
         return get_settings().ollama_model
 
+    def _post(self, req: urllib.request.Request) -> dict[str, Any]:
+        """POST do Ollamy z czytelnym błędem, gdy model nie istnieje (zamiast surowego 404).
+
+        Ollama zwraca HTTP 404 z treścią ``model "X" not found`` — bez tłumaczenia użytkownik
+        GUI dostałby nieczytelny traceback. Tu zamieniamy go na wskazówkę (`ollama pull` /
+        „Wykryj modele"). Inne błędy HTTP zwracamy jako RuntimeError z kodem i skróconą treścią.
+        """
+        try:
+            with urllib.request.urlopen(req) as resp:
+                result: dict[str, Any] = json.loads(resp.read())
+                return result
+        except urllib.error.HTTPError as exc:
+            detail = ""
+            with suppress(Exception):
+                detail = exc.read().decode("utf-8", errors="replace")
+            if exc.code == 404 or "not found" in detail.lower():
+                model = self._resolve_model()
+                raise RuntimeError(
+                    f"Model Ollamy „{model}” nie jest dostępny na serwerze. Pobierz go: "
+                    f"`ollama pull {model}`, albo wybierz istniejący w "
+                    "Ustawieniach → Ollama → „Wykryj modele”."
+                ) from exc
+            raise RuntimeError(f"Ollama HTTP {exc.code}: {detail[:300]}") from exc
+
     def _call_llm(self, text: str, instructions: str) -> str:
         model = self._resolve_model()
         prompt = (
@@ -61,9 +88,8 @@ class OllamaProvider(PostprocessMixin, LLMProvider):
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urllib.request.urlopen(req) as resp:
-            result = json.loads(resp.read())
-            return str(result.get("response", text))
+        result = self._post(req)
+        return str(result.get("response", text))
 
     def postprocess(
         self,
@@ -101,6 +127,5 @@ class OllamaProvider(PostprocessMixin, LLMProvider):
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urllib.request.urlopen(req) as resp:
-            result = json.loads(resp.read())
-            return str(result.get("message", {}).get("content", text))
+        result = self._post(req)
+        return str(result.get("message", {}).get("content", text))

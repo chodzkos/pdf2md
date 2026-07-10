@@ -12,6 +12,23 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    # Grupowanie par, które uv trzyma w locku razem. Bez tego każdy pakiet
+    # dostaje osobny PR, a że wszystkie przepisują ten sam blok uv.lock,
+    # kolidują ze sobą przy merge'u (czysto wchodzi tylko pierwszy, reszta
+    # wymaga rebase). Grupa = jeden spójny PR na parę.
+    groups:
+      # torch + torchvision — cu130, resolver dobiera je jako zgodną parę
+      # (bump jednego bez drugiego rozjeżdża ABI). Weryfikacja: GPU (Surya).
+      torch:
+        patterns:
+          - "torch"
+          - "torchvision"
+      # rodzina pymupdf — pymupdf/pymupdf-layout/pymupdf4llm wydawane razem
+      # pod wspólną wersją (np. 1.28.0); trzymamy je w jednym PR.
+      pymupdf:
+        patterns:
+          - "pymupdf"
+          - "pymupdf4llm"
 
   # Akcje w workflowach GitHub Actions — Dependabot podbija piny SHA
   # zachowując komentarz z wersją (np. # v4.2.2).

@@ -41,8 +41,11 @@ izolowane silniki VLM-OCR Fazy 2 i przeniesienie projektu na nową maszynę.
 
 Zasada: **silniki rdzeniowe** (PyMuPDF4LLM, Marker, Docling, Surya) idą do venv projektu.
 **Ciężkie silniki-usługi** (MinerU, olmOCR, PaddleOCR-VL) są izolowane w osobnych środowiskach, bo
-ich zależności (vLLM, PaddlePaddle, transformers) konfliktują ze sobą i z projektem. vLLM działa
-tylko pod Linux/WSL — na natywnym Windows te trzy silniki nie ruszą (ale Marker/Surya na GPU tak).
+ich zależności (vLLM, PaddlePaddle, transformers) konfliktują ze sobą i z projektem. Serwer vLLM
+działa tylko pod Linux/WSL. Rozróżnij jednak dwa tryby (zob. ENGINES.md):
+**proces lokalny** (MinerU, olmOCR bez `olmocr_server_url`) uruchamia vLLM u siebie i pod natywnym
+Windows nie ruszy; **silnik-usługa/klient HTTP** (PaddleOCR-VL zawsze, olmOCR z `olmocr_server_url`)
+działa też spod Windows, gdy serwer stoi w WSL2/Linux. Marker/Surya na GPU pod Windows działają.
 
 > **Inna karta niż RTX 5090, mniej VRAM albo starszy sterownik?** Patrz **sekcja 12** — co działa na
 > ilu GB i dlaczego do GPU potrzebny jest aktualny sterownik. Najszybciej: `pdf2md doctor` powie, co

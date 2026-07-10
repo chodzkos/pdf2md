@@ -93,7 +93,7 @@ ENGINE_CATALOG: tuple[dict[str, object], ...] = (
         "scope": "Opc.",
         "ocr": True,
         "llm": False,
-        "linux_only": True,  # vLLM — tylko Linux/WSL
+        "linux_only_local": True,  # lokalny proces vLLM — tylko Linux/WSL
         "license": "AGPL",
         "hint": "uv tool install mineru --with mineru[all]",
         "min_vram_gb": 6,  # backend pipeline; backend vlm ~12 GB (cięższy)
@@ -107,7 +107,9 @@ ENGINE_CATALOG: tuple[dict[str, object], ...] = (
         "ocr": True,
         "llm": False,
         "gpu": True,
-        "linux_only": True,  # vLLM — tylko Linux/WSL
+        "linux_only_local": True,  # tryb spawn: lokalny proces vLLM — tylko Linux/WSL
+        # Gdy olmocr_server_url ustawiony → silnik-usługa (klient serwera, bez lokalnego GPU).
+        "server_url_setting": "olmocr_server_url",
         "license": "Apache-2.0",
         "hint": "pip install olmocr (osobne środowisko + CUDA)",
         "min_vram_gb": 24,  # zmierzone: 9.5 GB model + 9.3 GB KV-cache + grafy CUDA
@@ -121,7 +123,8 @@ ENGINE_CATALOG: tuple[dict[str, object], ...] = (
         "ocr": True,
         "llm": False,
         "gpu": True,
-        "linux_only": True,  # vLLM — tylko Linux/WSL
+        # Klient HTTP serwera vLLM — wykonalny też z Windows, gdy serwer stoi (WSL2).
+        "server_backed": True,
         "license": "Apache-2.0",
         "hint": (
             "Uruchom serwer: VLLM_USE_FLASHINFER_SAMPLER=0 vllm serve "
@@ -455,15 +458,42 @@ def _min_vram_gb(item: dict[str, object]) -> float:
     return float(value) if isinstance(value, (int, float)) else 0.0
 
 
+def _engine_is_server_backed(item: dict[str, object]) -> bool:
+    """Czy silnik działa TERAZ jako klient HTTP zewnętrznego serwera VLM (a nie lokalny proces).
+
+    PaddleOCR-VL zawsze (``server_backed``). olmOCR tylko gdy skonfigurowano ``olmocr_server_url``
+    (``server_url_setting``) — wtedy inferencja żyje na serwerze i lokalne GPU nie jest wymagane,
+    więc silnik jest wykonalny także spod natywnego Windows (serwer stoi w WSL2/Linux).
+    """
+    if item.get("server_backed"):
+        return True
+    setting_name = item.get("server_url_setting")
+    if isinstance(setting_name, str):
+        return bool(getattr(get_settings(), setting_name, None))
+    return False
+
+
 def _engine_feasibility(item: dict[str, object], hw: HardwareInfo) -> str:
     """Wykonalność silnika względem wykrytego sprzętu (✅ / ⚠️ / ❌).
 
     Progi VRAM (poza olmOCR) są SZACUNKAMI — stąd pas „⚠️ na granicy" zamiast twardego „nie"
-    tam, gdzie da się docisnąć dostrajaniem. Wymiar Linux/WSL łączy się z VRAM-em: silnik na
-    vLLM pod Windows jest niewykonalny niezależnie od pamięci karty.
+    tam, gdzie da się docisnąć dostrajaniem. Wymiary systemu:
+
+    * silnik-usługa (klient HTTP serwera vLLM: PaddleOCR-VL, olmOCR z ``server_url``) jest
+      wykonalny niezależnie od OS — liczy się osiągalność serwera, nie lokalne GPU;
+    * lokalny proces vLLM (MinerU, olmOCR w trybie spawn) pod natywnym Windows nie ruszy,
+      choćby VRAM starczał.
     """
-    # Wymiar systemu: vLLM-owe silniki pod natywnym Windows nie ruszą, choćby VRAM starczał.
-    if item.get("linux_only") and platform.system() != "Linux":
+    # Silnik-usługa: pytamy realny silnik o osiągalność serwera (klient działa też z Windows).
+    if _engine_is_server_backed(item):
+        engine = _find_engine(str(item["key"]))
+        if engine is not None and engine.is_available():
+            return "✅ serwer osiągalny"
+        # Serwer nieosiągalny — to klient, więc podpowiedź o SERWERZE, nie o lokalnym CUDA/VRAM.
+        return "⚠️ wymaga serwera vLLM (Linux/WSL2) — uruchom serwer, zob. INSTALL.md"
+
+    # Lokalny proces oparty na vLLM pod natywnym Windows nie ruszy, choćby VRAM starczał.
+    if item.get("linux_only_local") and platform.system() != "Linux":
         return "❌ wymaga Linux/WSL"
 
     min_vram = _min_vram_gb(item)
@@ -529,11 +559,18 @@ def _print_engine_table(hw: HardwareInfo | None = None, out: Console | None = No
         description = str(item["description"])
         if available:
             status = "✅ Dostępny"
-        elif item.get("linux_only") and platform.system() != "Linux":
-            # Silnik na vLLM — pod natywnym Windows nie ruszy; hint instalacji mylił.
+        elif _engine_is_server_backed(item):
+            # Silnik-usługa (klient HTTP vLLM): niedostępny = serwer nieosiągalny, nie brak Linuksa.
+            status = "❌ Niedostępny (serwer nieosiągalny)"
+            description = (
+                f"{description}\nUWAGA: silnik-usługa (klient HTTP serwera vLLM) — uruchom serwer "
+                "(Linux/WSL2), zob. INSTALL.md. Sam klient działa też pod Windows."
+            )
+        elif item.get("linux_only_local") and platform.system() != "Linux":
+            # Lokalny proces na vLLM — pod natywnym Windows nie ruszy; hint instalacji mylił.
             status = "❌ Niedostępny (wymaga Linux/WSL)"
             description = (
-                f"{description}\nUWAGA: silnik opiera się na vLLM — działa tylko pod "
+                f"{description}\nUWAGA: lokalny proces oparty na vLLM — działa tylko pod "
                 "Linux/WSL, nie pod natywnym Windows."
             )
         else:

@@ -4,6 +4,20 @@ pdf2md rejestruje wszystkie znane silniki, ale traktuje je jako zaleznosci opcjo
 `is_available()` nie importuje ciezkich bibliotek ML i ma zwracac `False`, gdy pakiet lub CLI
 nie sa zainstalowane.
 
+## Silnik-usluga (klient serwera VLM) vs proces lokalny
+
+Silniki oparte na vLLM dziela sie na dwie kategorie — co wprost przeklada sie na kolumne
+„Wykonalnosc" w `pdf2md doctor`:
+
+- **Silnik-usluga (klient HTTP serwera vLLM):** PaddleOCR-VL zawsze; olmOCR, gdy ustawisz
+  `olmocr_server_url`. `pdf2md` jest wtedy tylko klientem HTTP — nie importuje modelu i **nie
+  wymaga lokalnego GPU**. Serwer stoi w Linux/WSL2, a klient dziala rowniez spod natywnego
+  Windows. `doctor` pokazuje `✅ serwer osiagalny`, gdy serwer odpowiada, albo
+  `⚠️ wymaga serwera vLLM (Linux/WSL2)`, gdy jest wylaczony — niezaleznie od systemu.
+- **Proces lokalny (spawn):** MinerU oraz olmOCR bez `olmocr_server_url` uruchamiaja vLLM we
+  wlasnym procesie i wymagaja Linuksa/WSL2 (oraz GPU). Pod natywnym Windows `doctor` pokazuje
+  `❌ wymaga Linux/WSL`.
+
 ## PyMuPDF4LLM
 
 **Opis i mocne strony:** szybki ekstraktor tekstu dla natywnych PDF-ow. Dobrze sprawdza sie
@@ -152,8 +166,10 @@ VLLM_USE_FLASHINFER_SAMPLER=0 vllm serve PaddlePaddle/PaddleOCR-VL \
 
 Szczegoly (izolowany venv, nightly-vLLM na Blackwell) w INSTALL.md.
 
-**Znane ograniczenia:** wymaga dzialajacego serwera vLLM (GPU); na natywnym Windows nie ruszy
-(vLLM tylko Linux/WSL).
+**Znane ograniczenia:** wymaga dzialajacego serwera vLLM (GPU) po stronie Linux/WSL2. Sam
+**serwer** nie ruszy pod natywnym Windows, ale **klient (`pdf2md`) tak** — wystarczy
+`paddleocr_vl_url` wskazujacy serwer w WSL2/Linux. `doctor` sprawdza osiagalnosc serwera
+(GET /models), nie lokalne GPU — dlatego silnik jest wykonalny takze spod Windows.
 
 ## olmOCR — ZAPARKOWANY (adapter gotowy)
 
@@ -173,6 +189,12 @@ rownania, tabele), serwowany przez vLLM.
 **Kiedy rozwazyc:** wylacznie tryb **external-server** (`--server` / pole `olmocr_server_url`) —
 wlasny, raz wystartowany serwer, gdybys potrzebowal olmOCR „na zadanie". Dla typowego uzycia:
 Surya lub PaddleOCR-VL.
+
+W trybie external-server olmOCR jest **silnikiem-usluga**: inferencja zyje na serwerze, wiec
+`is_available()` **nie wymaga lokalnego GPU** — wystarczy python izolowanego venv (CLI olmocr
+odpalamy przez niego) plus osiagalny serwer. Dzieki temu tryb produkcyjny dziala rowniez spod
+Windows z serwerem w WSL2. Bez `olmocr_server_url` (tryb spawn) olmOCR sam wstaje jako serwer
+vLLM i wymaga GPU oraz bina `vllm` w venv — czyli Linuksa/WSL2.
 
 **Instalacja (gdy naprawde potrzebny):** izolowany venv + nightly-vLLM — zob. INSTALL.md.
 

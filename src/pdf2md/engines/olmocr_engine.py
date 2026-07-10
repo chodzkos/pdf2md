@@ -55,20 +55,24 @@ class OlmOCREngine(VLMEngine):
         return None
 
     def is_available(self) -> bool:
-        """GPU + KOMPLETNY venv olmOCR (bin ``vllm`` obecny). Bez importu olmocr, nigdy nie rzuca.
+        """Wykonalność olmOCR. Bez importu olmocr, nigdy nie rzuca.
 
-        Sprawdzamy ``vllm`` (nie sam python), bo półzłożony venv (olmocr bez vLLM/torch) nie
-        zadziała — ma dawać ❌, nie fałszywe ✅. Tryb external-server (olmocr_server_url) nie
-        potrzebuje lokalnego vLLM — wystarczy python venv.
+        Venv olmOCR (python) jest wymagany zawsze — CLI odpalamy przez niego.
+        Dalej rozgałęzia się wg trybu:
+
+        * **external-server** (``olmocr_server_url`` ustawiony): inferencja żyje na serwerze,
+          klient NIE wymaga lokalnego GPU ani bina ``vllm`` — wystarczy python venv. Dzięki
+          temu tryb produkcyjny działa też spod Windows z serwerem w WSL2/Linux.
+        * **spawn lokalny** (brak server_url): olmOCR sam wstaje jako serwer vLLM, więc
+          wymaga GPU ORAZ bina ``vllm`` w venv (półzłożony venv bez vLLM/torch ma dawać ❌,
+          nie fałszywe ✅).
         """
-        if not self.has_gpu():
-            return False
         python = self._olmocr_python()
         if python is None:
             return False
         if get_settings().olmocr_server_url:
             return True
-        return (Path(python).parent / "vllm").exists()
+        return self.has_gpu() and (Path(python).parent / "vllm").exists()
 
     def convert(self, pdf_path: str, **kwargs: object) -> ConversionResult:
         """Uruchamia pipeline olmOCR (venv izolowany) z ``--markdown`` na całym PDF."""

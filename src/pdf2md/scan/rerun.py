@@ -2,12 +2,13 @@
 
 Strony wytypowane przez scan/validation.py (np. z dużą liczbą znaków �) renderujemy ponownie
 w wyższym DPI i puszczamy przez silnik fallbackowy. Realistyczny fallback w Fazie 2 to silnik
-VLM (Etap 12) udostępniający metodę per-stronę ``_ocr_page(image_path)``.
+VLM (Etap 12) udostępniający metodę per-stronę ``ocr_page(image_path)``.
 """
 
 from __future__ import annotations
 
 import os
+import shutil
 import tempfile
 from contextlib import suppress
 from pathlib import Path
@@ -24,7 +25,7 @@ class _PageOCREngine(Protocol):
 
     def load_model(self) -> None: ...
     def unload_model(self) -> None: ...
-    def _ocr_page(self, image_path: str) -> str: ...
+    def ocr_page(self, image_path: str) -> str: ...
 
 
 def _render_page(pdf_path: str, page_index: int, dpi: int, out_dir: str) -> str:
@@ -51,17 +52,22 @@ def rerun_difficult_pages(
     """Ponawia OCR wskazanych stron (0-based) silnikiem fallbackowym w wyższym DPI.
 
     Zwraca mapę {indeks_strony: poprawiony_markdown}. Silnik musi udostępniać interfejs
-    per-strona (load_model / _ocr_page / unload_model) — typowo silnik VLM z Etapu 12.
+    per-strona (load_model / ocr_page / unload_model) — typowo silnik VLM z Etapu 12.
+
+    Odporność: błąd OCR pojedynczej strony jest logowany i pomijany (strona nie trafia do
+    wyniku, zostaje w oryginalnej wersji), a pozostałe strony są przetwarzane dalej. Katalog
+    roboczy jest zawsze sprzątany.
     """
     if not page_indices:
         return {}
     if not isinstance(fallback_engine, _PageOCREngine):
         raise TypeError(
-            "fallback_engine musi udostępniać _ocr_page/load_model/unload_model "
+            "fallback_engine musi udostępniać ocr_page/load_model/unload_model "
             "(silnik VLM z Etapu 12)."
         )
 
     results: dict[int, str] = {}
+    failed: list[int] = []
     work_dir = tempfile.mkdtemp(prefix="pdf2md_rerun_")
     logger.info(
         f"Ponowny przebieg {len(page_indices)} trudnych stron w DPI={higher_dpi} "
@@ -70,12 +76,22 @@ def rerun_difficult_pages(
     try:
         fallback_engine.load_model()
         for idx in page_indices:
-            png = _render_page(pdf_path, idx, higher_dpi, work_dir)
-            results[idx] = fallback_engine._ocr_page(png)
-            with suppress(FileNotFoundError):
-                os.remove(png)
+            try:
+                png = _render_page(pdf_path, idx, higher_dpi, work_dir)
+                results[idx] = fallback_engine.ocr_page(png)
+                with suppress(FileNotFoundError):
+                    os.remove(png)
+            except Exception as exc:
+                # Jedna trudna strona nie może wywrócić całego przebiegu — loguj i jedź dalej.
+                logger.warning(f"Ponowny OCR strony {idx + 1} nie powiódł się: {exc}")
+                failed.append(idx)
     finally:
         fallback_engine.unload_model()
-        with suppress(OSError):
-            os.rmdir(work_dir)
+        shutil.rmtree(work_dir, ignore_errors=True)
+
+    if failed:
+        logger.warning(
+            f"Ponowny przebieg: {len(failed)}/{len(page_indices)} stron nie powiodło się "
+            f"(1-based: {[i + 1 for i in failed]}) — zostają w oryginalnej wersji."
+        )
     return results

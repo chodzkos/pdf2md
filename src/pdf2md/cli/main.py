@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import click
+from pydantic import ValidationError
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
@@ -367,12 +368,21 @@ def _coerce_config_value(field_name: str, value: str, settings: Settings) -> obj
         if lowered in {"0", "false", "no", "nie", "off"}:
             return False
         raise click.ClickException(f"Wartość dla {field_name} musi być bool: true/false")
+    # bool przed int przed float: bool jest podklasą int, a int podklasą docelową float —
+    # kolejność testów isinstance MUSI iść od najwęższego typu do najszerszego.
     if isinstance(current, int):
         try:
             return int(value)
         except ValueError as exc:
             raise click.ClickException(
                 f"Wartość dla {field_name} musi być liczbą całkowitą"
+            ) from exc
+    if isinstance(current, float):
+        try:
+            return float(value)
+        except ValueError as exc:
+            raise click.ClickException(
+                f"Wartość dla {field_name} musi być liczbą zmiennoprzecinkową"
             ) from exc
     return value
 
@@ -1182,7 +1192,15 @@ def config_set(ctx: click.Context, key: str, value: str) -> None:
 
     data = settings.model_dump()
     data[field_name] = _coerce_config_value(field_name, value, settings)
-    updated = Settings(**data)
+    # Walidacja pydantic (field_validatory: theme, *_device, epub_backend…) — zamiast surowego
+    # ValidationError podnosimy czytelny ClickException z pierwszym komunikatem; plik nietknięty.
+    try:
+        updated = Settings(**data)
+    except ValidationError as exc:
+        first = exc.errors()[0]
+        loc = first.get("loc")
+        field = str(loc[0]) if loc else field_name
+        raise click.ClickException(f"Nieprawidłowa wartość dla {field}: {first['msg']}") from exc
     save_settings(updated)
     console.print(f"[green]Zapisano:[/] {field_name} = {data[field_name]}")
 

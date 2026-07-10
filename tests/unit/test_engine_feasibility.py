@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 from pdf2md.cli.main import _engine_feasibility, _hardware_summary
@@ -79,10 +81,84 @@ def test_cpu_fallback_engine_regardless_of_state() -> None:
     assert _engine_feasibility(item, _hw("no_torch")) == "✅ CPU (wolno)"
 
 
-def test_linux_only_engine_on_windows(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Silnik vLLM pod Windows → ❌ wymaga Linux/WSL niezależnie od VRAM."""
+def test_linux_only_local_engine_on_windows(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Lokalny proces vLLM (MinerU) pod Windows → ❌ wymaga Linux/WSL niezależnie od VRAM."""
     monkeypatch.setattr("pdf2md.cli.main.platform.system", lambda: "Windows")
-    item = {"name": "MinerU", "linux_only": True, "min_vram_gb": 6}
+    item = {"key": "mineru", "name": "MinerU", "linux_only_local": True, "min_vram_gb": 6}
+    assert _engine_feasibility(item, _hw("ok", 48)) == "❌ wymaga Linux/WSL"
+
+
+class _FakeEngine:
+    """Minimalny silnik do testów wykonalności — steruje tylko is_available()."""
+
+    def __init__(self, available: bool) -> None:
+        self._available = available
+
+    def is_available(self) -> bool:
+        return self._available
+
+
+def _paddle_item() -> dict[str, object]:
+    return {
+        "key": "paddleocr-vl",
+        "name": "PaddleOCR-VL",
+        "server_backed": True,
+        "gpu": True,
+        "min_vram_gb": 12,
+    }
+
+
+def test_server_backed_engine_reachable_on_windows(monkeypatch: pytest.MonkeyPatch) -> None:
+    """PaddleOCR-VL (klient serwera) pod Windows z osiągalnym serwerem → ✅, mimo braku GPU."""
+    monkeypatch.setattr("pdf2md.cli.main.platform.system", lambda: "Windows")
+    monkeypatch.setattr("pdf2md.cli.main._find_engine", lambda _key: _FakeEngine(True))
+    assert _engine_feasibility(_paddle_item(), _hw("no_gpu")) == "✅ serwer osiągalny"
+
+
+def test_server_backed_engine_unreachable_on_windows(monkeypatch: pytest.MonkeyPatch) -> None:
+    """PaddleOCR-VL pod Windows z serwerem down → ⚠️ z podpowiedzią o serwerze (nie ❌ CUDA)."""
+    monkeypatch.setattr("pdf2md.cli.main.platform.system", lambda: "Windows")
+    monkeypatch.setattr("pdf2md.cli.main._find_engine", lambda _key: _FakeEngine(False))
+    result = _engine_feasibility(_paddle_item(), _hw("no_gpu"))
+    assert result.startswith("⚠️")
+    assert "serwer" in result
+    assert "CUDA" not in result
+
+
+def test_olmocr_server_backed_when_url_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    """olmOCR z olmocr_server_url pod Windows → silnik-usługa: ✅ gdy serwer stoi, mimo braku GPU."""
+    monkeypatch.setattr("pdf2md.cli.main.platform.system", lambda: "Windows")
+    monkeypatch.setattr("pdf2md.cli.main._find_engine", lambda _key: _FakeEngine(True))
+    monkeypatch.setattr(
+        "pdf2md.cli.main.get_settings",
+        lambda: SimpleNamespace(olmocr_server_url="http://wsl:30000/v1"),
+    )
+    item = {
+        "key": "olmocr",
+        "name": "olmOCR",
+        "linux_only_local": True,
+        "server_url_setting": "olmocr_server_url",
+        "gpu": True,
+        "min_vram_gb": 24,
+    }
+    assert _engine_feasibility(item, _hw("no_gpu")) == "✅ serwer osiągalny"
+
+
+def test_olmocr_spawn_mode_on_windows_is_linux_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    """olmOCR bez server_url (tryb spawn) pod Windows → ❌ wymaga Linux/WSL."""
+    monkeypatch.setattr("pdf2md.cli.main.platform.system", lambda: "Windows")
+    monkeypatch.setattr(
+        "pdf2md.cli.main.get_settings",
+        lambda: SimpleNamespace(olmocr_server_url=""),
+    )
+    item = {
+        "key": "olmocr",
+        "name": "olmOCR",
+        "linux_only_local": True,
+        "server_url_setting": "olmocr_server_url",
+        "gpu": True,
+        "min_vram_gb": 24,
+    }
     assert _engine_feasibility(item, _hw("ok", 48)) == "❌ wymaga Linux/WSL"
 
 

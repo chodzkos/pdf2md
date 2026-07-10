@@ -99,10 +99,12 @@ def _engines_tab() -> str:
     groups = _p(
         "Silniki dzielą się na trzy grupy: <b>główne</b> (PyMuPDF4LLM / Marker / Docling — działają "
         "wszędzie), <b>Surya</b> (GPU, ale dzieli środowisko projektu — działa też pod Windows) oraz "
-        "<b>izolowane usługi VLM-OCR</b> (MinerU / PaddleOCR-VL / olmOCR). Te ostatnie opierają się "
-        "na vLLM i <b>działają tylko pod Linux/WSL</b> (pod natywnym Windows nie ruszą) — uruchamiasz "
-        "je przez CLI. <b>olmOCR</b> jest dodatkowo <b>zaparkowany</b> (anglocentryczny, zajmuje "
-        "~całą kartę); dla skanów po polsku użyj PaddleOCR-VL lub Surya."
+        "<b>izolowane usługi VLM-OCR</b> (MinerU / PaddleOCR-VL / olmOCR) oparte na vLLM. Tu liczy się "
+        "tryb: <b>proces lokalny</b> (MinerU, olmOCR bez server_url) uruchamia vLLM u siebie i "
+        "<b>działa tylko pod Linux/WSL</b>; <b>silnik-usługa/klient HTTP</b> (PaddleOCR-VL, olmOCR z "
+        "ustawionym server_url) <b>działa też spod Windows</b>, gdy serwer stoi w WSL2/Linux. "
+        "<b>olmOCR</b> jest dodatkowo <b>zaparkowany</b> (anglocentryczny, zajmuje ~całą kartę); dla "
+        "skanów po polsku użyj PaddleOCR-VL lub Surya."
     )
     doctor = _p(
         "Co jest zainstalowane i dostępne w <b>Twoim</b> środowisku — wraz ze statusem GPU/CUDA, "

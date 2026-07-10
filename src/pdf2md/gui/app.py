@@ -53,6 +53,13 @@ def main() -> None:
     """Uruchamia aplikację graficzną pdf2md."""
     args = sys.argv[1:]
     if "--help" in args or "-h" in args:
+        # print zostawiony (nieszkodliwy), ale jako gui-script stdout może nie istnieć —
+        # równoległy logger.info gwarantuje ślad w logu GUI.
+        usage = (
+            "Usage: pdf2md-gui [PDF/obraz ...] — graficzny konwerter PDF/obrazów do Markdown; "
+            "podane pliki PDF/JPG/PNG/TIFF zostaną dodane do listy konwersji."
+        )
+        logger.info(usage)
         print("Usage: pdf2md-gui [PDF/obraz ...]")
         print()
         print("Uruchamia graficzny konwerter PDF/obrazów do Markdown.")
@@ -61,7 +68,8 @@ def main() -> None:
 
     initial_files = [arg for arg in args if is_supported_input(arg)]
 
-    setup_logging()
+    # to_file=True: tryb GUI (gui-script, brak konsoli) → log do ~/.config/pdf2md/logs/gui.log.
+    setup_logging(to_file=True)
     app = QApplication(sys.argv)
     app.setApplicationName("pdf2md")
     app.setApplicationVersion("1.0.0")

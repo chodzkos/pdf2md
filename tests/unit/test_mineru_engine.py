@@ -33,6 +33,7 @@ def _make_fake_run(
         capture_output: bool,
         text: bool,
         env: dict[str, str] | None = None,
+        creationflags: int = 0,
     ) -> subprocess.CompletedProcess[str]:
         calls.append(command)
         if envs is not None:

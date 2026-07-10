@@ -8,6 +8,8 @@ from pathlib import Path
 
 from chodzkos_detection import check_pandoc
 
+from pdf2md.utils.subprocess_flags import NO_WINDOW_FLAGS
+
 
 class PandocEpubExporter:
     """Konwertuje Markdown do EPUB przez zewnętrzny Pandoc."""
@@ -39,6 +41,7 @@ class PandocEpubExporter:
                 check=True,
                 capture_output=True,
                 text=True,
+                creationflags=NO_WINDOW_FLAGS,
             )
         finally:
             tmp_path.unlink(missing_ok=True)

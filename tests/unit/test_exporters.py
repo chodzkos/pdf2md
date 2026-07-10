@@ -47,6 +47,7 @@ def test_pandoc_epub_exporter_runs_pandoc_and_removes_temp_file(
         check: bool,
         capture_output: bool,
         text: bool,
+        creationflags: int = 0,
     ) -> subprocess.CompletedProcess[str]:
         calls.append(command)
         temp_paths.append(Path(command[1]))
@@ -87,6 +88,7 @@ def test_pandoc_epub_exporter_puts_temp_in_source_dir(
         check: bool,
         capture_output: bool,
         text: bool,
+        creationflags: int = 0,
     ) -> subprocess.CompletedProcess[str]:
         calls.append(command)
         temp_paths.append(Path(command[1]))
@@ -110,7 +112,7 @@ def test_calibre_epub_exporter_raises_when_calibre_missing(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    monkeypatch.setattr("pdf2md.exporters.calibre_epub_exporter.check_calibre", lambda: False)
+    monkeypatch.setattr("pdf2md.exporters.calibre_epub_exporter.calibre_path", lambda: None)
 
     with pytest.raises(RuntimeError, match=r"Calibre .* nie jest dostępny"):
         CalibreEpubExporter().export("# Tytul", tmp_path / "book.epub")
@@ -125,7 +127,10 @@ def test_calibre_epub_exporter_runs_ebook_convert_and_removes_temp_file(
     output = tmp_path / "out" / "book.epub"
     calls: list[list[str]] = []
     temp_paths: list[Path] = []
-    monkeypatch.setattr("pdf2md.exporters.calibre_epub_exporter.check_calibre", lambda: True)
+    ebook_convert = "/opt/Calibre2/ebook-convert"
+    monkeypatch.setattr(
+        "pdf2md.exporters.calibre_epub_exporter.calibre_path", lambda: ebook_convert
+    )
 
     def fake_run(
         command: list[str],
@@ -133,6 +138,7 @@ def test_calibre_epub_exporter_runs_ebook_convert_and_removes_temp_file(
         check: bool,
         capture_output: bool,
         text: bool,
+        creationflags: int = 0,
     ) -> subprocess.CompletedProcess[str]:
         calls.append(command)
         temp_paths.append(Path(command[1]))
@@ -150,7 +156,8 @@ def test_calibre_epub_exporter_runs_ebook_convert_and_removes_temp_file(
     result = CalibreEpubExporter().export("![](fig.png)", output, source_dir=source_dir)
 
     assert result == output
-    assert calls == [["ebook-convert", str(temp_paths[0]), str(output)]]
+    # ebook-convert wołany PEŁNĄ ścieżką z calibre_path(), nie gołą nazwą.
+    assert calls == [[ebook_convert, str(temp_paths[0]), str(output)]]
     assert output.read_bytes() == b"epub"
     assert not temp_paths[0].exists()
 

@@ -6,7 +6,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from pdf2md.detection.dependencies import check_calibre
+from pdf2md.detection.dependencies import calibre_path
+from pdf2md.utils.subprocess_flags import NO_WINDOW_FLAGS
 
 
 class CalibreEpubExporter:
@@ -19,8 +20,11 @@ class CalibreEpubExporter:
         *,
         source_dir: Path | None = None,
     ) -> Path:
-        if not check_calibre():
-            raise RuntimeError("Calibre (ebook-convert) nie jest dostępny w PATH")
+        ebook_convert = calibre_path()
+        if ebook_convert is None:
+            raise RuntimeError(
+                "Calibre (ebook-convert) nie jest dostępny (PATH / rejestr / znane katalogi)"
+            )
 
         path = Path(output_path)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -35,10 +39,11 @@ class CalibreEpubExporter:
             tmp_path = Path(tmp.name)
         try:
             subprocess.run(
-                ["ebook-convert", str(tmp_path), str(path)],
+                [ebook_convert, str(tmp_path), str(path)],
                 check=True,
                 capture_output=True,
                 text=True,
+                creationflags=NO_WINDOW_FLAGS,
             )
         finally:
             tmp_path.unlink(missing_ok=True)

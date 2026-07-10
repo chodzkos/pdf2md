@@ -58,7 +58,7 @@ engines-core = [
     # torch/torchvision zadeklarowane JAWNIE (mimo że ciągną je marker-pdf/surya):
     # [tool.uv.sources] łapie tylko zadeklarowane pakiety, nie transitive — bez tego
     # źródło cu130 jest ignorowane i Windows dostaje wariant +cpu z PyPI.
-    "torch>=2.12",
+    "torch>=2.13.0",
     "torchvision>=0.27",
 ]
 llm = [

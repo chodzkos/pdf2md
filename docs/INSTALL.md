@@ -461,6 +461,10 @@ skopiuj cache `~/.cache/huggingface/`, ale to opcjonalne).
 - **GUI nie otwiera okna konsoli — gdzie są logi?** → to celowe (`pdf2md-gui` jest gui-scriptem, bez
   konsoli). Diagnostyka trafia do `~/.config/pdf2md/logs/gui.log` (rotacja 5 MB). Dołącz ten plik
   do zgłoszenia problemu z GUI.
+- **Calibre zainstalowane, ale `doctor` go nie widzi?** → wykrywanie idzie PATH → rejestr Windows →
+  znane katalogi (`C:\Calibre2`, `%ProgramFiles%\Calibre2`, `%LOCALAPPDATA%\Programs\Calibre2`).
+  Jeśli Calibre siedzi gdzie indziej, dodaj jego katalog do PATH albo zainstaluj w standardowej
+  lokalizacji. `pdf2md doctor` pokazuje status `calibre`.
 - **`command not found` przy `pdf2md`/`marker_single`** → pod `uv` programy projektu nie trafiają
   do PATH. Wołaj przez `uv run pdf2md ...` albo aktywuj venv (`.venv\Scripts\activate`).
 - **GPU: `torch …+cpu` / `CUDA ❌` mimo karty** → lock nieświeży; `uv lock --upgrade-package torch

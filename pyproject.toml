@@ -59,7 +59,7 @@ engines-core = [
     # [tool.uv.sources] łapie tylko zadeklarowane pakiety, nie transitive — bez tego
     # źródło cu130 jest ignorowane i Windows dostaje wariant +cpu z PyPI.
     "torch>=2.12",
-    "torchvision>=0.27",
+    "torchvision>=0.28.0",
 ]
 llm = [
     "anthropic>=0.29",

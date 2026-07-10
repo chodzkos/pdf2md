@@ -15,7 +15,7 @@ from chodzkos_gui_kit.qt.widgets import (
     PathEntryTexts,
 )
 from loguru import logger
-from PySide6.QtCore import QSize, QUrl
+from PySide6.QtCore import QObject, QRunnable, QSize, QThreadPool, QUrl, Signal
 from PySide6.QtGui import QCloseEvent, QDesktopServices, QIcon
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -123,6 +123,32 @@ def _has_in_place_images(engine_name: str) -> bool:
     return engine_name.strip().lower() in {"docling", "marker"}
 
 
+class _EpubToolsBridge(QObject):
+    """Most sygnałowy: przenosi wynik sondy narzędzi EPUB z wątku puli do wątku UI."""
+
+    ready = Signal(bool, bool)  # (pandoc_dostępny, calibre_dostępny)
+
+
+class _EpubToolsProbe(QRunnable):
+    """Liczy check_pandoc()/check_calibre() poza wątkiem UI (na Windows: rejestr/FS/PATH).
+
+    Uruchamiane na starcie konwersji — wynik trafia do cache MainWindow i jest gotowy,
+    zanim pojawi się dialog końcowy (żaden blokujący `which`/rejestr na wątku UI).
+    """
+
+    def __init__(self, bridge: _EpubToolsBridge) -> None:
+        super().__init__()
+        self._bridge = bridge
+
+    def run(self) -> None:
+        try:
+            pandoc = bool(check_pandoc())
+            calibre = bool(check_calibre())
+        except Exception:
+            pandoc, calibre = False, False
+        self._bridge.ready.emit(pandoc, calibre)
+
+
 class MainWindow(QMainWindow):
     """Główne okno pdf2md."""
 
@@ -136,6 +162,10 @@ class MainWindow(QMainWindow):
         self._worker: ConversionWorker | None = None
         self._last_output_dir: Path | None = None
         self._last_markdown_outputs: list[Path] = []
+        self._batch_total = 0  # liczba plików w bieżącym batchu (do etykiety paska)
+        # Cache dostępności narzędzi EPUB liczony w tle na starcie konwersji (None = jeszcze nieznany).
+        self._epub_tools: tuple[bool, bool] | None = None
+        self._epub_tools_bridge: _EpubToolsBridge | None = None
         self._initial_files = initial_files or []
         self._build_ui()
 
@@ -408,8 +438,10 @@ class MainWindow(QMainWindow):
         self._btn_convert.setEnabled(False)
         self._btn_cancel.setEnabled(True)
         self._progress.setValue(0)
+        self._batch_total = len(files)
         self._last_markdown_outputs = []
         self._last_output_dir = Path(output_dir) if output_dir else None
+        self._start_epub_tools_probe()
         self._preview.clear()
         self._log_panel.log_info(
             f"Rozpoczynam konwersję {len(files)} plik(ów) | silnik: {engine_name}"
@@ -457,9 +489,10 @@ class MainWindow(QMainWindow):
     # Sloty workera
     # ------------------------------------------------------------------
 
-    def _on_progress(self, filename: str, percent: int) -> None:
+    def _on_progress(self, filename: str, index: int, percent: int) -> None:
+        total = self._batch_total or 1
         self._progress.setValue(percent)
-        self._progress.setFormat(f"{filename}  {percent}%")
+        self._progress.setFormat(f"[{index}/{total}] {filename}  {percent}%")
 
     def _on_file_done(self, src: str, dst: str, elapsed: float) -> None:
         name = Path(src).name
@@ -494,6 +527,26 @@ class MainWindow(QMainWindow):
     def _finish_worker(self) -> None:
         self._worker = None
 
+    def _start_epub_tools_probe(self) -> None:
+        """Liczy dostępność Pandoc/Calibre w tle (QThreadPool) na starcie konwersji.
+
+        Dzięki temu dialog końcowy nie odpala blokującego `which`/rejestru na wątku UI.
+        """
+        self._epub_tools = None
+        bridge = _EpubToolsBridge()
+        bridge.ready.connect(self._on_epub_tools_ready)
+        self._epub_tools_bridge = bridge  # referencja utrzymuje most przy życiu
+        QThreadPool.globalInstance().start(_EpubToolsProbe(bridge))
+
+    def _on_epub_tools_ready(self, pandoc: bool, calibre: bool) -> None:
+        self._epub_tools = (pandoc, calibre)
+
+    def _epub_tools_available(self) -> tuple[bool, bool]:
+        """Zwraca (pandoc, calibre) z cache; awaryjnie liczy synchronicznie, gdy sonda nie zdążyła."""
+        if self._epub_tools is not None:
+            return self._epub_tools
+        return check_pandoc(), check_calibre()
+
     def _show_done_message(self, success: int, errors: int, total: float) -> None:
         message = QMessageBox(self)
         # Własne przyciski (EPUB/Zamknij) → instancja zostaje; dokładamy belkę.
@@ -514,7 +567,8 @@ class MainWindow(QMainWindow):
                 QMessageBox.ButtonRole.ActionRole,
             )
         export_epub = None
-        if self._last_markdown_outputs and (check_pandoc() or check_calibre()):
+        pandoc_ok, calibre_ok = self._epub_tools_available()
+        if self._last_markdown_outputs and (pandoc_ok or calibre_ok):
             export_epub = message.addButton("Eksportuj do EPUB", QMessageBox.ButtonRole.ActionRole)
         message.addButton("Zamknij", QMessageBox.ButtonRole.AcceptRole)
         message.exec()

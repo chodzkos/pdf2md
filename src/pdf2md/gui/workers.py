@@ -30,7 +30,9 @@ def _has_in_place_images(engine_name: str) -> bool:
 class ConversionWorker(QThread):
     """Konwertuje pliki PDF w osobnym wątku, emitując sygnały postępu."""
 
-    progress = Signal(str, int)  # (nazwa_pliku, procent 0-100)
+    # (nazwa_pliku, indeks_pliku_1based, procent_batcha 0-100). Procent jest MONOTONICZNY
+    # względem całego batcha — nie miesza już postępu per-plik z postępem batcha.
+    progress = Signal(str, int, int)
     file_done = Signal(str, str, float)  # (plik_wejsciowy, plik_wyjsciowy, czas_s)
     file_error = Signal(str, str)  # (plik_wejsciowy, komunikat_błędu)
     all_done = Signal(int, int, float)  # (sukces, błędy, łączny_czas)
@@ -126,6 +128,7 @@ class ConversionWorker(QThread):
         llm: LLMProvider | None,
     ) -> None:
         total_start = time.monotonic()
+        total = len(self._files)
         success = 0
         errors = 0
         self._success_count = 0
@@ -144,7 +147,9 @@ class ConversionWorker(QThread):
                 break
 
             filename = Path(pdf_path).name
-            self.progress.emit(filename, 0)
+            # Start pliku: pokaż nazwę/indeks od razu, z DOTYCHCZASOWYM procentem batcha
+            # (int(i/total*100)) — dla pierwszego pliku to 0, dla kolejnych = wartość z poprzedniego.
+            self.progress.emit(filename, i + 1, int(i / total * 100))
             stem = Path(pdf_path).stem
             out_path = str(Path(self._output_dir) / f"{stem}.md") if self._output_dir else None
             file_start = time.monotonic()
@@ -191,7 +196,6 @@ class ConversionWorker(QThread):
                     status="ok",
                     duration_s=elapsed,
                 )
-                self.progress.emit(filename, 100)
                 done_output = history_output if "scan pipeline" in engine.name.lower() else out_path
                 if done_output and not Path(done_output).is_file():
                     done_output = None
@@ -222,7 +226,6 @@ class ConversionWorker(QThread):
                     duration_s=time.monotonic() - file_start,
                     error_msg=str(exc),
                 )
-                self.progress.emit(filename, 0)
                 self.file_error.emit(pdf_path, str(exc))
                 errors += 1
                 self._error_count = errors
@@ -239,14 +242,12 @@ class ConversionWorker(QThread):
                     duration_s=time.monotonic() - file_start,
                     error_msg=str(exc),
                 )
-                self.progress.emit(filename, 0)
                 self.file_error.emit(pdf_path, str(exc))
                 errors += 1
                 self._error_count = errors
 
-            # Emituj łączny postęp między plikami
-            overall = int((i + 1) / len(self._files) * 100)
-            self.progress.emit(filename, overall)
+            # Koniec pliku (sukces LUB błąd): monotoniczny procent batcha int((i+1)/total*100).
+            self.progress.emit(filename, i + 1, int((i + 1) / total * 100))
 
         total_elapsed = time.monotonic() - total_start
         if was_cancelled:

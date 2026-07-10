@@ -107,6 +107,26 @@ class TestOllamaProvider:
         ):
             assert OllamaProvider().is_available() is False
 
+    def test_postprocess_raises_readable_error_on_missing_model(self) -> None:
+        """Model spoza serwera (HTTP 404) → czytelny RuntimeError zamiast surowego błędu Ollamy."""
+        import email.message
+        import io
+
+        err = urllib.error.HTTPError(
+            "http://localhost:11434/api/generate",
+            404,
+            "Not Found",
+            email.message.Message(),
+            io.BytesIO(b'{"error":"model \\"qwen3:14b\\" not found"}'),
+        )
+        fake_settings = _fake_settings(ollama_model="qwen3:14b")
+        with (
+            patch("pdf2md.llm.ollama_provider.urllib.request.urlopen", side_effect=err),
+            patch("pdf2md.llm.ollama_provider.get_settings", return_value=fake_settings),
+            pytest.raises(RuntimeError, match="nie jest dostępny na serwerze"),
+        ):
+            OllamaProvider().postprocess("# Wejście", mode="whole_document")
+
     def test_postprocess_returns_llm_result(self) -> None:
         response_body = json.dumps({"response": "# Poprawiony"}).encode()
         mock_resp = MagicMock()

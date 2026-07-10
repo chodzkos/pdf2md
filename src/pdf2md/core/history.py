@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import os
 import sqlite3
+from contextlib import closing
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -71,7 +72,9 @@ def record(
         raise ValueError("status musi mieć wartość: ok albo error")
 
     ts = datetime.now(UTC).isoformat(timespec="seconds")
-    with _connect() as connection:
+    # closing() zamyka połączenie deterministycznie; wewnętrzny `connection` trzyma transakcję
+    # (commit/rollback). Bez closing połączenie żyłoby do GC → blokady pliku .db na Windows.
+    with closing(_connect()) as connection, connection:
         cursor = connection.execute(
             """
             INSERT INTO conversions (
@@ -114,7 +117,7 @@ def list_recent(limit: int = 20, engine: str | None = None) -> list[ConversionHi
 
 def clear() -> int:
     """Czyści historię i zwraca liczbę usuniętych wpisów."""
-    with _connect() as connection:
+    with closing(_connect()) as connection, connection:
         count = connection.execute("SELECT COUNT(*) FROM conversions").fetchone()[0]
         connection.execute("DELETE FROM conversions")
         return int(count)
@@ -139,6 +142,12 @@ def export_csv(
 
 
 def _connect() -> sqlite3.Connection:
+    """Otwiera połączenie SQLite z gotowym schematem.
+
+    Wołający odpowiada za zamknięcie połączenia — używaj `with closing(_connect()) as conn:`
+    (ewentualnie z dodatkowym `conn` na transakcję), by domknąć je deterministycznie i nie
+    zostawiać uchwytu pliku .db do GC (na Windows blokowałby plik).
+    """
     db_path = history_db_path()
     db_path.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(db_path)
@@ -187,7 +196,7 @@ def _fetch_entries(
         query += " LIMIT ?"
         params.append(limit)
 
-    with _connect() as connection:
+    with closing(_connect()) as connection, connection:
         rows = connection.execute(query, params).fetchall()
     return [_entry_from_row(row) for row in rows]
 

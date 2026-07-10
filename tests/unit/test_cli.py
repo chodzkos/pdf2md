@@ -564,6 +564,37 @@ def test_config_set_rejects_invalid_int(cli_test_env: Path) -> None:
     assert "liczbą całkowitą" in result.output
 
 
+def test_config_set_accepts_float(cli_test_env: Path) -> None:
+    """Pole float (olmocr_gpu_memory_utilization) przyjmuje wartość zmiennoprzecinkową."""
+    result = CliRunner().invoke(cli, ["config", "set", "olmocr_gpu_memory_utilization", "0.85"])
+
+    assert result.exit_code == 0
+    assert "olmocr_gpu_memory_utilization = 0.85" in result.output
+    # Utrwalone na dysku.
+    assert "olmocr_gpu_memory_utilization = 0.85" in config._CONFIG_FILE.read_text(encoding="utf-8")
+
+
+def test_config_set_rejects_invalid_float(cli_test_env: Path) -> None:
+    """Niepoprawny float → czytelny błąd, a plik configu pozostaje nietknięty."""
+    result = CliRunner().invoke(cli, ["config", "set", "olmocr_gpu_memory_utilization", "abc"])
+
+    assert result.exit_code != 0
+    assert "liczbą zmiennoprzecinkową" in result.output
+    # Plik nie powstał (błąd przed zapisem) — a gdyby istniał, nie zawiera złej wartości.
+    assert not config._CONFIG_FILE.exists() or "abc" not in config._CONFIG_FILE.read_text(
+        encoding="utf-8"
+    )
+
+
+def test_config_set_rejects_invalid_theme(cli_test_env: Path) -> None:
+    """Wartość odrzucona przez field_validator (theme) → czytelny błąd z komunikatem walidatora."""
+    result = CliRunner().invoke(cli, ["config", "set", "theme", "purple"])
+
+    assert result.exit_code != 0
+    assert "Nieprawidłowa wartość dla theme" in result.output
+    assert "auto, light albo dark" in result.output
+
+
 def test_config_edit_uses_editor(
     cli_test_env: Path,
     monkeypatch: pytest.MonkeyPatch,

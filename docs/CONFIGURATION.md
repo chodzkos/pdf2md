@@ -12,6 +12,20 @@ pdf2md config edit
 
 lub bezpośrednio w edytorze — plik to zwykły TOML.
 
+### Typy wartości i walidacja
+
+`config set` rzutuje wartość na typ pola z modelu ustawień, więc podajesz zwykły tekst:
+
+- **bool** (np. `llm.enabled`): `true/false`, `1/0`, `yes/no`, `tak/nie`, `on/off`;
+- **int** (np. `marker.marker_workers`, `olmocr_max_model_len`): liczba całkowita;
+- **float** (np. `olmocr_gpu_memory_utilization`, `paddleocr_vl_timeout`): liczba zmiennoprzecinkowa, np. `0.85`;
+- **string** (reszta): wartość dosłowna.
+
+Błędne wejście kończy się czytelnym komunikatem, a **plik configu pozostaje nietknięty** —
+np. `config set olmocr_gpu_memory_utilization abc` → „musi być liczbą zmiennoprzecinkową",
+a wartość spoza dozwolonego zbioru (walidatory pól) → „Nieprawidłowa wartość dla `<pole>`: …"
+(np. `config set theme purple` wypisze dozwolone `auto, light albo dark`).
+
 ---
 
 ## Pełny plik domyślny

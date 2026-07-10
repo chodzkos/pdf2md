@@ -87,7 +87,7 @@ Issues = "https://github.com/chodzkos/pdf2md/issues"
 
 [dependency-groups]
 dev = [
-    "pytest>=8.2",
+    "pytest>=9.1.1",
     "pytest-cov>=5.0",
     "ruff>=0.5",
     "mypy>=1.10",

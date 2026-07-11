@@ -261,7 +261,13 @@ def detect_hardware() -> HardwareInfo:
 
 @lru_cache(maxsize=1)
 def cuda_usable() -> bool:
-    """Sprawdza, czy CUDA jest nie tylko widoczna, ale wykonuje prosty kernel."""
+    """Sprawdza, czy CUDA wykonuje REALNY kernel (nie tylko alokację), i zwraca poprawny wynik.
+
+    Sama alokacja/`memcpy` (`torch.zeros(1).cuda()` + `synchronize`) NIE wymaga kernela SASS, więc
+    na kartach nieobsługiwanych przez dany build (np. Pascal sm_61 + cu130) przechodziła, choć
+    każdy realny kernel pada `AcceleratorError: no kernel image is available`. Dlatego odpalamy
+    prawdziwą operację elementwise i weryfikujemy wynik — dopiero to obnaża brak obrazu kernela.
+    """
     try:
         import torch
     except Exception:
@@ -270,12 +276,13 @@ def cuda_usable() -> bool:
     try:
         if not torch.cuda.is_available():
             return False
-        tensor = torch.zeros(1).cuda()
+        tensor = torch.ones(8, device="cuda") * 2  # realny kernel elementwise (nie sama alokacja)
+        ok = float(tensor.sum().item()) == 16.0  # .item() synchronizuje i ściąga wynik z GPU
         torch.cuda.synchronize()
         del tensor
+        return ok
     except Exception:
         return False
-    return True
 
 
 def check_gpu() -> dict[str, Any]:

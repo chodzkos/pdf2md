@@ -49,12 +49,12 @@ marker = [
     "marker-pdf>=1.10,<2",
 ]
 docling = [
-    "docling>=2.0",
+    "docling>=2.112.0",
 ]
 engines-core = [
     "pymupdf4llm>=0.0.17",
     "marker-pdf>=1.10,<2",
-    "docling>=2.0",
+    "docling>=2.112.0",
     # torch/torchvision zadeklarowane JAWNIE (mimo że ciągną je marker-pdf/surya):
     # [tool.uv.sources] łapie tylko zadeklarowane pakiety, nie transitive — bez tego
     # źródło cu130 jest ignorowane i Windows dostaje wariant +cpu z PyPI.

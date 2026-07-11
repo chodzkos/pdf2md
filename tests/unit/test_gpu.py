@@ -13,14 +13,27 @@ import pytest
 from pdf2md.detection.hardware import check_gpu, cuda_usable
 
 
+class _FakeScalar:
+    def __init__(self, value: float) -> None:
+        self._value = value
+
+    def item(self) -> float:
+        return self._value
+
+
 class _FakeTensor:
-    def __init__(self, kernel_raises: bool = False) -> None:
+    def __init__(self, values: list[float], kernel_raises: bool = False) -> None:
+        self._values = values
         self._kernel_raises = kernel_raises
 
-    def cuda(self) -> _FakeTensor:
+    def __mul__(self, scalar: float) -> _FakeTensor:
+        # Mnożenie elementwise = realny kernel SASS — na niewspieranej architekturze pada TU.
         if self._kernel_raises:
             raise RuntimeError("cudaErrorNoKernelImageForDevice")
-        return self
+        return _FakeTensor([v * scalar for v in self._values])
+
+    def sum(self) -> _FakeScalar:
+        return _FakeScalar(sum(self._values))
 
 
 class _FakeCuda:
@@ -47,15 +60,19 @@ class _FakeTorch:
         available: bool = True,
         kernel_raises: bool = False,
         sync_raises: bool = False,
+        wrong_result: bool = False,
     ) -> None:
         self.cuda = _FakeCuda(available=available, sync_raises=sync_raises)
         self.version = SimpleNamespace(cuda="12.1")
         self._kernel_raises = kernel_raises
-        self.zeros_calls = 0
+        self._wrong_result = wrong_result
+        self.ones_calls = 0
 
-    def zeros(self, _size: int) -> _FakeTensor:
-        self.zeros_calls += 1
-        return _FakeTensor(kernel_raises=self._kernel_raises)
+    def ones(self, size: int, device: str | None = None) -> _FakeTensor:
+        self.ones_calls += 1
+        # wrong_result: kernel „przechodzi", ale zwraca śmieci → weryfikacja wyniku ma dać False.
+        base = 0.0 if self._wrong_result else 1.0
+        return _FakeTensor([base] * size, kernel_raises=self._kernel_raises)
 
 
 @pytest.fixture(autouse=True)
@@ -86,7 +103,7 @@ def test_cuda_usable_false_when_cuda_not_available(monkeypatch: pytest.MonkeyPat
     monkeypatch.setitem(sys.modules, "torch", fake_torch)
 
     assert cuda_usable() is False
-    assert fake_torch.zeros_calls == 0
+    assert fake_torch.ones_calls == 0
 
 
 def test_cuda_usable_runs_smoke_kernel(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -95,16 +112,29 @@ def test_cuda_usable_runs_smoke_kernel(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(sys.modules, "torch", fake_torch)
 
     assert cuda_usable() is True
-    assert fake_torch.zeros_calls == 1
+    assert fake_torch.ones_calls == 1
     assert fake_torch.cuda.synchronized is True
 
 
 def test_cuda_usable_false_when_smoke_kernel_fails(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Stara karta z nieobsługiwanym kernelem zwraca false mimo is_available()."""
+    """Stara karta z nieobsługiwanym kernelem: mnożenie rzuca (no kernel image) → False."""
     fake_torch = _FakeTorch(available=True, kernel_raises=True)
     monkeypatch.setitem(sys.modules, "torch", fake_torch)
 
     assert cuda_usable() is False
+
+
+def test_cuda_usable_false_when_kernel_result_wrong(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Kernel „przechodzi", ale zwraca zły wynik (śmieci z GPU) → weryfikacja daje False.
+
+    To sedno B19: sama alokacja/memcpy nie obnaża braku obrazu kernela; dopiero sprawdzenie
+    wyniku realnej operacji (sum == 16.0) wyłapuje niewspieraną architekturę.
+    """
+    fake_torch = _FakeTorch(available=True, wrong_result=True)
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+
+    assert cuda_usable() is False
+    assert fake_torch.ones_calls == 1  # kernel odpalony, tylko wynik odrzucony
 
 
 def test_cuda_usable_result_is_cached(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -114,7 +144,7 @@ def test_cuda_usable_result_is_cached(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert cuda_usable() is True
     assert cuda_usable() is True
-    assert fake_torch.zeros_calls == 1
+    assert fake_torch.ones_calls == 1
 
 
 def test_check_gpu_reports_cuda_usable(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -191,8 +191,8 @@ override-dependencies = ["pillow>=12.2"]
 # Piny SHA zamiast tagów: tag jest mutowalny (można go przesunąć), SHA nie.
 # Podbicie wersji = świadomy commit (chore: + testy), a nie cicha zmiana pod tagiem.
 # Dependabot NIE obsługuje pinów git (poniżej) — te podbijamy ręcznie.
-# v0.5.0 — podbicie = chore: + testy
-chodzkos-gui-kit = { git = "https://github.com/chodzkos/gui-kit", rev = "09938082b2b5d2250fb1adfb2fd238a8199366ec" }
+# v0.5.1 — podbicie = chore: + testy (config.json.broken-* backup + single-source version)
+chodzkos-gui-kit = { git = "https://github.com/chodzkos/gui-kit", rev = "44e639881a7e86600efabe74ec0c8dc8c0114fd2" }
 # v0.1.2 — podbicie = chore: + testy (find_tool + probe_tool executable + CREATE_NO_WINDOW)
 chodzkos-detection = { git = "https://github.com/chodzkos/chodzkos-detection", rev = "6633745e17b170f991b8305448c3e5f96490b28f" }
 # torch z PyPI na Windowsie = wariant CPU-only (+cpu) → Surya/Marker liczą na CPU

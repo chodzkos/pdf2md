@@ -267,8 +267,8 @@ source = { git = "https://github.com/chodzkos/chodzkos-detection?rev=6633745e17b
 
 [[package]]
 name = "chodzkos-gui-kit"
-version = "0.5.1"
-source = { git = "https://github.com/chodzkos/gui-kit?rev=44e639881a7e86600efabe74ec0c8dc8c0114fd2#44e639881a7e86600efabe74ec0c8dc8c0114fd2" }
+version = "0.5.3"
+source = { git = "https://github.com/chodzkos/gui-kit?rev=bb40fa67294c5fd6632d11543902a2d9b69665db#bb40fa67294c5fd6632d11543902a2d9b69665db" }
 dependencies = [
     { name = "platformdirs" },
 ]
@@ -1892,7 +1892,7 @@ dev = [
 requires-dist = [
     { name = "anthropic", marker = "extra == 'llm'", specifier = ">=0.29" },
     { name = "chodzkos-detection", git = "https://github.com/chodzkos/chodzkos-detection?rev=6633745e17b170f991b8305448c3e5f96490b28f" },
-    { name = "chodzkos-gui-kit", extras = ["qt"], git = "https://github.com/chodzkos/gui-kit?rev=44e639881a7e86600efabe74ec0c8dc8c0114fd2" },
+    { name = "chodzkos-gui-kit", extras = ["qt"], git = "https://github.com/chodzkos/gui-kit?rev=bb40fa67294c5fd6632d11543902a2d9b69665db" },
     { name = "click", specifier = ">=8.4.2" },
     { name = "docling", marker = "extra == 'docling'", specifier = ">=2.0" },
     { name = "docling", marker = "extra == 'engines-core'", specifier = ">=2.0" },

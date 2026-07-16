@@ -10,7 +10,6 @@ from chodzkos_gui_kit.qt.theme import ThemeManager, ThemeSetting, current_palett
 from chodzkos_gui_kit.qt.widgets import (
     FileList,
     FileListTexts,
-    HelpWindow,
     LogView,
     PathEntry,
     PathEntryTexts,
@@ -44,7 +43,7 @@ from pdf2md.core.encryption import is_pdf_encrypted, verify_pdf_password
 from pdf2md.core.input_types import SUPPORTED_INPUT_EXTENSIONS, is_image_input
 from pdf2md.detection.dependencies import check_calibre
 from pdf2md.exporters import build_epub_exporter
-from pdf2md.gui.help_window import HELP_TITLE, help_tabs
+from pdf2md.gui.help_window import build_help_window
 from pdf2md.gui.settings_dialog import SettingsDialog
 from pdf2md.gui.theming import attach_dark_titlebar, themed_message_box
 from pdf2md.gui.widgets.engine_selector import EngineSelectorWidget
@@ -434,7 +433,7 @@ class MainWindow(QMainWindow):
         box.exec()
         clicked = box.clickedButton()
         if clicked is help_btn:
-            HelpWindow(self, title=HELP_TITLE, tabs=help_tabs()).exec()
+            build_help_window(self).exec()
         elif clicked is project_btn:
             self._open_project_page()
 

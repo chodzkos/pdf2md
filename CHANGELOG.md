@@ -4,6 +4,7 @@
 
 ### Dodane
 
+- Ekstrakcja pól formularzy PDF (`pdf2md forms <plik>`) → JSON / CSV / tabela Markdown (stdout albo `--output`). Obsługuje formularze wielostronicowe (AcroForm przez `pypdf`); brak pól → czytelny komunikat i czyste wyjście.
 - Tryb porównania silników (`pdf2md compare <plik>`) — konwertuje ten sam plik wszystkimi dostępnymi silnikami, zapisuje wynik per silnik (`<plik>_<silnik>.md`) i wypisuje tabelę metryk (czas, długość tekstu, liczba nagłówków, liczba tabel). Silniki niedostępne są pomijane z adnotacją, a błąd jednego silnika nie przerywa całości. Opcjonalna ocena jakości przez LLM (`--llm-score`, domyślnie wyłączona).
 - Natywny eksport EPUB przez `ebooklib` (TOC z rozdziałów, obrazy, CSS, metadane, opcjonalna okładka) — wybór backendu `pandoc|native|calibre`. Builder jest izolowany (bez zależności od reszty pdf2md), pod przyszłe współdzielenie z EpubForge.
 - Presety konwersji (silnik/język/LLM) jako nazwane profile — `convert --profile`.

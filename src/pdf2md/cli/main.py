@@ -28,6 +28,8 @@ from pdf2md.core.compare import EngineComparison, compare_engines, make_llm_scor
 from pdf2md.core.config import Settings, get_settings, save_settings
 from pdf2md.core.converter import ConversionError, Converter
 from pdf2md.core.engine_catalog import ENGINE_CATALOG
+from pdf2md.core.forms import extract_form_fields
+from pdf2md.core.forms import render as render_form_fields
 from pdf2md.core.image_extraction import (
     append_image_references,
     extract_pdf_images,
@@ -907,6 +909,44 @@ def compare(
 
     if not any(result.status == "ok" for result in results):
         raise click.ClickException("Żaden silnik nie skonwertował pliku.")
+
+
+@cli.command()
+@click.argument("file", nargs=1, required=True)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["md", "json", "csv"]),
+    default="md",
+    show_default=True,
+    help="Format wyjścia pól formularza.",
+)
+@click.option("--output", "-o", help="Plik wyjściowy (domyślnie stdout).")
+def forms(file: str, output_format: str, output: str | None) -> None:
+    """Wyciąga pola formularza PDF (nazwa + wartość) do JSON/CSV/Markdown."""
+    path = Path(file)
+    if not path.exists():
+        raise click.ClickException(f"Plik nie istnieje: {file}")
+    if path.suffix.lower() != ".pdf":
+        raise click.ClickException("Komenda forms obsługuje tylko pliki PDF.")
+
+    try:
+        fields = extract_form_fields(path)
+    except Exception as exc:  # pypdf może rzucić na uszkodzonym/zaszyfrowanym PDF
+        raise click.ClickException(f"Nie udało się odczytać formularza: {exc}") from exc
+
+    if not fields:
+        click.echo("Brak pól formularza w tym PDF.", err=True)
+        return
+
+    rendered = render_form_fields(fields, output_format)
+    if output:
+        out_path = Path(output)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(rendered, encoding="utf-8")
+        console.print(f"[green]Zapisano:[/] {out_path} ({len(fields)} pól)")
+    else:
+        click.echo(rendered)
 
 
 @cli.command("list-engines")

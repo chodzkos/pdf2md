@@ -171,6 +171,12 @@
 ## Priorytet 3 — Specjalistyczne funkcje
 
 ### F10 — Obsługa formularzy PDF
+
+> **STATUS: ✅ ZREALIZOWANE (lipiec 2026).** Komenda `pdf2md forms <plik>` wyciąga pola formularza
+> (nazwa + wartość + typ) przez `pypdf` i eksportuje do JSON / CSV / tabeli Markdown (`--format`,
+> `--output` lub stdout). Obsługuje formularze wielostronicowe (AcroForm); brak pól → czytelny
+> komunikat i czyste wyjście. Logika w `src/pdf2md/core/forms.py` (testowalna, niezależna od CLI).
+
 **Opis:** Ekstrakcja pól formularzy PDF do struktury danych (JSON, CSV, MD table).
 
 **Funkcje:**
@@ -336,7 +342,7 @@ jakość tabel. Wdrożyć, gdy pojawi się potrzeba (np. wsparcie nie-NVIDIA).
 | F07 | Porównywarka | ⭐⭐ | 2d | Średnia | ✅ Zrobione |
 | F08 | Presety | ⭐ | 1d | Średnia | 🔴 Wysoki |
 | F09 | Calibre | ⭐⭐ | 1d | Niska | 🟢 Niski |
-| F10 | Formularze | ⭐⭐⭐ | 3d | Niska | 🟢 Niski |
+| F10 | Formularze | ⭐⭐⭐ | 3d | Niska | ✅ Zrobione |
 | F11 | Ekstrakcja obrazów | ⭐⭐⭐ | 3d | Wysoka | 🟡 Średni |
 | F12 | Hasła PDF | ⭐⭐ | 1d | Średnia | 🔴 Wysoki |
 | F13 | Tłumaczenie | ⭐⭐⭐ | 4d | Wysoka | 🟡 Średni |

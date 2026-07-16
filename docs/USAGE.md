@@ -176,6 +176,26 @@ Z ocena jakosci przez LLM:
 pdf2md compare dokument.pdf --llm-score --llm claude
 ```
 
+### `pdf2md forms`
+
+Wyciaga pola formularza PDF (nazwa + wartosc + typ) do JSON, CSV albo tabeli Markdown.
+
+```bash
+pdf2md forms FILE [OPTIONS]
+```
+
+| Opcja | Znaczenie |
+|---|---|
+| `--format` | Format wyjscia: `md` (domyslnie), `json`, `csv`. |
+| `--output`, `-o` | Plik wyjsciowy. Bez opcji wynik idzie na stdout. |
+
+Obsluguje formularze wielostronicowe (AcroForm). PDF bez pol → komunikat „Brak pol formularza"
+i czyste zakonczenie (exit 0), zeby dobrze zachowywac sie w skryptach.
+
+```bash
+pdf2md forms formularz.pdf --format json --output pola.json
+```
+
 ### `pdf2md list-engines`
 
 Pokazuje katalog znanych silnikow, status instalacji, OCR, LLM, licencje i podpowiedz instalacji.

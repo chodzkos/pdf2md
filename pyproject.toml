@@ -34,6 +34,7 @@ dependencies = [
     # PYSEC-2026-165. 12.3.0 domyka kolejne 8 advisory pillow (PYSEC-2026-2253..2257/3451..3453).
     # Cap pillow<11 z marker-pdf/surya-ocr nadpisany w [tool.uv] niżej.
     "Pillow>=12.3",
+    "pypdf>=6.0",
     "pyyaml>=6.0",
     "chodzkos-gui-kit[qt]",
     "chodzkos-detection",

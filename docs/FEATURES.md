@@ -206,6 +206,12 @@
 ---
 
 ### F12 — Obsługa zaszyfrowanych PDF
+
+> **STATUS: ✅ ZREALIZOWANE (lipiec 2026).** Wykrywanie szyfrowania i odszyfrowanie przez `pypdf`
+> (`src/pdf2md/core/encryption.py`): CLI `convert --password`, GUI dialog hasła (maskowane echo,
+> ponawianie przy złym haśle). Odszyfrowana kopia w katalogu tymczasowym trafia do istniejącego
+> przepływu konwersji (silniki dostają zwykły PDF). AES obsługiwane (`cryptography` już w zależnościach).
+
 **Opis:** Konwersja zaszyfrowanych PDF po podaniu hasła.
 
 **Funkcje:**
@@ -344,7 +350,7 @@ jakość tabel. Wdrożyć, gdy pojawi się potrzeba (np. wsparcie nie-NVIDIA).
 | F09 | Calibre | ⭐⭐ | 1d | Niska | 🟢 Niski |
 | F10 | Formularze | ⭐⭐⭐ | 3d | Niska | ✅ Zrobione |
 | F11 | Ekstrakcja obrazów | ⭐⭐⭐ | 3d | Wysoka | 🟡 Średni |
-| F12 | Hasła PDF | ⭐⭐ | 1d | Średnia | 🔴 Wysoki |
+| F12 | Hasła PDF | ⭐⭐ | 1d | Średnia | ✅ Zrobione |
 | F13 | Tłumaczenie | ⭐⭐⭐ | 4d | Wysoka | 🟡 Średni |
 | F14 | RAG chunks | ⭐⭐ | 2d | Wysoka | 🟡 Średni |
 | F15 | Zdjęcia → MD | ⭐⭐ | 2d | Wysoka | 🔴 Wysoki |

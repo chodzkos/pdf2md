@@ -50,10 +50,12 @@ class ConversionWorker(QThread):
         docling_device: str | None = None,
         scan_profile: str = "",
         extract_images: bool = False,
+        passwords: dict[str, str] | None = None,
     ) -> None:
         super().__init__()
         settings = get_settings()
         self._files = files
+        self._passwords = passwords or {}
         self._engine_name = engine_name
         self._output_dir = output_dir
         self._llm_name = llm_name
@@ -179,6 +181,7 @@ class ConversionWorker(QThread):
                     engine_kwargs=engine_kwargs,
                     engine_options=engine_options,
                     record_history=False,
+                    password=self._passwords.get(pdf_path),
                 )
                 if self._should_extract_images(engine, pdf_path):
                     result.markdown = self._extract_images_for_output(

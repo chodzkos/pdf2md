@@ -10,6 +10,7 @@ from pathlib import Path
 from loguru import logger
 
 from pdf2md.core import history as conversion_history
+from pdf2md.core.encryption import PdfPasswordError, decrypt_pdf, is_pdf_encrypted
 from pdf2md.core.image_input import image_to_preprocessed_pdf
 from pdf2md.core.input_types import is_image_input, is_supported_input
 from pdf2md.engines.base import ConversionEngine, ConversionResult
@@ -33,6 +34,7 @@ class Converter:
         engine_kwargs: dict[str, object] | None = None,
         engine_options: dict[str, object] | None = None,
         record_history: bool = True,
+        password: str | None = None,
     ) -> ConversionResult:
         """Konwertuje jeden plik PDF do Markdown.
 
@@ -45,12 +47,13 @@ class Converter:
             engine_kwargs: Opcje specyficzne dla silnika konwersji.
             engine_options: Opcje przekazywane bezpośrednio do silnika konwersji.
             record_history: Czy zapisać wpis historii w tej warstwie.
+            password: Hasło do zaszyfrowanego PDF (None = plik nieszyfrowany).
 
         Returns:
             Wynik konwersji z Markdown i metadanymi.
 
         Raises:
-            ConversionError: Plik nie istnieje lub silnik niedostępny.
+            ConversionError: Plik nie istnieje, silnik niedostępny albo złe/brak hasła.
         """
         start = time.monotonic()
         try:
@@ -78,6 +81,13 @@ class Converter:
                     logger.info(
                         f"Obraz wejściowy przygotowany jako tymczasowy PDF: {effective_path}"
                     )
+                elif is_pdf_encrypted(path):
+                    dec_dir = stack.enter_context(tempfile.TemporaryDirectory(prefix="pdf2md_dec_"))
+                    try:
+                        effective_path = str(decrypt_pdf(path, password or "", dec_dir))
+                    except PdfPasswordError as exc:
+                        raise ConversionError(str(exc)) from exc
+                    logger.info(f"PDF odszyfrowany do tymczasowego pliku: {effective_path}")
 
                 options = {**(engine_kwargs or {}), **(engine_options or {})}
                 if output_path is not None and engine.name.lower() in {"docling", "marker"}:

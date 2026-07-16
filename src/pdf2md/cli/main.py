@@ -27,6 +27,7 @@ from pdf2md.core import history as conversion_history
 from pdf2md.core.compare import EngineComparison, compare_engines, make_llm_scorer
 from pdf2md.core.config import Settings, get_settings, save_settings
 from pdf2md.core.converter import ConversionError, Converter
+from pdf2md.core.encryption import is_pdf_encrypted
 from pdf2md.core.engine_catalog import ENGINE_CATALOG
 from pdf2md.core.forms import extract_form_fields
 from pdf2md.core.forms import render as render_form_fields
@@ -674,6 +675,7 @@ def cli(ctx: click.Context) -> None:
     show_default=True,
     help="Minimalna szerokość i wysokość obrazu do ekstrakcji, w pikselach.",
 )
+@click.option("--password", help="Hasło do zaszyfrowanych PDF-ów w tym uruchomieniu.")
 @click.option("--dry-run", is_flag=True, help="Pokaż plan bez konwersji.")
 @click.option("--verbose", "-v", is_flag=True, help="Szczegółowy output.")
 @click.pass_context
@@ -691,6 +693,7 @@ def convert(
     epub_backend: str | None,
     extract_images: bool,
     image_min_size: int,
+    password: str | None,
     dry_run: bool,
     verbose: bool,
 ) -> None:
@@ -719,6 +722,15 @@ def convert(
     if dry_run:
         _print_dry_run(input_files, output_paths, selected_engine, llm_name)
         return
+
+    if password is None:
+        encrypted = [
+            str(path) for path in input_files if not is_image_input(path) and is_pdf_encrypted(path)
+        ]
+        if encrypted:
+            raise click.ClickException(
+                f"PDF zaszyfrowany: {encrypted[0]}. Podaj hasło flagą --password."
+            )
 
     if any(is_image_input(path) for path in input_files) and not selected_engine.supports_ocr:
         raise click.ClickException(
@@ -759,6 +771,7 @@ def convert(
                     engine_kwargs=engine_kwargs,
                     engine_options=engine_options,
                     record_history=False,
+                    password=password,
                 )
                 if extract_images and not is_image_input(path):
                     images = extract_pdf_images(

@@ -87,6 +87,7 @@ pdf2md convert FILES... [OPTIONS]
 | `--engine`, `-e` | Silnik konwersji, np. `pymupdf4llm`, `marker`, `docling`, `mineru`, `pdf-craft`. Bez opcji uzywa `conversion.default_engine`. |
 | `--output`, `-o` | Plik wyjsciowy `.md`/`.epub` dla jednego pliku albo katalog dla wielu plikow. |
 | `--output-dir` | Katalog wynikowy dla batcha. Nie lacz z `--output`. |
+| `--epub-backend` | Backend eksportu EPUB: `pandoc`, `native`, `calibre`. Bez opcji uzywa `conversion.epub_backend` (domyslnie `pandoc`). Dziala tylko przy wyjsciu `.epub`. |
 | `--llm` | Dostawca LLM: `none`, `ollama`, `claude`, `openai`, `gemini`. Domyslnie `none`. |
 | `--llm-model` | Model LLM dla tego uruchomienia, np. `gpt-4.1-mini` albo `qwen2.5:14b`. |
 | `--llm-mode` | Tryb LLM: `none`, `whole_document`, `by_page`, `by_chunk`, `by_heading`. |
@@ -115,7 +116,14 @@ pdf2md convert "pdfy/*.pdf" --engine docling --output-dir ./markdown
 Eksport EPUB:
 
 ```bash
-pdf2md convert ksiazka.pdf --engine pdf-craft --output ksiazka.epub
+pdf2md convert ksiazka.pdf --engine pymupdf4llm --output ksiazka.epub
+```
+
+Wybor backendu EPUB (`pandoc` domyslnie, `native` = wbudowany builder `ebooklib` bez Pandoca,
+`calibre` = `ebook-convert` z fallbackiem na Pandoc):
+
+```bash
+pdf2md convert ksiazka.pdf --output ksiazka.epub --epub-backend native
 ```
 
 Plan bez konwersji:

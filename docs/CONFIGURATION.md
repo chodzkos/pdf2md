@@ -45,6 +45,7 @@ ollama_url = "http://localhost:11434"
 default_engine = "pymupdf4llm"
 default_output_dir = ""
 default_language = "pol+eng"
+epub_backend = "pandoc"
 
 [marker]
 marker_device = "cpu"
@@ -102,6 +103,7 @@ gemini_api_key = ""
 | `default_engine` | str | `"pymupdf4llm"` | Domyślny silnik: `pymupdf4llm`, `marker`, `docling`, `mineru`. |
 | `default_output_dir` | str | `""` | Domyślny katalog wynikowy. Puste = obok pliku źródłowego. |
 | `default_language` | str | `"pol+eng"` | Język OCR w formacie Tesseracta, np. `pol+eng`, `deu`, `chi_sim`. |
+| `epub_backend` | str | `"pandoc"` | Backend eksportu EPUB: `pandoc` (domyślny), `native` (wbudowany builder `ebooklib` — TOC, obrazy, CSS, metadane, okładka; bez Pandoca) lub `calibre` (`ebook-convert`; gdy niedostępny, fallback na Pandoc). |
 
 ---
 
@@ -182,6 +184,7 @@ Wszystkie pola konfiguracji można nadpisać zmienną środowiskową o nazwie od
 | `LLM_PROVIDER` | `llm.provider` |
 | `LLM_MODE` | `llm.mode` |
 | `DEFAULT_ENGINE` | `conversion.default_engine` |
+| `EPUB_BACKEND` | `conversion.epub_backend` |
 | `MINERU_BACKEND` | `mineru.mineru_backend` |
 
 ---

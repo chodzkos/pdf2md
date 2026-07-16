@@ -13,10 +13,12 @@ from pdf2md.exporters.pandoc_epub_exporter import PandocEpubExporter
 
 logger = logging.getLogger(__name__)
 
+
 class EpubExporter(Protocol):
     def export(
         self, markdown: str, output_path: str | Path, *, source_dir: Path | None = None
     ) -> Path: ...
+
 
 EPUB_BACKENDS = ("pandoc", "native", "calibre")
 

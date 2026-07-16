@@ -19,7 +19,9 @@ from uuid import uuid4
 from ebooklib import epub
 from markdown_it import MarkdownIt
 
-_DEFAULT_CSS = "body { font-family: serif; line-height: 1.5; margin: 1em; }\nimg { max-width: 100%; }"
+_DEFAULT_CSS = (
+    "body { font-family: serif; line-height: 1.5; margin: 1em; }\nimg { max-width: 100%; }"
+)
 _IMAGE_REF_RE = re.compile(r'(<img\s+[^>]*src=["\'])([^"\']+)(["\'][^>]*>)', re.IGNORECASE)
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")
 _SLUG_RE = re.compile(r"[^A-Za-z0-9_.-]+")
@@ -123,7 +125,9 @@ def from_markdown(
 
     normalized_metadata = _metadata_from_mapping(metadata)
     html_chapters = [
-        EpubChapter(title=title, html_body=_rewrite_image_refs(_markdown_to_html(body), images or {}))
+        EpubChapter(
+            title=title, html_body=_rewrite_image_refs(_markdown_to_html(body), images or {})
+        )
         for title, body in _split_markdown_chapters(md_text, normalized_metadata.title)
     ]
     return EpubInput(

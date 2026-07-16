@@ -8,6 +8,15 @@
 ## Priorytet 1 — Naturalne rozszerzenia v1.0
 
 ### F01 — Konwersja do EPUB (natywna, bez Pandoc)
+
+> **STATUS: ✅ ZREALIZOWANE (lipiec 2026, PR #94).** Natywny backend EPUB przez `ebooklib` —
+> izolowany builder w `src/pdf2md/exporters/epub/` (typy `EpubMetadata`/`EpubChapter`/`EpubInput`,
+> `build_epub()` + `from_markdown()`) oraz `NativeEpubExporter`. Builder nie importuje niczego z
+> `pdf2md` (tylko `ebooklib` + parser Markdown + stdlib), pod przyszłe wyjęcie do EpubForge. Składa
+> TOC z nagłówków, osadza obrazy, CSS, metadane i opcjonalną okładkę. Wybór backendu
+> `pandoc|native|calibre` przez `[conversion].epub_backend` lub `convert --epub-backend`. Odblokował
+> też 2 testy pomijane wcześniej na brak `ebooklib`.
+
 **Opis:** Zamiast wywoływać Pandoc jako subprocess, własna implementacja EPUB buildery z `ebooklib`. Pozwoli na lepszą kontrolę nad formatowaniem, TOC, metadanymi i stylami CSS.
 
 **Funkcje:**
@@ -311,7 +320,7 @@ jakość tabel. Wdrożyć, gdy pojawi się potrzeba (np. wsparcie nie-NVIDIA).
 
 | ID | Funkcja | Trudność | Czas | Wartość | Priorytet |
 |---|---|---|---|---|---|
-| F01 | EPUB native | ⭐⭐⭐ | 5d | Wysoka | 🔴 Wysoki |
+| F01 | EPUB native | ⭐⭐⭐ | 5d | Wysoka | ✅ Zrobione (PR #94) |
 | F02 | Własny silnik | ⭐⭐⭐⭐⭐ | 4tyg | Wysoka | 🟡 Średni |
 | F03 | Batch/watchdog | ⭐⭐ | 2d | Średnia | 🔴 Wysoki |
 | F04 | Historia | ⭐⭐ | 2d | Średnia | 🔴 Wysoki |
@@ -345,7 +354,7 @@ jakość tabel. Wdrożyć, gdy pojawi się potrzeba (np. wsparcie nie-NVIDIA).
 **v1.2 — "Power features"** (~2-3 tygodnie)
 - F15 Zdjęcia → MD (2d)
 - F11 Ekstrakcja obrazów (3d)
-- F01 EPUB native (5d)
+- ✅ F01 EPUB native (PR #94)
 - F18 Docker (1d)
 
 **v2.0 — "Platform"** (~1-2 miesiące)

@@ -212,3 +212,17 @@ jak MinerU (subprocess + wlasne srodowisko z `transformers<4.48`).
 
 Nie instaluj `pdf-craft` w srodowisku z `marker-pdf` lub `docling` — wymusi downgrade
 `transformers` i crash tych silnikow.
+
+## Eksport EPUB — backendy
+
+Silniki wyzej daja Markdown. Eksport do EPUB to osobny etap z wymiennym backendem, wybieranym przez
+`[conversion].epub_backend` (config) albo `convert --epub-backend` (CLI). Domyslnie `pandoc`.
+
+| Backend | Czym jest | Wymaga | Uwagi |
+|---|---|---|---|
+| `pandoc` | Konwersja przez Pandoc (subprocess) | `pandoc` w PATH | Domyslny. |
+| `native` | Wbudowany builder przez `ebooklib` | `ebooklib` (w `engines-core`) | Bez Pandoca. TOC z naglowkow, osadzone obrazy, CSS, metadane, opcjonalna okladka. Builder izolowany (`src/pdf2md/exporters/epub/`, zero importow z `pdf2md`) — pod przyszle wspoldzielenie z EpubForge. |
+| `calibre` | Konwersja przez `ebook-convert` | Calibre (`ebook-convert`) | Gdy Calibre poza PATH/niedostepny, eksport wraca do Pandoca. Detekcja w `doctor`. |
+
+Backend `native` (PR #94) nie zalezy od zewnetrznych narzedzi — dziala od reki po instalacji
+`engines-core`. Referencje obrazow `![](...)` z Markdown sa osadzane w EPUB-ie.

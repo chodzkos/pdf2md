@@ -24,6 +24,7 @@ from rich.table import Table
 from pdf2md import __version__
 from pdf2md.core import config as config_module
 from pdf2md.core import history as conversion_history
+from pdf2md.core.compare import EngineComparison, compare_engines, make_llm_scorer
 from pdf2md.core.config import Settings, get_settings, save_settings
 from pdf2md.core.converter import ConversionError, Converter
 from pdf2md.core.engine_catalog import ENGINE_CATALOG
@@ -559,6 +560,47 @@ def _print_dry_run(
         console.print(table)
 
 
+def _print_comparison(
+    source: Path,
+    results: list[EngineComparison],
+    unavailable: list[str],
+    *,
+    scored: bool,
+) -> None:
+    table = Table(title=f"Porównanie silników: {source.name}")
+    table.add_column("Silnik")
+    table.add_column("Status", justify="center")
+    table.add_column("Czas [s]", justify="right")
+    table.add_column("Znaki", justify="right")
+    table.add_column("Nagłówki", justify="right")
+    table.add_column("Tabele", justify="right")
+    if scored:
+        table.add_column("Ocena LLM", justify="right")
+    table.add_column("Plik")
+    for result in results:
+        if result.status == "ok" and result.metrics is not None:
+            row = [
+                result.engine,
+                "[green]✓[/]",
+                f"{result.duration_s:.2f}",
+                str(result.metrics.chars),
+                str(result.metrics.headings),
+                str(result.metrics.tables),
+            ]
+            if scored:
+                row.append("—" if result.llm_score is None else str(result.llm_score))
+            row.append(result.output_path.name if result.output_path else "—")
+        else:
+            row = [result.engine, "[red]✗[/]", f"{result.duration_s:.2f}", "—", "—", "—"]
+            if scored:
+                row.append("—")
+            row.append(f"[red]{(result.error or '')[:60]}[/]")
+        table.add_row(*row)
+    console.print(table)
+    if unavailable:
+        console.print(f"[dim]Pominięto (niedostępne): {', '.join(unavailable)}[/]")
+
+
 def _export_result(markdown: str, output_path: Path, epub_backend: str = "pandoc") -> Path:
     if output_path.suffix.lower() == ".epub":
         # Obrazy inline leżą obok wyniku — wskaż katalog źródłowy, żeby temp .md
@@ -769,6 +811,102 @@ def convert(
     )
     if failures:
         raise click.ClickException("; ".join(failures))
+
+
+@cli.command()
+@click.argument("file", nargs=1, required=True)
+@click.option("--output-dir", help="Katalog na wyniki per silnik (domyślnie obok pliku).")
+@click.option("--lang", default="pol+eng", show_default=True, help="Język OCR dla silników OCR.")
+@click.option(
+    "--llm-score",
+    is_flag=True,
+    help="Oceń jakość każdego wyniku przez LLM (0-100). Domyślnie wyłączone.",
+)
+@click.option(
+    "--llm",
+    "llm_name",
+    type=click.Choice(LLM_CHOICES),
+    default=None,
+    help="Dostawca LLM do --llm-score (domyślnie pierwszy dostępny).",
+)
+@click.option("--llm-model", help="Model LLM do --llm-score.")
+@click.option("--verbose", "-v", is_flag=True, help="Szczegółowy output.")
+@click.pass_context
+def compare(
+    ctx: click.Context,
+    file: str,
+    output_dir: str | None,
+    lang: str,
+    llm_score: bool,
+    llm_name: str | None,
+    llm_model: str | None,
+    verbose: bool,
+) -> None:
+    """Konwertuje plik WSZYSTKIMI dostępnymi silnikami i porównuje metryki."""
+    if verbose:
+        setup_logging(verbose=True)
+    path = Path(file)
+    if not path.exists():
+        raise click.ClickException(f"Plik nie istnieje: {file}")
+    _validate_input_formats([path])
+
+    available = engine_registry.get_available()
+    unavailable = [engine.name for engine in engine_registry.get_all() if engine not in available]
+    if is_image_input(path):
+        usable = [engine for engine in available if engine.supports_ocr]
+        unavailable += [
+            f"{engine.name} (bez OCR)" for engine in available if not engine.supports_ocr
+        ]
+    else:
+        usable = available
+    if not usable:
+        raise click.ClickException("Brak dostępnych silników do porównania.")
+
+    out_dir = Path(output_dir) if output_dir else path.parent
+
+    llm_scorer = None
+    if llm_score:
+        if llm_name and llm_name != "none":
+            provider: LLMProvider | None = _select_llm(llm_name, llm_model)
+        else:
+            candidates = llm_registry.get_available()
+            provider = candidates[0].bind_model(llm_model) if candidates else None
+        if provider is None:
+            console.print("[yellow]Uwaga:[/] --llm-score pominięte — brak dostępnego dostawcy LLM.")
+        else:
+            llm_scorer = make_llm_scorer(provider)
+            if verbose:
+                console.print(f"[cyan]Ocena LLM:[/] {provider.name}")
+
+    converter = Converter()
+    results: list[EngineComparison] = []
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        TimeElapsedColumn(),
+        console=console,
+    ) as progress:
+        for engine in usable:
+            task_id = progress.add_task(f"Konwertuję {engine.name}", total=None)
+            results.extend(
+                compare_engines(
+                    path,
+                    [engine],
+                    out_dir,
+                    lang=lang,
+                    converter=converter,
+                    llm_scorer=llm_scorer,
+                )
+            )
+            progress.remove_task(task_id)
+
+    _print_comparison(path, results, unavailable, scored=llm_scorer is not None)
+    for result in results:
+        if result.status == "error":
+            console.print(f"[red]Błąd ({result.engine}):[/] {result.error}")
+
+    if not any(result.status == "ok" for result in results):
+        raise click.ClickException("Żaden silnik nie skonwertował pliku.")
 
 
 @cli.command("list-engines")

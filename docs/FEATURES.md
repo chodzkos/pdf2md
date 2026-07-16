@@ -116,6 +116,13 @@
 ---
 
 ### F07 — Porównywarka silników
+
+> **STATUS: ✅ ZREALIZOWANE (lipiec 2026).** Komenda `pdf2md compare <plik>` konwertuje ten sam plik
+> wszystkimi dostępnymi silnikami (`is_available()`), zapisuje wynik per silnik (`<plik>_<silnik>.md`)
+> i wypisuje tabelę metryk: czas, długość tekstu, liczba nagłówków, liczba tabel. Silniki niedostępne
+> są pomijane z adnotacją, błąd jednego silnika nie przerywa całości. Opcjonalna ocena jakości przez
+> LLM (`--llm-score`). Logika w `src/pdf2md/core/compare.py` (testowalna, niezależna od CLI).
+
 **Opis:** Funkcja "compare mode" — konwertuj ten sam PDF wszystkimi dostępnymi silnikami i pokaż wyniki side by side.
 
 **GUI:** podzielony panel z zakładkami (jedna zakładka = jeden silnik)  
@@ -326,7 +333,7 @@ jakość tabel. Wdrożyć, gdy pojawi się potrzeba (np. wsparcie nie-NVIDIA).
 | F04 | Historia | ⭐⭐ | 2d | Średnia | 🔴 Wysoki |
 | F05 | Web UI | ⭐⭐⭐ | 1tyg | Wysoka | 🟡 Średni |
 | F06 | Plugin system | ⭐⭐⭐ | 3d | Wysoka | 🟡 Średni |
-| F07 | Porównywarka | ⭐⭐ | 2d | Średnia | 🔴 Wysoki |
+| F07 | Porównywarka | ⭐⭐ | 2d | Średnia | ✅ Zrobione |
 | F08 | Presety | ⭐ | 1d | Średnia | 🔴 Wysoki |
 | F09 | Calibre | ⭐⭐ | 1d | Niska | 🟢 Niski |
 | F10 | Formularze | ⭐⭐⭐ | 3d | Niska | 🟢 Niski |
@@ -349,7 +356,7 @@ jakość tabel. Wdrożyć, gdy pojawi się potrzeba (np. wsparcie nie-NVIDIA).
 - F12 Hasła PDF (1d)
 - F03 Watchdog (2d)
 - F04 Historia (2d)
-- F07 Porównywarka (2d)
+- ✅ F07 Porównywarka
 
 **v1.2 — "Power features"** (~2-3 tygodnie)
 - F15 Zdjęcia → MD (2d)

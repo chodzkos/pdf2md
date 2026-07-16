@@ -144,6 +144,38 @@ LLM przez API:
 ANTHROPIC_API_KEY=... pdf2md convert raport.pdf --llm claude --llm-mode whole_document
 ```
 
+### `pdf2md compare`
+
+Konwertuje jeden plik **wszystkimi dostepnymi silnikami** i pokazuje metryki obok siebie —
+przydatne, gdy nie wiesz, ktory silnik da najlepszy wynik dla danego dokumentu.
+
+```bash
+pdf2md compare FILE [OPTIONS]
+```
+
+| Opcja | Znaczenie |
+|---|---|
+| `--output-dir` | Katalog na wyniki per silnik. Domyslnie obok pliku zrodlowego. |
+| `--lang` | Jezyk OCR dla silnikow OCR, domyslnie `pol+eng`. |
+| `--llm-score` | Ocena jakosci kazdego wyniku przez LLM (0–100). Domyslnie wylaczone. |
+| `--llm` | Dostawca LLM do `--llm-score` (domyslnie pierwszy dostepny). |
+| `--llm-model` | Model LLM do `--llm-score`. |
+| `--verbose`, `-v` | Szczegolowy output. |
+
+Kazdy silnik zapisuje swoj wynik jako `<plik>_<silnik>.md`, a tabela pokazuje czas konwersji,
+liczbe znakow, liczbe naglowkow i tabel. Silniki niedostepne (GPU/usluga) sa pomijane z adnotacja,
+a blad jednego silnika nie przerywa calego porownania.
+
+```bash
+pdf2md compare dokument.pdf --output-dir ./porownanie
+```
+
+Z ocena jakosci przez LLM:
+
+```bash
+pdf2md compare dokument.pdf --llm-score --llm claude
+```
+
 ### `pdf2md list-engines`
 
 Pokazuje katalog znanych silnikow, status instalacji, OCR, LLM, licencje i podpowiedz instalacji.

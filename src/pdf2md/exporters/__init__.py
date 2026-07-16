@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
+from typing import Protocol
 
 from pdf2md.detection.dependencies import check_calibre
 from pdf2md.exporters.calibre_epub_exporter import CalibreEpubExporter
@@ -11,9 +13,12 @@ from pdf2md.exporters.pandoc_epub_exporter import PandocEpubExporter
 
 logger = logging.getLogger(__name__)
 
-EpubExporter = CalibreEpubExporter | PandocEpubExporter
+class EpubExporter(Protocol):
+    def export(
+        self, markdown: str, output_path: str | Path, *, source_dir: Path | None = None
+    ) -> Path: ...
 
-EPUB_BACKENDS = ("pandoc", "calibre")
+EPUB_BACKENDS = ("pandoc", "native", "calibre")
 
 
 def build_epub_exporter(backend: str = "pandoc") -> EpubExporter:
@@ -22,6 +27,10 @@ def build_epub_exporter(backend: str = "pandoc") -> EpubExporter:
     Gdy ``backend == "calibre"``, ale `ebook-convert` jest niedostępny, wraca do
     Pandoca (z ostrzeżeniem). Nieznana wartość również skutkuje Pandokiem.
     """
+    if backend == "native":
+        from pdf2md.exporters.native_epub_exporter import NativeEpubExporter
+
+        return NativeEpubExporter()
     if backend == "calibre":
         if check_calibre():
             return CalibreEpubExporter()

@@ -56,6 +56,9 @@ engines-core = [
     "pymupdf4llm>=0.0.17",
     "marker-pdf>=1.10,<2",
     "docling>=2.0",
+    "ebooklib>=0.18",
+    "markdown-it-py>=4.2",
+    "Pillow>=12.2",
     # torch/torchvision zadeklarowane JAWNIE (mimo że ciągną je marker-pdf/surya):
     # [tool.uv.sources] łapie tylko zadeklarowane pakiety, nie transitive — bez tego
     # źródło cu130 jest ignorowane i Windows dostaje wariant +cpu z PyPI.
@@ -71,6 +74,7 @@ scan = [
     "opencv-python>=4.8",
     "numpy>=1.26",
     "ebooklib>=0.18",
+    "markdown-it-py>=4.2",
 ]
 
 [project.scripts]

@@ -47,54 +47,33 @@ def export_epub(
     metadata: dict[str, str],
     output_path: str | Path,
 ) -> str:
-    """Buduje EPUB. Preferuje ebooklib (kontrola TOC/CSS/metadanych); Pandoc jako fallback."""
+    """Buduje EPUB przez natywny, przenośny builder ebooklib."""
     path = Path(output_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        return _export_epub_ebooklib(chapters, metadata, path)
-    except ImportError:
-        logger.warning("ebooklib niedostępny — buduję EPUB przez Pandoc (fallback)")
-        return _export_epub_pandoc(chapters, metadata, path)
+    return _export_epub_native(chapters, metadata, path)
 
 
-def _export_epub_ebooklib(
+def _export_epub_native(
     chapters: list[Chapter],
     metadata: dict[str, str],
     path: Path,
 ) -> str:
-    from ebooklib import epub
+    from pdf2md.exporters.epub import EpubChapter, EpubInput, EpubMetadata, build_epub
 
-    language = metadata.get("language", "pl")
-    book = epub.EpubBook()
-    book.set_identifier(metadata.get("identifier") or "pdf2md-book")
-    book.set_title(metadata.get("title") or "Książka")
-    book.set_language(language)
-    if metadata.get("author"):
-        book.add_author(metadata["author"])
-
-    css = epub.EpubItem(
-        uid="style",
-        file_name="style/book.css",
-        media_type="text/css",
-        content=b"body { font-family: serif; line-height: 1.5; margin: 1em; }",
+    author = metadata.get("author", "")
+    data = EpubInput(
+        metadata=EpubMetadata(
+            title=metadata.get("title") or "Książka",
+            authors=(author,) if author else (),
+            language=metadata.get("language", "pl"),
+            identifier=metadata.get("identifier"),
+        ),
+        chapters=tuple(
+            EpubChapter(title=ch.title, html_body=_body_to_html(ch.body)) for ch in chapters
+        ),
     )
-    book.add_item(css)
-
-    epub_chapters = []
-    for i, ch in enumerate(chapters, 1):
-        item = epub.EpubHtml(title=ch.title, file_name=f"chap_{i:03d}.xhtml", lang=language)
-        item.content = f"<h1>{escape(ch.title)}</h1>\n{_body_to_html(ch.body)}"
-        item.add_item(css)
-        book.add_item(item)
-        epub_chapters.append(item)
-
-    book.toc = tuple(epub_chapters)
-    book.add_item(epub.EpubNcx())
-    book.add_item(epub.EpubNav())
-    book.spine = ["nav", *epub_chapters]
-
-    epub.write_epub(str(path), book)
-    logger.info(f"Zapisano EPUB (ebooklib): {path}")
+    build_epub(data, path)
+    logger.info(f"Zapisano EPUB (ebooklib/native): {path}")
     return str(path)
 
 

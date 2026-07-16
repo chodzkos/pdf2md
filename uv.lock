@@ -1849,6 +1849,8 @@ docling = [
 ]
 engines-core = [
     { name = "docling" },
+    { name = "ebooklib" },
+    { name = "markdown-it-py" },
     { name = "marker-pdf" },
     { name = "pymupdf4llm" },
     { name = "torch" },
@@ -1870,6 +1872,7 @@ pymupdf = [
 ]
 scan = [
     { name = "ebooklib" },
+    { name = "markdown-it-py" },
     { name = "numpy" },
     { name = "opencv-python" },
 ]
@@ -1891,7 +1894,10 @@ requires-dist = [
     { name = "click", specifier = ">=8.1" },
     { name = "docling", marker = "extra == 'docling'", specifier = ">=2.0" },
     { name = "docling", marker = "extra == 'engines-core'", specifier = ">=2.0" },
+    { name = "ebooklib", marker = "extra == 'engines-core'", specifier = ">=0.18" },
     { name = "ebooklib", marker = "extra == 'scan'", specifier = ">=0.18" },
+    { name = "markdown-it-py", marker = "extra == 'engines-core'", specifier = ">=4.2" },
+    { name = "markdown-it-py", marker = "extra == 'scan'", specifier = ">=4.2" },
     { name = "google-genai", marker = "extra == 'llm'", specifier = ">=1.0" },
     { name = "loguru", specifier = ">=0.7" },
     { name = "marker-pdf", marker = "extra == 'engines-core'", specifier = ">=1.10,<2" },

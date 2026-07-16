@@ -183,7 +183,7 @@ class Settings(BaseSettings):
     default_engine: str = "pymupdf4llm"
     default_output_dir: str = ""
     default_language: str = "pol+eng"
-    epub_backend: str = "pandoc"  # backend eksportu EPUB: pandoc albo calibre
+    epub_backend: str = "pandoc"  # backend eksportu EPUB: pandoc, native albo calibre
     marker_device: str = "cpu"
     marker_workers: int = 1
     marker_max_pages: int = 0  # 0 = cały dokument; >0 ogranicza strony tylko na jawne żądanie
@@ -257,8 +257,8 @@ class Settings(BaseSettings):
     def validate_epub_backend(cls, value: str) -> str:
         """Dopuszcza tylko wspierane backendy eksportu EPUB."""
         normalized = value.lower().strip()
-        if normalized not in {"pandoc", "calibre"}:
-            raise ValueError("epub_backend musi mieć wartość: pandoc albo calibre")
+        if normalized not in {"pandoc", "native", "calibre"}:
+            raise ValueError("epub_backend musi mieć wartość: pandoc, native albo calibre")
         return normalized
 
     @field_validator("theme")

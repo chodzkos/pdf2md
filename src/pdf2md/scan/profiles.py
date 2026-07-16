@@ -78,8 +78,8 @@ class Output(_Strict):
     def validate_epub_backend(cls, value: str) -> str:
         """Dopuszcza tylko wspierane backendy eksportu EPUB."""
         normalized = value.lower().strip()
-        if normalized not in {"pandoc", "calibre"}:
-            raise ValueError("epub_backend musi mieć wartość: pandoc albo calibre")
+        if normalized not in {"pandoc", "native", "calibre"}:
+            raise ValueError("epub_backend musi mieć wartość: pandoc, native albo calibre")
         return normalized
 
 

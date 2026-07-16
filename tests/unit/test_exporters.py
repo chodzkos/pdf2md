@@ -181,3 +181,11 @@ def test_build_epub_exporter_falls_back_to_pandoc_when_calibre_missing(
     monkeypatch.setattr("pdf2md.exporters.check_calibre", lambda: False)
 
     assert isinstance(build_epub_exporter("calibre"), PandocEpubExporter)
+
+
+def test_build_epub_exporter_returns_native() -> None:
+    pytest.importorskip("ebooklib")
+    pytest.importorskip("markdown_it")
+    from pdf2md.exporters.native_epub_exporter import NativeEpubExporter
+
+    assert isinstance(build_epub_exporter("native"), NativeEpubExporter)

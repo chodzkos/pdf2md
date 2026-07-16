@@ -44,9 +44,10 @@ def test_profile_editor_shows_only_available_epub_backends(
 
     dialog = ProfileEditDialog("balanced")
     try:
-        assert dialog._epub_backend.count() == 1
+        assert dialog._epub_backend.count() == 2
         assert dialog._epub_backend.itemData(0) == "pandoc"
-        assert dialog._epub_backend.isEnabled() is False
+        assert dialog._epub_backend.itemData(1) == "native"
+        assert dialog._epub_backend.isEnabled() is True
     finally:
         dialog.deleteLater()
 

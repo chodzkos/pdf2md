@@ -28,7 +28,7 @@ dependencies = [
     "pydantic-settings>=2.14.2",
     "loguru>=0.7",
     "rich>=13.7",
-    "click>=8.1",
+    "click>=8.4.2",
     "PySide6>=6.7",
     # security floor: CVE fix (pip-audit). Do 12.2.0: CVE-2026-25990/40192/42310/42311 +
     # PYSEC-2026-165. 12.3.0 domyka kolejne 8 advisory pillow (PYSEC-2026-2253..2257/3451..3453).

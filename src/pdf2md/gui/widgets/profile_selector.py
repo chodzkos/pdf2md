@@ -23,6 +23,7 @@ from pdf2md.gui.theming import follow_app_titlebar, themed_message_box
 
 _EPUB_BACKEND_LABELS = {
     "pandoc": "Pandoc",
+    "native": "Native (ebooklib)",
     "calibre": "Calibre",
 }
 
@@ -32,6 +33,7 @@ def available_epub_backend_options() -> list[tuple[str, str]]:
     options: list[tuple[str, str]] = []
     if check_pandoc():
         options.append(("pandoc", _EPUB_BACKEND_LABELS["pandoc"]))
+    options.append(("native", _EPUB_BACKEND_LABELS["native"]))
     if check_calibre():
         options.append(("calibre", _EPUB_BACKEND_LABELS["calibre"]))
     return options
@@ -146,7 +148,7 @@ class ProfileEditDialog(QDialog):
         profile.dpi = self._dpi.value()
         profile.output.epub = self._epub.isChecked()
         backend = self._epub_backend.currentData()
-        if backend in {"pandoc", "calibre"}:
+        if backend in {"pandoc", "native", "calibre"}:
             profile.output.epub_backend = str(backend)
         profile.output.quality_report = self._report.isChecked()
         try:

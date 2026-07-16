@@ -94,6 +94,8 @@ def _epub_backend_label(backend: str) -> str:
         return "Calibre"
     if backend == "pandoc":
         return "Pandoc"
+    if backend == "native":
+        return "Native (ebooklib)"
     return backend
 
 
@@ -103,13 +105,14 @@ def _resolve_epub_backend(preferred_backend: str) -> tuple[str | None, str | Non
     available: list[str] = []
     if check_pandoc():
         available.append("pandoc")
+    available.append("native")
     if check_calibre():
         available.append("calibre")
 
     if preferred in available:
         return preferred, None
     if not available:
-        return None, "Pandoc ani Calibre nie są dostępne. Nie można wyeksportować EPUB."
+        return None, "Pandoc, Native ani Calibre nie są dostępne. Nie można wyeksportować EPUB."
 
     fallback = "pandoc" if "pandoc" in available else available[0]
     message = (
@@ -567,8 +570,7 @@ class MainWindow(QMainWindow):
                 QMessageBox.ButtonRole.ActionRole,
             )
         export_epub = None
-        pandoc_ok, calibre_ok = self._epub_tools_available()
-        if self._last_markdown_outputs and (pandoc_ok or calibre_ok):
+        if self._last_markdown_outputs:
             export_epub = message.addButton("Eksportuj do EPUB", QMessageBox.ButtonRole.ActionRole)
         message.addButton("Zamknij", QMessageBox.ButtonRole.AcceptRole)
         message.exec()

@@ -4,6 +4,7 @@
 
 ### Dodane
 
+- Natywny eksport EPUB przez `ebooklib` (TOC z rozdziałów, obrazy, CSS, metadane, opcjonalna okładka) — wybór backendu `pandoc|native|calibre`. Builder jest izolowany (bez zależności od reszty pdf2md), pod przyszłe współdzielenie z EpubForge.
 - Presety konwersji (silnik/język/LLM) jako nazwane profile — `convert --profile`.
 - OCR zdjęć dokumentów (JPG/PNG/TIFF), w tym wielostronicowy TIFF — to samo wejście co skany PDF.
 - Historia konwersji (SQLite) + komenda `pdf2md history` (filtr po silniku, eksport CSV).
@@ -49,6 +50,7 @@
 ### Naprawione
 
 - **pillow 12.2.0 → 12.3.0 (CI pip-audit na czerwono).** pip-audit zaczął zgłaszać 8 nowych advisory pillow 12.2.0 (PYSEC-2026-2253..2257, 3451..3453), naprawionych w 12.3.0 — krok „Audyt zależności" (Ubuntu/py3.12) wywalał całe CI. Podbity floor `Pillow>=12.3` oraz override `[tool.uv] override-dependencies = ["pillow>=12.3"]` (marker-pdf/surya-ocr nadal pinują pillow<11); `uv.lock` zaktualizowany do 12.3.0. pip-audit ponownie czysty.
+- Testy eksportu/scan-pipeline nie są pomijane z powodu braku `ebooklib` w zależnościach `engines-core`.
 - **Uszkodzony `config.toml`/`config.json` nie kasuje po cichu preferencji** — podbicie `chodzkos-gui-kit` do **v0.5.1** (`0993808` → `44e6398`). `config.load_config` przy `JSONDecodeError` przenosi teraz uszkodzony plik na kopię `*.broken-<ts>` (bez nadpisywania) i loguje `warning`, zamiast zwracać puste ustawienia bez śladu — użytkownik może zdiagnozować/odzyskać. Bonus: gui-kit ma jedno źródło prawdy o wersji (`importlib.metadata`, koniec rozjazdu `__version__`). Pin pozostaje SHA zgodnie z polityką repo (komentarz nad linią: `v0.5.1`).
 - **`cuda_usable()` odpala REALNY kernel, nie tylko alokację.** Dawny smoke test (`torch.zeros(1).cuda()` + `synchronize`) to alokacja/memcpy — nie wymaga kernela SASS, więc na kartach nieobsługiwanych przez build (np. Pascal **sm_61 + cu130**) zwracał `True`, choć każdy realny kernel padał `AcceleratorError: no kernel image is available`. W `doctor` dawało to sprzeczność w jednej tabeli („CUDA smoke test ✅ używalna" obok „Ocena sprzętu: ZBYT STARA"), a każdy konsument `cuda_usable()` dostawał błędne ✅ i wywalał się w środku konwersji. Teraz smoke test wykonuje prawdziwą operację elementwise i **weryfikuje wynik** (`torch.ones(8, device="cuda") * 2`, `sum == 16.0`) — dopiero to obnaża brak obrazu kernela.
 - **Historia (SQLite): deterministyczne zamykanie połączeń.** `record`/`clear`/`_fetch_entries` używały `with _connect() as conn:` — kontekst `sqlite3.Connection` commituje transakcję, ale **nie zamyka** połączenia (uchwyt pliku `history.db` wisiał do GC → na Windows blokada pliku). Teraz `with closing(_connect()) as conn, conn:` — zewnętrzny `closing` zamyka połączenie deterministycznie, wewnętrzny `conn` trzyma transakcję. Zachowanie zapytań bez zmian.

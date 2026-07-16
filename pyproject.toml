@@ -58,7 +58,7 @@ engines-core = [
     "docling>=2.0",
     "ebooklib>=0.18",
     "markdown-it-py>=4.2",
-    "Pillow>=12.2",
+    "Pillow>=12.3",
     # torch/torchvision zadeklarowane JAWNIE (mimo że ciągną je marker-pdf/surya):
     # [tool.uv.sources] łapie tylko zadeklarowane pakiety, nie transitive — bez tego
     # źródło cu130 jest ignorowane i Windows dostaje wariant +cpu z PyPI.

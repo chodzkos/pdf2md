@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 from chodzkos_detection import check_pandoc
@@ -20,9 +21,12 @@ from PySide6.QtGui import QCloseEvent, QDesktopServices, QIcon
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QDialog,
     QFrame,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
+    QLineEdit,
     QMainWindow,
     QMessageBox,
     QProgressBar,
@@ -36,7 +40,8 @@ from PySide6.QtWidgets import (
 )
 
 from pdf2md.core.config import get_settings
-from pdf2md.core.input_types import SUPPORTED_INPUT_EXTENSIONS
+from pdf2md.core.encryption import is_pdf_encrypted, verify_pdf_password
+from pdf2md.core.input_types import SUPPORTED_INPUT_EXTENSIONS, is_image_input
 from pdf2md.detection.dependencies import check_calibre
 from pdf2md.exporters import build_epub_exporter
 from pdf2md.gui.help_window import HELP_TITLE, help_tabs
@@ -124,6 +129,33 @@ def _resolve_epub_backend(preferred_backend: str) -> tuple[str | None, str | Non
 
 def _has_in_place_images(engine_name: str) -> bool:
     return engine_name.strip().lower() in {"docling", "marker"}
+
+
+def _collect_pdf_passwords(
+    files: list[str],
+    prompt: Callable[[str, bool], str | None],
+) -> dict[str, str] | None:
+    """Zbiera hasła do zaszyfrowanych plików PRZED startem konwersji.
+
+    ``prompt(nazwa_pliku, poprzednia_próba_błędna)`` zwraca wpisane hasło albo ``None``
+    (użytkownik anulował). Przy złym haśle pętla powtarza prompt z ``wrong=True``.
+    Zwraca mapę ``{plik: hasło}`` (tylko dla zaszyfrowanych) albo ``None``, gdy
+    użytkownik anulował — wtedy wołający przerywa start konwersji.
+    """
+    passwords: dict[str, str] = {}
+    for file_path in files:
+        if is_image_input(Path(file_path)) or not is_pdf_encrypted(file_path):
+            continue
+        wrong = False
+        while True:
+            entered = prompt(Path(file_path).name, wrong)
+            if entered is None:
+                return None
+            if verify_pdf_password(file_path, entered):
+                passwords[file_path] = entered
+                break
+            wrong = True
+    return passwords
 
 
 class _EpubToolsBridge(QObject):
@@ -423,6 +455,13 @@ class MainWindow(QMainWindow):
             ).exec()
             return
 
+        passwords = _collect_pdf_passwords(files, self._prompt_pdf_password)
+        if passwords is None:
+            self._log_panel.log_warning(
+                "Konwersja przerwana — nie podano hasła do zaszyfrowanego PDF."
+            )
+            return
+
         engine_name = self._engine_selector.get_engine_name()
         llm_name = self._llm_selector.get_llm_name()
         llm_model = self._llm_selector.get_model()
@@ -460,6 +499,7 @@ class MainWindow(QMainWindow):
             language=language,
             scan_profile=scan_profile,
             extract_images=self._extract_images.isChecked(),
+            passwords=passwords,
         )
         self._worker.progress.connect(self._on_progress)
         self._worker.file_done.connect(self._on_file_done)
@@ -467,6 +507,21 @@ class MainWindow(QMainWindow):
         self._worker.all_done.connect(self._on_all_done)
         self._worker.cancelled.connect(self._on_cancelled)
         self._worker.start()
+
+    def _prompt_pdf_password(self, filename: str, wrong: bool) -> str | None:
+        """Modalny dialog hasła (echo maskowane). Zwraca hasło albo None (anulowano)."""
+        if wrong:
+            label = f"Nieprawidłowe hasło. Spróbuj ponownie dla „{filename}”:"
+        else:
+            label = f"Plik „{filename}” jest zaszyfrowany. Podaj hasło:"
+        dialog = QInputDialog(self)
+        dialog.setWindowTitle("Zaszyfrowany PDF")
+        dialog.setLabelText(label)
+        dialog.setTextEchoMode(QLineEdit.EchoMode.Password)
+        attach_dark_titlebar(dialog)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return None
+        return dialog.textValue()
 
     def _on_cancel(self) -> None:
         """Prosi worker o przerwanie i blokuje przycisk (zatrzyma się na granicy)."""

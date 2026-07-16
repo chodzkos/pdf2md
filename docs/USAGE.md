@@ -92,6 +92,7 @@ pdf2md convert FILES... [OPTIONS]
 | `--llm-model` | Model LLM dla tego uruchomienia, np. `gpt-4.1-mini` albo `qwen2.5:14b`. |
 | `--llm-mode` | Tryb LLM: `none`, `whole_document`, `by_page`, `by_chunk`, `by_heading`. |
 | `--lang` | Jezyk OCR, domyslnie `pol+eng`. |
+| `--password` | Haslo do zaszyfrowanych PDF-ow w tym uruchomieniu. Zaszyfrowany plik bez hasla → czytelny blad. W GUI haslo pyta osobny dialog. |
 | `--dry-run` | Pokazuje plan konwersji bez zapisu plikow. |
 | `--verbose`, `-v` | Wlacza bardziej szczegolowy output. |
 

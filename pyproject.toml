@@ -51,12 +51,12 @@ marker = [
     "marker-pdf>=1.10,<2",
 ]
 docling = [
-    "docling>=2.0",
+    "docling>=2.114.0",
 ]
 engines-core = [
     "pymupdf4llm>=0.0.17",
     "marker-pdf>=1.10,<2",
-    "docling>=2.0",
+    "docling>=2.114.0",
     "ebooklib>=0.18",
     "markdown-it-py>=4.2",
     "Pillow>=12.3",

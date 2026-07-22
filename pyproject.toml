@@ -42,7 +42,7 @@ dependencies = [
 
 [project.optional-dependencies]
 pymupdf = [
-    "pymupdf4llm>=0.0.17",
+    "pymupdf4llm>=1.28.0",
 ]
 images = [
     "pymupdf>=1.27",
@@ -54,7 +54,7 @@ docling = [
     "docling>=2.0",
 ]
 engines-core = [
-    "pymupdf4llm>=0.0.17",
+    "pymupdf4llm>=1.28.0",
     "marker-pdf>=1.10,<2",
     "docling>=2.0",
     "ebooklib>=0.18",

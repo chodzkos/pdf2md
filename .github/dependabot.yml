@@ -29,6 +29,16 @@ updates:
         patterns:
           - "pymupdf"
           - "pymupdf4llm"
+    # Surya 1 zostaje silnikiem LOKALNYM: marker-pdf 1.x + surya-ocr 0.17.x
+    # (modele ładowane w procesie, działa natywnie na Windows). marker 2.x /
+    # surya >=0.20 (Surya 2) wymagają zewnętrznego serwera vLLM (Docker) lub
+    # llama-server — to inny model wdrożenia, rozważany osobno jako silnik
+    # chmurowy, nie jako bump. Poprawki w obrębie 1.x / 0.17.x nadal przychodzą.
+    ignore:
+      - dependency-name: "marker-pdf"
+        versions: [">=2"]
+      - dependency-name: "surya-ocr"
+        versions: [">=0.20"]
 
   # Akcje w workflowach GitHub Actions — Dependabot podbija piny SHA
   # zachowując komentarz z wersją (np. # v4.2.2).

@@ -34,7 +34,7 @@ dependencies = [
     # PYSEC-2026-165. 12.3.0 domyka kolejne 8 advisory pillow (PYSEC-2026-2253..2257/3451..3453).
     # Cap pillow<11 z marker-pdf/surya-ocr nadpisany w [tool.uv] niżej.
     "Pillow>=12.3",
-    "pypdf>=6.0",
+    "pypdf>=6.21.4",
     "pyyaml>=6.0",
     "chodzkos-gui-kit[qt]",
     "chodzkos-detection",
@@ -42,7 +42,7 @@ dependencies = [
 
 [project.optional-dependencies]
 pymupdf = [
-    "pymupdf4llm>=0.0.17",
+    "pymupdf4llm>=1.28.0",
 ]
 images = [
     "pymupdf>=1.27",
@@ -54,7 +54,7 @@ docling = [
     "docling>=2.0",
 ]
 engines-core = [
-    "pymupdf4llm>=0.0.17",
+    "pymupdf4llm>=1.28.0",
     "marker-pdf>=1.10,<2",
     "docling>=2.0",
     "ebooklib>=0.18",
@@ -97,7 +97,7 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.15.22",
     "mypy>=2.3.0",
-    "pre-commit>=3.7",
+    "pre-commit>=4.6.1",
 ]
 
 [tool.hatch.build.targets.wheel]

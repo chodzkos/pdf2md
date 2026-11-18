@@ -48,14 +48,14 @@ images = [
     "pymupdf>=1.27",
 ]
 marker = [
-    "marker-pdf>=1.10,<2",
+    "marker-pdf>=1.10,<3",
 ]
 docling = [
     "docling>=2.0",
 ]
 engines-core = [
     "pymupdf4llm>=1.28.0",
-    "marker-pdf>=1.10,<2",
+    "marker-pdf>=1.10,<3",
     "docling>=2.0",
     "ebooklib>=0.18",
     "markdown-it-py>=4.2",
